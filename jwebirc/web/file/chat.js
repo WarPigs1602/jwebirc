@@ -105,8 +105,7 @@ class ChatManager {
         this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
         console.log('Capabilities enabled:', caps.join(', '));
         
-        this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> Capabilities enabled: " + caps.join(', ') + "\n");
-        this.addWindow();
+        // Don't show message here - will be shown when negotiation ends
         
         // End CAP negotiation
         this.endCapNegotiation();
@@ -135,6 +134,12 @@ class ChatManager {
                 console.log('CAP negotiation ended');
             }
             this.capNegotiationActive = false;
+            
+            // Show all enabled capabilities once at the end
+            if (this.capabilities.enabled.length > 0) {
+                this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> Capabilities enabled: " + this.capabilities.enabled.join(', ') + "\n");
+                this.addWindow();
+            }
         }
     }
     
@@ -414,117 +419,182 @@ class ChatManager {
     }
     
     parseControl(text) {
-        let content = text;
-        let arr = null;
-        let elem = 0;
+        // State-based parser for proper IRC formatting
+        const result = [];
+        let pos = 0;
         
-        // Color codes (^C)
-        if (text.includes(String.fromCharCode(3))) {
-            arr = text.split(String.fromCharCode(3));
-            let open = false;
-            content = arr[0];
-            let cnt = 0;
+        // Active formatting state
+        const state = {
+            bold: false,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            monospace: false,
+            reverse: false,
+            color: null,
+            bgcolor: null
+        };
+        
+        const openTags = [];
+        
+        const applyState = () => {
+            // Close all open tags
+            while (openTags.length > 0) {
+                result.push('</span>');
+                openTags.pop();
+            }
             
-            for (let i = 1; i < arr.length; i++) {
-                let color = "#000000";
-                let bgcolor = "#FFFFFF";
-                
-                // Extract color code safely
-                let chars = arr[i].split("");
-                let codeStr = "";
-                for (let j = 0; j < Math.min(5, chars.length); j++) {
-                    codeStr += chars[j];
-                }
-                let code = codeStr.replace(/[^0-9,]/g, "");
-                
-                if (code.length > 0 && arr[i].startsWith(code)) {
-                    let control = code.includes(",") ? code.split(",") : [code];
+            // Apply current state
+            const styles = [];
+            if (state.bold) styles.push('font-weight: bold');
+            if (state.italic) styles.push('font-style: italic');
+            if (state.underline && state.strikethrough) {
+                styles.push('text-decoration: underline line-through');
+            } else if (state.underline) {
+                styles.push('text-decoration: underline');
+            } else if (state.strikethrough) {
+                styles.push('text-decoration: line-through');
+            }
+            if (state.monospace) styles.push('font-family: monospace');
+            if (state.reverse) styles.push('filter: invert(1)');
+            if (state.color) styles.push(`color: ${state.color}`);
+            if (state.bgcolor) styles.push(`background-color: ${state.bgcolor}`);
+            
+            if (styles.length > 0) {
+                result.push(`<span style="${styles.join('; ')};">`);
+                openTags.push(true);
+            }
+        };
+        
+        while (pos < text.length) {
+            const char = text.charCodeAt(pos);
+            
+            switch (char) {
+                case 0x02: // Bold
+                    state.bold = !state.bold;
+                    applyState();
+                    pos++;
+                    break;
                     
-                    if (control.length === 1) {
-                        for (let j = 0; j < this.colors.length; j++) {
-                            if (j === parseInt(control[0])) {
-                                color = this.colors[j];
-                                cnt++;
-                                elem++;
-                            }
-                        }
-                    } else if (control.length === 2) {
-                        for (let j = 0; j < this.colors.length; j++) {
-                            if (j === parseInt(control[0])) color = this.colors[j];
-                            if (j === parseInt(control[1])) bgcolor = this.colors[j];
-                        }
-                        cnt++;
-                        elem++;
+                case 0x1D: // Italic
+                    state.italic = !state.italic;
+                    applyState();
+                    pos++;
+                    break;
+                    
+                case 0x1F: // Underline
+                    state.underline = !state.underline;
+                    applyState();
+                    pos++;
+                    break;
+                    
+                case 0x1E: // Strikethrough
+                    state.strikethrough = !state.strikethrough;
+                    applyState();
+                    pos++;
+                    break;
+                    
+                case 0x11: // Monospace
+                    state.monospace = !state.monospace;
+                    applyState();
+                    pos++;
+                    break;
+                    
+                case 0x16: // Reverse
+                    state.reverse = !state.reverse;
+                    applyState();
+                    pos++;
+                    break;
+                    
+                case 0x0F: // Reset all formatting
+                    state.bold = false;
+                    state.italic = false;
+                    state.underline = false;
+                    state.strikethrough = false;
+                    state.monospace = false;
+                    state.reverse = false;
+                    state.color = null;
+                    state.bgcolor = null;
+                    applyState();
+                    pos++;
+                    break;
+                    
+                case 0x03: // Color
+                    pos++;
+                    let colorStr = '';
+                    // Read foreground color (max 2 digits)
+                    while (pos < text.length && text[pos] >= '0' && text[pos] <= '9' && colorStr.length < 2) {
+                        colorStr += text[pos];
+                        pos++;
                     }
                     
-                    arr[i] = arr[i].substring(code.length);
-                    content += control.length === 1 
-                        ? `<span style="color: ${color};">` 
-                        : `<span style="color: ${color}; background-color: ${bgcolor};">`;
-                    content += this.endCodes(arr[i], elem);
-                } else {
-                    content += "</span>" + this.endCodes(arr[i], elem);
-                }
+                    if (colorStr.length > 0) {
+                        const colorIndex = parseInt(colorStr);
+                        if (colorIndex >= 0 && colorIndex < this.colors.length) {
+                            state.color = this.colors[colorIndex];
+                        }
+                        
+                        // Check for background color
+                        if (pos < text.length && text[pos] === ',') {
+                            pos++;
+                            let bgColorStr = '';
+                            while (pos < text.length && text[pos] >= '0' && text[pos] <= '9' && bgColorStr.length < 2) {
+                                bgColorStr += text[pos];
+                                pos++;
+                            }
+                            if (bgColorStr.length > 0) {
+                                const bgColorIndex = parseInt(bgColorStr);
+                                if (bgColorIndex >= 0 && bgColorIndex < this.colors.length) {
+                                    state.bgcolor = this.colors[bgColorIndex];
+                                }
+                            }
+                        }
+                        applyState();
+                    } else {
+                        // Color reset (no digits after \x03)
+                        state.color = null;
+                        state.bgcolor = null;
+                        applyState();
+                    }
+                    break;
+                    
+                default:
+                    // Regular character
+                    const nextSpecial = this.findNextControlCode(text, pos);
+                    const chunk = text.substring(pos, nextSpecial);
+                    result.push(this.escapeHtml(chunk));
+                    pos = nextSpecial;
+                    break;
             }
-            
-            while (cnt > 0) {
-                content += "</span>";
-                cnt--;
-                elem--;
-            }
-            text = content;
         }
         
-        // Bold (^B)
-        text = this.parseFormatCode(text, String.fromCharCode(2), "font-weight: bold");
-        // Italic (^])
-        text = this.parseFormatCode(text, String.fromCharCode(29), "font-style: italic");
-        // Strikethrough (^^)
-        text = this.parseFormatCode(text, String.fromCharCode(30), "text-decoration: line-through");
-        // Underline (^_)
-        text = this.parseFormatCode(text, String.fromCharCode(31), "text-decoration: underline");
+        // Close remaining tags
+        while (openTags.length > 0) {
+            result.push('</span>');
+            openTags.pop();
+        }
         
-        return text.trim();
+        return result.join('').trim();
     }
     
-    parseFormatCode(text, code, style) {
-        if (!text.includes(code)) return text;
+    findNextControlCode(text, start) {
+        const controlCodes = [0x02, 0x03, 0x0F, 0x11, 0x16, 0x1D, 0x1E, 0x1F];
+        let nearest = text.length;
         
-        const arr = text.split(code);
-        let content = arr[0];
-        let open = false;
-        
-        for (let i = 1; i < arr.length; i++) {
-            if (!open) {
-                content += `<span style="${style};">`;
-                open = true;
-            } else {
-                content += "</span>";
-                open = false;
+        for (const code of controlCodes) {
+            const pos = text.indexOf(String.fromCharCode(code), start);
+            if (pos !== -1 && pos < nearest) {
+                nearest = pos;
             }
-            content += arr[i];
         }
         
-        if (open) content += "</span>";
-        return content;
+        return nearest;
     }
     
-    endCodes(text, elem) {
-        if (!text.includes(String.fromCharCode(15))) return text;
-        
-        const arr = text.split(String.fromCharCode(15));
-        let content = arr[0];
-        
-        for (let j = 1; j < arr.length; j++) {
-            while (elem >= 0) {
-                content += "</span>";
-                elem--;
-            }
-            elem = 0;
-            content += arr[j];
-        }
-        
-        return content;
+    escapeHtml(text) {
+        // Don't escape HTML - allow existing HTML tags to pass through
+        // This preserves link formatting and other HTML from parsePages
+        return text;
     }
     
     addNick(channel, nick, host, color) {

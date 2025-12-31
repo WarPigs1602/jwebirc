@@ -50,12 +50,14 @@ class PostManager {
         // Control keys for IRC formatting
         if (keyEvent.ctrlKey) {
             switch (key) {
-                case 'k': this.control(3); return false;  // Color
-                case 'b': this.control(2); return false;  // Bold
-                case 'i': this.control(29); return false; // Italic
-                case 'l': this.control(30); return false; // Strikethrough
-                case 'u': this.control(31); return false; // Underline
-                case 'o': this.control(15); return false; // Reset
+                case 'k': this.control(3); return false;   // Color \x03
+                case 'b': this.control(2); return false;   // Bold \x02
+                case 'i': this.control(29); return false;  // Italic \x1D
+                case 'l': this.control(30); return false;  // Strikethrough \x1E
+                case 'u': this.control(31); return false;  // Underline \x1F
+                case 'm': this.control(17); return false;  // Monospace \x11
+                case 'r': this.control(22); return false;  // Reverse \x16
+                case 'o': this.control(15); return false;  // Reset \x0F
             }
         }
         
@@ -77,7 +79,18 @@ class PostManager {
     }
     
     control(code) {
-        this.messageInput.value += String.fromCharCode(code);
+        // Insert control code at cursor position
+        const start = this.messageInput.selectionStart;
+        const end = this.messageInput.selectionEnd;
+        const text = this.messageInput.value;
+        const controlChar = String.fromCharCode(code);
+        
+        this.messageInput.value = text.substring(0, start) + controlChar + text.substring(end);
+        
+        // Move cursor after inserted control code
+        const newPos = start + 1;
+        this.messageInput.setSelectionRange(newPos, newPos);
+        this.messageInput.focus();
     }
     
     sendText() {
@@ -94,6 +107,8 @@ class PostManager {
     
     submitText() {
         const text = this.parseText(this.messageInput.value);
+        console.log('submitText - original:', this.messageInput.value);
+        console.log('submitText - parsed:', text);
         if (text) {
             const msg = {
                 category: "chat",
@@ -224,7 +239,8 @@ class PostManager {
                 }
                 
                 this.chatManager.addWindow();
-                return "/privmsg " + activeWindow + " " + text;
+                // Build proper IRC message through ircText to handle special cases
+                return this.ircText("/privmsg " + activeWindow + " " + text);
             } else {
                 this.chatManager.parsePage(this.chatManager.getTimestamp() + " *** You must start with / in the status window\n");
                 this.chatManager.addWindow();
@@ -422,9 +438,47 @@ class PostManager {
     }
     
     escapeHtml(text) {
-        const element = document.createElement("p");
-        element.appendChild(document.createTextNode(text));
-        return element.innerHTML;
+        // Preserve IRC control codes while escaping HTML
+        const controlCodes = [0x02, 0x03, 0x0F, 0x11, 0x16, 0x1D, 0x1E, 0x1F];
+        let result = '';
+        
+        for (let i = 0; i < text.length; i++) {
+            const charCode = text.charCodeAt(i);
+            if (controlCodes.includes(charCode)) {
+                // Keep control codes as-is
+                result += text[i];
+                // If it's a color code, preserve following digits and comma
+                if (charCode === 0x03) {
+                    i++;
+                    while (i < text.length) {
+                        const nextChar = text[i];
+                        if (nextChar >= '0' && nextChar <= '9') {
+                            result += nextChar;
+                            i++;
+                        } else if (nextChar === ',' && i + 1 < text.length && 
+                                 text[i + 1] >= '0' && text[i + 1] <= '9') {
+                            result += nextChar;
+                            i++;
+                        } else {
+                            i--;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Escape HTML special characters
+                switch (text[i]) {
+                    case '<': result += '&lt;'; break;
+                    case '>': result += '&gt;'; break;
+                    case '&': result += '&amp;'; break;
+                    case '"': result += '&quot;'; break;
+                    case "'": result += '&#39;'; break;
+                    default: result += text[i];
+                }
+            }
+        }
+        
+        return result;
     }
     
     unescapeHtml(text) {

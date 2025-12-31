@@ -115,7 +115,7 @@ class IRCParser {
                         this.chatManager.parseServerPrefix(arr[i]);
                     }
                 }
-                return this.handleGenericNumeric(arr, code);
+                return this.handleGenericNumeric(arr, code, text);
                 
             case "353": // Names list
                 const channel = arr[4];
@@ -180,7 +180,7 @@ class IRCParser {
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
             default:
-                return this.handleGenericNumeric(arr, code);
+                return this.handleGenericNumeric(arr, code, text);
         }
     }
     
@@ -377,11 +377,41 @@ class IRCParser {
         }
     }
     
-    handleGenericNumeric(arr, code) {
+    handleGenericNumeric(arr, code, text) {
         this.output = this.chatManager.getActiveWindow();
-        const parsed = code.startsWith("3") ? arr.slice(4).join(" ") : arr.slice(3).join(" ");
-        console.log(`Code ${code} == ${parsed.trim()}`);
-        return " <span style=\"color: #ff0000\">==</span> " + parsed.trim();
+        
+        // Parse from original text to preserve the full message
+        // Format: :server CODE nickname [params...] [:trailing message]
+        // We need to find everything after the third space (after nickname)
+        
+        let spaceCount = 0;
+        let startIndex = 0;
+        
+        for (let i = 0; i < text.length; i++) {
+            if (text[i] === ' ') {
+                spaceCount++;
+                if (spaceCount === 3) {
+                    startIndex = i + 1;
+                    break;
+                }
+            }
+        }
+        
+        if (startIndex > 0 && startIndex < text.length) {
+            let parsed = text.substring(startIndex);
+            
+            // Remove leading : from the trailing parameter if present
+            // Example: ":server 396 nick hostname :message" -> "hostname message"
+            const colonIndex = parsed.indexOf(':');
+            if (colonIndex !== -1) {
+                parsed = parsed.substring(0, colonIndex) + parsed.substring(colonIndex + 1);
+            }
+            
+            return " <span style=\"color: #ff0000\">==</span> " + parsed.trim();
+        }
+        
+        // Fallback
+        return " <span style=\"color: #ff0000\">==</span> " + text;
     }
     
     formatError(message) {
