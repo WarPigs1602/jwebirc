@@ -107,8 +107,6 @@ class PostManager {
     
     submitText() {
         const text = this.parseText(this.messageInput.value);
-        console.log('submitText - original:', this.messageInput.value);
-        console.log('submitText - parsed:', text);
         if (text) {
             const msg = {
                 category: "chat",
@@ -142,16 +140,13 @@ class PostManager {
     sendTypingNotification() {
         // Check if message-tags capability is enabled
         if (!this.chatManager.hasCapability('message-tags')) {
-            console.log('Typing notification skipped: message-tags capability not enabled');
             return;
         }
         
         const activeWindow = this.chatManager.getActiveWindow();
         
-        // Only send for channels, not for Status or queries
-        if (!activeWindow || activeWindow.toLowerCase() === 'status' || 
-            (!activeWindow.startsWith('#') && !activeWindow.startsWith('&'))) {
-            console.log('Typing notification skipped: not in a channel');
+        // Only send for channels and query windows, not for Status
+        if (!activeWindow || activeWindow.toLowerCase() === 'status') {
             return;
         }
         
@@ -164,7 +159,6 @@ class PostManager {
         
         // Send TAGMSG with typing=active tag (IRCv3 client-only-tags)
         const tagmsgCommand = '/@+typing=active TAGMSG ' + activeWindow;
-        console.log('Sending typing notification:', tagmsgCommand);
         this.sendRawMessage(tagmsgCommand);
         
         // Reset typing flag after timeout
@@ -187,9 +181,8 @@ class PostManager {
         
         const activeWindow = this.chatManager.getActiveWindow();
         
-        // Only send for channels
-        if (!activeWindow || activeWindow.toLowerCase() === 'status' || 
-            (!activeWindow.startsWith('#') && !activeWindow.startsWith('&'))) {
+        // Only send for channels and query windows, not for Status
+        if (!activeWindow || activeWindow.toLowerCase() === 'status') {
             return;
         }
         
@@ -202,7 +195,6 @@ class PostManager {
         
         // Send TAGMSG with typing=done tag
         const tagmsgCommand = '/@+typing=done TAGMSG ' + activeWindow;
-        console.log('Sending typing done notification:', tagmsgCommand);
         this.sendRawMessage(tagmsgCommand);
     }
     
@@ -217,10 +209,7 @@ class PostManager {
                 message: rawMessage,
                 target: ""
             };
-            console.log('Sending raw message:', rawMessage);
             this.chatManager.socket.send(JSON.stringify(msg));
-        } else {
-            console.error('Cannot send raw message: socket not available or message empty');
         }
     }
     

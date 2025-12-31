@@ -63,7 +63,6 @@ class ChatManager {
         ];
         
         this.capabilities.requested = [...desiredCaps];
-        console.log('Ready for capability negotiation. Waiting for server CAP LS...');
         // Server will send CAP LS 302, we respond to it
     }
     
@@ -73,7 +72,6 @@ class ChatManager {
      */
     handleCapLS(caps) {
         this.capabilities.available = caps;
-        console.log('Available capabilities:', caps.join(', '));
         
         // Request only desired capabilities that are actually available
         const toRequest = this.capabilities.requested.filter(cap => caps.includes(cap));
@@ -88,7 +86,6 @@ class ChatManager {
             if (window.postManager) {
                 // Send with / prefix as required by server
                 window.postManager.sendRawMessage('/' + 'CAP REQ :' + toRequest.join(' '));
-                console.log('Requesting caps:', toRequest.join(', '));
             }
         } else {
             // No capabilities available, end negotiation
@@ -103,7 +100,6 @@ class ChatManager {
     handleCapACK(caps) {
         // Replace capabilities list (not push, to avoid duplicates)
         this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
-        console.log('Capabilities enabled:', caps.join(', '));
         
         // Don't show message here - will be shown when negotiation ends
         
@@ -116,7 +112,6 @@ class ChatManager {
      * @param {Array} caps - Array of rejected capabilities
      */
     handleCapNAK(caps) {
-        console.log('Capabilities rejected:', caps.join(', '));
         this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Capabilities rejected: " + caps.join(', ') + "\n");
         this.addWindow();
         
@@ -131,7 +126,6 @@ class ChatManager {
         if (this.capNegotiationActive) {
             if (window.postManager) {
                 window.postManager.sendRawMessage('/CAP END');
-                console.log('CAP negotiation ended');
             }
             this.capNegotiationActive = false;
             
@@ -149,9 +143,7 @@ class ChatManager {
      * @returns {boolean}
      */
     hasCapability(cap) {
-        const hasIt = this.capabilities.enabled.includes(cap);
-        console.log(`Checking capability '${cap}':`, hasIt, '| Enabled caps:', this.capabilities.enabled.join(', '));
-        return hasIt;
+        return this.capabilities.enabled.includes(cap);
     }
     
     /**
@@ -165,7 +157,6 @@ class ChatManager {
         if (match) {
             this.serverPrefixes.modes = match[1];
             this.serverPrefixes.symbols = match[2];
-            console.log('Server PREFIX:', this.serverPrefixes);
         }
     }
     
@@ -221,7 +212,6 @@ class ChatManager {
      * @param {string} user - The user who is typing
      */
     handleTypingNotification(channel, user, state = 'active') {
-        console.log('handleTypingNotification called - channel:', channel, 'user:', user, 'state:', state, 'activeWindow:', this.activeWindow);
         
         // Create map for this channel if not present
         if (!this.typingUsers.has(channel)) {
@@ -234,14 +224,12 @@ class ChatManager {
             if (channelTyping.has(user)) {
                 clearTimeout(channelTyping.get(user));
             }
-            console.log('Adding user to typing list:', user);
             const timeout = setTimeout(() => {
                 this.removeTypingUser(channel, user);
             }, this.typingTimeout);
             channelTyping.set(user, timeout);
             this.updateTypingBar(channel);
         } else if (state === 'paused' || state === 'done') {
-            console.log('Removing user from typing list due to state:', state);
             this.removeTypingUser(channel, user);
             // Instantly hide typing bar for done/paused without transition
             if (this.typingBar && channel.toLowerCase() === this.activeWindow.toLowerCase()) {
@@ -255,7 +243,6 @@ class ChatManager {
                 }, 50);
             }
         } else {
-            console.log('Unknown typing state, removing user to avoid stale entry');
             this.removeTypingUser(channel, user);
         }
     }
@@ -354,7 +341,6 @@ class ChatManager {
     
     setupWebSocket() {
         this.socket.onopen = (event) => {
-            console.log('WebSocket connected successfully');
             // Don't show connection message - request capabilities silently
             
             // Request IRCv3 capabilities
@@ -362,14 +348,12 @@ class ChatManager {
         };
         
         this.socket.onerror = (errorEvent) => {
-            console.error('WebSocket error:', errorEvent);
             this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection error: " + (errorEvent.message || 'Unknown error') + "\n");
             this.addWindow();
             this.scrollToEnd("#chat_window", 100);
         };
         
         this.socket.onclose = (closeEvent) => {
-            console.log('WebSocket disconnected. Code:', closeEvent.code, 'Reason:', closeEvent.reason);
             this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection to server closed!\n");
             this.addWindow();
             this.scrollToEnd("#chat_window", 100);
@@ -379,11 +363,6 @@ class ChatManager {
             try {
                 const msg = JSON.parse(messageEvent.data);
                 const { message, category } = msg;
-                
-                // Debug: Log all incoming messages
-                if (message.startsWith('@')) {
-                    console.log('Received message with tags:', message);
-                }
                 
                 if (category === "error") {
                     this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: " + message + "\n");
@@ -400,7 +379,6 @@ class ChatManager {
                     this.addWindow();
                 }
             } catch (error) {
-                console.error('Error parsing message:', error);
                 this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error parsing message\n");
             }
         };

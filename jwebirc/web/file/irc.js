@@ -22,15 +22,11 @@ class IRCParser {
                 tags = this.parseMessageTags(text.substring(1, spaceIndex));
                 text = text.substring(spaceIndex + 1);
                 
-                console.log('Received message with tags:', tags);
-                
                 // Handle typing notification (tagmsg with typing tag)
                 if (tags.has('typing') || tags.has('+typing')) {
                     // Check if this is a TAGMSG command
                     const parts = text.split(' ');
-                    console.log('Potential TAGMSG, parts:', parts);
                     if (parts.length >= 3 && parts[1] === 'TAGMSG') {
-                        console.log('Processing TAGMSG');
                         const typingState = tags.get('typing') || tags.get('+typing') || 'active';
                         this.handleTypingTag(text, typingState);
                         return;
@@ -233,14 +229,10 @@ class IRCParser {
     
     autoJoinAfterLogin() {
         if (this.login) {
-            console.log('Auto-join triggered. Channel param:', this.channel);
             
             if (this.channel.length !== 0 && window.postManager) {
                 const channelsToJoin = this.chatManager.parseChannels(this.channel);
-                console.log('Joining channels:', channelsToJoin);
                 window.postManager.submitTextMessage("/join " + channelsToJoin);
-            } else {
-                console.log('No channel to join. Channel param empty.');
             }
             
             this.login = false;
@@ -467,10 +459,8 @@ class IRCParser {
      * @param {string} message - The TAGMSG message
      */
     handleTypingTag(message, typingState = 'active') {
-        console.log('handleTypingTag called with:', message);
         const parts = message.split(' ');
         if (parts.length < 3) {
-            console.log('Not enough parts in TAGMSG');
             return;
         }
         
@@ -478,14 +468,16 @@ class IRCParser {
         const command = parts[1];
         const target = parts[2];
         
-        console.log('TAGMSG details - nick:', nick, 'command:', command, 'target:', target);
-        
-        if (command === 'TAGMSG' && (target.startsWith('#') || target.startsWith('&'))) {
-            // Typing notification for a channel
-            console.log('Calling handleTypingNotification for', target, 'by', nick, 'state:', typingState);
-            this.chatManager.handleTypingNotification(target, nick, typingState);
-        } else {
-            console.log('Not a valid channel TAGMSG');
+        if (command === 'TAGMSG') {
+            // Check if target is a channel or our nickname (private message)
+            if (target.startsWith('#') || target.startsWith('&')) {
+                // Typing notification for a channel
+                this.chatManager.handleTypingNotification(target, nick, typingState);
+            } else if (target.toLowerCase() === this.user.toLowerCase()) {
+                // Typing notification for a private message (query)
+                // The target is our nickname, so the typing indicator should appear in the query window with the sender
+                this.chatManager.handleTypingNotification(nick, nick, typingState);
+            }
         }
     }
     
@@ -534,15 +526,12 @@ class IRCParser {
                 break;
             case 'LIST':
                 // List of active capabilities
-                console.log('Active capabilities:', caps.join(', '));
                 break;
             case 'NEW':
                 // New capabilities available
-                console.log('New capabilities available:', caps.join(', '));
                 break;
             case 'DEL':
                 // Capabilities no longer available
-                console.log('Capabilities removed:', caps.join(', '));
                 break;
         }
     }
