@@ -39,7 +39,7 @@ A modern web-based IRC (Internet Relay Chat) client built with Java EE, WebSocke
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/jwebirc.git
+git clone https://github.com/WarPigs1602/jwebirc.git
 cd jwebirc
 ```
 
