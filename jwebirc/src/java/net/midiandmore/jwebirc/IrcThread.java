@@ -110,12 +110,10 @@ public class IrcThread implements Runnable {
         setRuns(true);
         var p = getParser();
         try {
+            // Perform DNS resolution
             p.sendText("NOTICE AUTH *** (jwebirc) Looking up your hostname...", getSession(), "chat", "");
-            if (p.getIp().equalsIgnoreCase(p.getHostname())) {
-                p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
-            } else {
-                p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname.", getSession(), "chat", "");
-            }
+            performDnsResolution(p);
+            
             String line = null;
             p.handshake(getNick());
             while ((line = getParser().getIn().readLine()) != null) {
@@ -132,6 +130,71 @@ public class IrcThread implements Runnable {
             }
         }
         p.sendText("NOTICE AUTH *** (jwebirc) Connection aborted...", getSession(), "chat", "");
+    }
+    
+    /**
+     * Performs DNS resolution for the client's IP address
+     * @param p The IrcParser instance
+     */
+    private void performDnsResolution(IrcParser p) {
+        try {
+            String ip = p.getIp();
+            String currentHostname = p.getHostname();
+            
+            // Only perform reverse DNS lookup if hostname equals IP
+            // (meaning no hostname was provided or detected yet)
+            if (ip != null && !ip.isBlank() && ip.equalsIgnoreCase(currentHostname)) {
+                try {
+                    // Perform reverse DNS lookup
+                    java.net.InetAddress addr = java.net.InetAddress.getByName(ip);
+                    String resolvedHostname = addr.getCanonicalHostName();
+                    
+                    // Verify the resolved hostname doesn't just return the IP
+                    if (!resolvedHostname.equalsIgnoreCase(ip)) {
+                        // Perform forward DNS lookup to verify
+                        java.net.InetAddress verifyAddr = java.net.InetAddress.getByName(resolvedHostname);
+                        String verifyIp = verifyAddr.getHostAddress();
+                        
+                        // If forward lookup matches the original IP, accept the hostname
+                        if (verifyIp.equalsIgnoreCase(ip) || normalizeIp(verifyIp).equalsIgnoreCase(normalizeIp(ip))) {
+                            p.setHostname(resolvedHostname);
+                            p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname: " + resolvedHostname, getSession(), "chat", "");
+                        } else {
+                            p.sendText("NOTICE AUTH *** (jwebirc) No hostname found (verification failed).", getSession(), "chat", "");
+                        }
+                    } else {
+                        p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
+                    }
+                } catch (java.net.UnknownHostException ex) {
+                    p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
+                }
+            } else if (!ip.equalsIgnoreCase(currentHostname)) {
+                // Hostname was already resolved/provided
+                p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname: " + currentHostname, getSession(), "chat", "");
+            } else {
+                p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
+            }
+        } catch (Exception ex) {
+            p.sendText("NOTICE AUTH *** (jwebirc) DNS lookup error: " + ex.getMessage(), getSession(), "chat", "");
+        }
+    }
+    
+    /**
+     * Normalizes IP addresses for comparison (handles IPv6 variations)
+     * @param ip The IP address to normalize
+     * @return Normalized IP address
+     */
+    private String normalizeIp(String ip) {
+        try {
+            java.net.InetAddress addr = java.net.InetAddress.getByName(ip);
+            if (addr instanceof java.net.Inet6Address) {
+                // For IPv6, return canonical form
+                return addr.getHostAddress().toLowerCase().replaceAll("%(\\w+)$", "");
+            }
+            return addr.getHostAddress();
+        } catch (java.net.UnknownHostException ex) {
+            return ip;
+        }
     }
 
     /**
