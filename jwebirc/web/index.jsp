@@ -20,6 +20,11 @@
     session.setAttribute("webchat_user", webchatUser);
     session.setAttribute("webchat_password", webchatPassword);
     session.setAttribute("webchat_realname", webchatRealname);
+    session.setAttribute("webchat_name", webchatName);
+    session.setAttribute("webchat_title", webchatTitle);
+    session.setAttribute("irc_network_name", ircNetworkName);
+    session.setAttribute("irc_network_description", ircNetworkDescription);
+    session.setAttribute("irc_network_keywords", ircNetworkKeywords);
     session.setAttribute("webchat_mode", webircMode);
     session.setAttribute("webchat_cgi", webircCgi);
     session.setAttribute("hmac_temporal", hmacTemporal);
@@ -309,7 +314,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
     <div class="login-card">
         <div class="login-header">
             <i class="fas fa-comments fa-3x" style="color: var(--primary-color); margin-bottom: 1rem;"></i>
-            <h2>MidiAndMore IRC</h2>
+            <h2><%= session.getAttribute("irc_network_name") != null ? session.getAttribute("irc_network_name") : "IRC" %></h2>
             <p class="text-muted">Join the conversation</p>
         </div>
         
@@ -525,7 +530,8 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         <div class="login-footer">
             <small class="text-muted">
                     <i class="fas fa-shield-alt"></i> Secure connection &bull; 
-                    <i class="fas fa-globe"></i> WebSocket supported
+                    <i class="fas fa-globe"></i> WebSocket supported &bull;
+                    <a href="about.jsp" style="color: var(--primary-color); text-decoration: none;"><i class="fas fa-info-circle"></i> About</a>
             </small>
         </div>
     </div>

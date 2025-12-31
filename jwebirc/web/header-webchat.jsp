@@ -15,22 +15,24 @@
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         
-        <title>MidiAndMore.Net - IRC Web Client</title>
+        <title><%= session.getAttribute("webchat_title") != null ? session.getAttribute("webchat_title") : "IRC Web Client" %></title>
         
         <!-- Meta Tags -->
         <meta name="author" content="Andreas Pschorn">
-        <meta name="description" content="Modern web-based IRC client for the MidiAndMore.Net IRC Network - chat directly in your browser">
-        <meta name="keywords" content="IRC, WebChat, MidiAndMore, Chat, Internet Relay Chat">
-        <meta name="application-name" content="jWebIRC">
+        <meta name="description" content="<%= session.getAttribute("irc_network_description") != null ? session.getAttribute("irc_network_description") : "Modern web-based IRC client" %>">
+        <meta name="keywords" content="<%= session.getAttribute("irc_network_keywords") != null ? session.getAttribute("irc_network_keywords") : "IRC, WebChat, Chat, Internet Relay Chat" %>">
+        <meta name="application-name" content="<%= session.getAttribute("webchat_name") != null ? session.getAttribute("webchat_name") : "jWebIRC" %>">
         <meta name="theme-color" content="#990000">
         
         <!-- Open Graph / Social Media -->
         <meta property="og:type" content="website">
-        <meta property="og:title" content="MidiAndMore.Net - IRC Web Client">
+        <meta property="og:title" content="<%= session.getAttribute("webchat_title") != null ? session.getAttribute("webchat_title") : "IRC Web Client" %>">
         <meta property="og:description" content="Modern web-based IRC client">
         
         <!-- Favicon -->
-        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>💬</text></svg>">
+        <link rel="icon" type="image/svg+xml" href="file/logo.svg">
+        <link rel="icon" type="image/png" sizes="32x32" href="file/favicon-32x32.png">
+        <link rel="shortcut icon" href="file/favicon.ico">
         
         <!-- Stylesheets -->
         <link rel="preload" href="file/style.css" as="style">

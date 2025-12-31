@@ -16,6 +16,11 @@
     String webchatUser = "jwebirc";
     String webchatPassword = "password";
     String webchatRealname = "https://irc.midiandmore.net/";
+    String webchatName = "jWebIRC"; // Chat application name
+    String webchatTitle = "jWebIRC - IRC Web Client"; // Browser title
+    String ircNetworkName = "jWebIRC"; // IRC Network display name
+    String ircNetworkDescription = "Modern web-based IRC client"; // IRC Network description
+    String ircNetworkKeywords = "IRC, WebChat, Chat, Internet Relay Chat, jWebIRC"; // SEO keywords
     String forwardedForHeader = "X-Forwarded-For";
     String forwardedForIps = "127.0.0.1";
     String webircMode = "WEBIRC";

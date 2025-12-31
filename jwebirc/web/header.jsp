@@ -13,15 +13,17 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         
-        <title>MidiAndMore IRC - Login</title>
+        <title><%= session.getAttribute("irc_network_name") != null ? session.getAttribute("irc_network_name") + " - Login" : "IRC - Login" %></title>
         
         <!-- Meta Tags -->
         <meta name="author" content="Andreas Pschorn">
-        <meta name="description" content="Web-based IRC client for MidiAndMore.Net">
+        <meta name="description" content="<%= session.getAttribute("irc_network_description") != null ? session.getAttribute("irc_network_description") : "Web-based IRC client" %>">
         <meta name="theme-color" content="#990000">
         
         <!-- Favicon -->
-        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>💬</text></svg>">
+        <link rel="icon" type="image/svg+xml" href="file/logo.svg">
+        <link rel="icon" type="image/png" sizes="32x32" href="file/favicon-32x32.png">
+        <link rel="shortcut icon" href="file/favicon.ico">
         
         <!-- Stylesheets -->
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
