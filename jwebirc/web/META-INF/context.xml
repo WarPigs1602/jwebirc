@@ -1,2 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Context path="/jwebirc"/>
+<Context path="/jwebirc" reloadable="false">
+    
+    <!-- Session Manager Configuration -->
+    <Manager pathname="" />
+    
+    <!-- Resource Configuration -->
+    <!-- Uncomment and configure for database connection pooling
+    <Resource name="jdbc/jwebircDB" 
+              auth="Container"
+              type="javax.sql.DataSource"
+              maxTotal="20" 
+              maxIdle="10"
+              maxWaitMillis="10000"
+              username="dbuser" 
+              password="dbpass"
+              driverClassName="org.postgresql.Driver"
+              url="jdbc:postgresql://localhost:5432/jwebirc"
+              validationQuery="SELECT 1"
+              testOnBorrow="true"/>
+    -->
+    
+    <!-- Security Configuration -->
+    <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+           allow=".*" />
+    
+    <!-- Access Log Configuration -->
+    <Valve className="org.apache.catalina.valves.AccessLogValve"
+           directory="logs"
+           prefix="jwebirc_access_log"
+           suffix=".txt"
+           pattern="%h %l %u %t &quot;%r&quot; %s %b %D"
+           resolveHosts="false" />
+    
+    <!-- Error Report Valve -->
+    <Valve className="org.apache.catalina.valves.ErrorReportValve"
+           showReport="false"
+           showServerInfo="false" />
+           
+</Context>

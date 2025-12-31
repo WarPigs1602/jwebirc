@@ -1,253 +1,461 @@
-var messageHistory = new Array();
-var messageCounter = 0;
-var browser = navigator.appName;
-let message = document.getElementById("message");
-clearMessageHistory();
+/**
+ * jwebirc 2.0 - Message Post Manager Class
+ * @author Andreas Pschorn
+ * @license MIT
+ */
 
-function clearMessageHistory() {
-    messageHistory = new Array();
-}
-
-function addMessageHistory(message) {
-    messageHistory.unshift(message);
-}
-
-
-function submitChatInput(keyEvent) {
-    var key = keyEvent.key;
-    if (key === 'ArrowUp') {
-        messageUp();
+class PostManager {
+    constructor(chatManager) {
+        this.chatManager = chatManager;
+        this.messageHistory = [];
+        this.messageCounter = 0;
+        this.browser = navigator.appName;
+        this.messageInput = null;
+        this.typingTimer = null;
+        this.isTyping = false;
+        this.typingTimeout = 4000; // 4 seconds between typing notifications
+    }
+    
+    initialize() {
+        this.messageInput = document.getElementById("message");
+    }
+    
+    clearMessageHistory() {
+        this.messageHistory = [];
+    }
+    
+    addMessageHistory(message) {
+        this.messageHistory.unshift(message);
+    }
+    
+    submitChatInput(keyEvent) {
+        const key = keyEvent.key;
+        
+        // Send typing notification if message-tags capability is enabled
+        if (!['Enter', 'ArrowUp', 'ArrowDown', 'Tab', 'Escape'].includes(key) && 
+            !keyEvent.ctrlKey && !keyEvent.altKey && !keyEvent.metaKey) {
+            this.sendTypingNotification();
+        }
+        
+        // Navigation keys
+        if (key === 'ArrowUp') {
+            this.messageUp();
+            return true;
+        }
+        if (key === 'ArrowDown') {
+            this.messageDown();
+            return true;
+        }
+        
+        // Control keys for IRC formatting
+        if (keyEvent.ctrlKey) {
+            switch (key) {
+                case 'k': this.control(3); return false;  // Color
+                case 'b': this.control(2); return false;  // Bold
+                case 'i': this.control(29); return false; // Italic
+                case 'l': this.control(30); return false; // Strikethrough
+                case 'u': this.control(31); return false; // Underline
+                case 'o': this.control(15); return false; // Reset
+            }
+        }
+        
+        // Special keys
+        if (key === 'Enter') {
+            this.sendText();
+            return false;
+        }
+        if (key === 'Tab') {
+            this.tab();
+            return false;
+        }
+        
         return true;
     }
-    if (key === 'ArrowDown') {
-        messageDown();
-        return true;
+    
+    focusText() {
+        this.clearMessage();
     }
-    if (key === 'k' && keyEvent.ctrlKey) {
-        control(3);
-        return false;
+    
+    control(code) {
+        this.messageInput.value += String.fromCharCode(code);
     }
-    if (key === 'b' && keyEvent.ctrlKey) {
-        control(2);
-        return false;
+    
+    sendText() {
+        this.addMessageHistory(this.messageInput.value);
+        this.messageCounter = -1;
+        
+        if (this.messageInput.value !== "") {
+            // Send typing=done notification before sending message
+            this.sendTypingDone();
+            this.submitText();
+        }
+        this.clearMessage();
     }
-    if (key === 'i' && keyEvent.ctrlKey) {
-        control(29);
-        return false;
+    
+    submitText() {
+        const text = this.parseText(this.messageInput.value);
+        if (text) {
+            const msg = {
+                category: "chat",
+                message: text,
+                target: ""
+            };
+            this.chatManager.socket.send(JSON.stringify(msg));
+        }
     }
-    if (key === 'l' && keyEvent.ctrlKey) {
-        control(30);
-        return false;
+    
+    submitTextMessage(text) {
+        const parsed = this.parseText(text);
+        if (parsed) {
+            const msg = {
+                category: "chat",
+                message: parsed,
+                target: ""
+            };
+            this.chatManager.socket.send(JSON.stringify(msg));
+        }
     }
-    if (key === 'u' && keyEvent.ctrlKey) {
-        control(31);
-        return false;
+    
+    setTextMessage(text) {
+        this.messageInput.value = text;
+        this.messageInput.focus();
     }
-    if (key === 'o' && keyEvent.ctrlKey) {
-        control(15);
-        return false;
+    
+    /**
+     * Sends typing notification via TAGMSG
+     */
+    sendTypingNotification() {
+        // Check if message-tags capability is enabled
+        if (!this.chatManager.hasCapability('message-tags')) {
+            console.log('Typing notification skipped: message-tags capability not enabled');
+            return;
+        }
+        
+        const activeWindow = this.chatManager.getActiveWindow();
+        
+        // Only send for channels, not for Status or queries
+        if (!activeWindow || activeWindow.toLowerCase() === 'status' || 
+            (!activeWindow.startsWith('#') && !activeWindow.startsWith('&'))) {
+            console.log('Typing notification skipped: not in a channel');
+            return;
+        }
+        
+        // Prevent too frequent sending
+        if (this.isTyping) {
+            return;
+        }
+        
+        this.isTyping = true;
+        
+        // Send TAGMSG with typing=active tag (IRCv3 client-only-tags)
+        const tagmsgCommand = '/@+typing=active TAGMSG ' + activeWindow;
+        console.log('Sending typing notification:', tagmsgCommand);
+        this.sendRawMessage(tagmsgCommand);
+        
+        // Reset typing flag after timeout
+        if (this.typingTimer) {
+            clearTimeout(this.typingTimer);
+        }
+        
+        this.typingTimer = setTimeout(() => {
+            this.isTyping = false;
+        }, this.typingTimeout);
     }
-    if (key === 'Enter') {
-        sendText();
-        return false;
+    
+    /**
+     * Sends typing=done notification
+     */
+    sendTypingDone() {
+        if (!this.chatManager.hasCapability('message-tags')) {
+            return;
+        }
+        
+        const activeWindow = this.chatManager.getActiveWindow();
+        
+        // Only send for channels
+        if (!activeWindow || activeWindow.toLowerCase() === 'status' || 
+            (!activeWindow.startsWith('#') && !activeWindow.startsWith('&'))) {
+            return;
+        }
+        
+        // Clear typing state
+        this.isTyping = false;
+        if (this.typingTimer) {
+            clearTimeout(this.typingTimer);
+            this.typingTimer = null;
+        }
+        
+        // Send TAGMSG with typing=done tag
+        const tagmsgCommand = '/@+typing=done TAGMSG ' + activeWindow;
+        console.log('Sending typing done notification:', tagmsgCommand);
+        this.sendRawMessage(tagmsgCommand);
     }
-    if (key === 'Tab') {
-        tab();
-        return false;
-    } else  {
-        return true;
-    }
-}
-
-function focusText() {
-    clearMessage();
-}
-
-function control(code) {
-    message.value += String.fromCharCode(code);
-}
-
-function sendText() {
-    addMessageHistory(message.value);
-    messageCounter = -1;
-    if (message.value !== "") {
-        submitText();
-    }
-    clearMessage();
-}
-
-function submitText()
-{
-    message.value = parseText(message.value);
-    if (message.value) {
-        var msg = {
-            category: "chat",
-            message: message.value,
-            target: ""
-        };
-        socket.send(JSON.stringify(msg));
-    }
-}
-
-function submitTextMessage(text)
-{
-    text = parseText(text);
-    if (text) {
-        var msg = {
-            category: "chat",
-            message: text,
-            target: ""
-        };
-        socket.send(JSON.stringify(msg));
-    }
-}
-
-function setTextMessage(text)
-{
-    message.value = text;
-    message.focus();
-}
-
-function parseText(text) {
-    if (!text.startsWith("/")) {
-        if (aw.toLowerCase() !== "status") {
-            output = aw;
-            parse_output("&lt;<span style=\"color: " + get_color(aw, get_user()) + ";\">" + get_status(aw, get_user()) + get_user() + "</span>&gt; " + escapeHtml(text));
-            text = "/privmsg " + aw + " " + text;
-            add_window();
+    
+    /**
+     * Sends a RAW IRC message without parsing
+     * @param {string} rawMessage - The raw IRC message
+     */
+    sendRawMessage(rawMessage) {
+        if (rawMessage && this.chatManager.socket) {
+            const msg = {
+                category: "chat",
+                message: rawMessage,
+                target: ""
+            };
+            console.log('Sending raw message:', rawMessage);
+            this.chatManager.socket.send(JSON.stringify(msg));
         } else {
-            get_timestamp();
-            parse_output("*** You must start with / in the status window");
-            add_window();
+            console.error('Cannot send raw message: socket not available or message empty');
+        }
+    }
+    
+    parseText(text) {
+        const activeWindow = this.chatManager.getActiveWindow();
+        
+        // Not a command - send as message to current channel
+        if (!text.startsWith("/")) {
+            if (activeWindow.toLowerCase() !== "status") {
+                this.chatManager.setOutput(activeWindow);
+                
+                if (window.ircParser) {
+                    // Set output to the active window before parsing
+                    window.ircParser.output = activeWindow;
+                    window.ircParser.parseOutput("&lt;<span style=\"color: " + this.chatManager.getColor(activeWindow, window.user) + ";\">" + this.chatManager.getStatus(activeWindow, window.user) + window.user + "</span>&gt; " + this.escapeHtml(text));
+                }
+                
+                this.chatManager.addWindow();
+                return "/privmsg " + activeWindow + " " + text;
+            } else {
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " *** You must start with / in the status window\n");
+                this.chatManager.addWindow();
+                return null;
+            }
+        }
+        
+        // Parse IRC commands
+        return this.parseCommand(text, activeWindow);
+    }
+    
+    parseCommand(text, activeWindow) {
+        this.chatManager.setOutput(activeWindow);
+        
+        // CAP commands - send as raw without parsing
+        if (text.toUpperCase().startsWith("/CAP ")) {
+            const capCommand = text.substring(1); // Remove leading /
+            return capCommand;
+        }
+        
+        // Block /LIST command
+        if (text.toLowerCase().startsWith("/list")) {
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> The /LIST command is disabled\n");
+            this.chatManager.addWindow();
             return null;
         }
-    } else if (text.startsWith("/names ")) {
-    } else if (text.startsWith("/who ")) {
-    } else if (text.startsWith("/kick ")) {
-        text = text.substring(6);
-        output = aw;
-        text = "/kick " + aw + " " + escapeHtml(text);
-        add_window();
-    } else if (text.startsWith("/away ")) {
-        text = text.substring(6);
-        output = aw;
-        text = "/away " + escapeHtml(text);
-        add_window();
-    } else if (text.startsWith("/me ")) {
-        text = text.substring(4);
-        output = aw;
-        parse_output("* <span style=\"color: " + get_color(aw, get_user()) + ";\">" + get_status(aw, get_user()) + get_user() + "</span> " + text);
-        text = "/privmsg " + aw + " " + String.fromCharCode(1) + "ACTION " + escapeHtml(text) + String.fromCharCode(1);
-        add_window();
-    } else if (text.startsWith("/msg ")) {
-        text = text.substring(5);
-        output = aw;
-        parse_output("&raquo; " + text.split(" ", 1)[0] + " " + text.substring(text.split(" ", 1)[0].length + 1));
-        text = "/privmsg " + text.split(" ", 1)[0] + " " + escapeHtml(text).substring(text.split(" ", 1)[0].length + 1);
-        add_window();
-    } else if (text.startsWith("/notice ")) {
-        text = text.substring(8);
-        output = aw;
-        parse_output("-" + text.split(" ", 1)[0] + "- " + text.substring(text.split(" ", 1)[0].length + 1));
-        text = "/notice " + text.split(" ", 1)[0] + " " + escapeHtml(text).substring(text.split(" ", 1)[0].length + 1);
-        add_window();
-    } else if (text.startsWith("/part ")) {
-        text = text.substring(6);
-        output = text.split(" ", 1)[0];
-        text = text.substring(output.length);
-        aw = output;
-        parse_output("*** " + get_user() + " has left " + aw);
-        text = "/part " + output + " " + escapeHtml(text);
-        add_window();
-    } else if (text.startsWith("/quit ")) {
-        text = text.substring(6);
-        aw = null;
-        parse_output("*** " + get_user() + " has quit IRC (Quit: " + escapeHtml(text) + ")");
-        text = "/quit " + escapeHtml(text);
-        add_window();
+        
+        // /QUERY command - open private chat
+        if (text.startsWith("/query ")) {
+            const nick = text.substring(7).trim().split(" ")[0];
+            if (nick && nick.length > 0) {
+                if (!this.chatManager.isPage(nick)) {
+                    this.chatManager.addPage(nick, "query", true);
+                } else {
+                    this.chatManager.setWindow(nick);
+                }
+                // Display message in the query window itself
+                this.chatManager.setOutput(nick);
+                this.chatManager.parsePages(this.chatManager.getTimestamp() + " <span style=\"color: #00ff00\">==</span> Query window opened for " + nick + "\n", nick);
+                this.chatManager.addWindow();
+            } else {
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Usage: /query <nick>\n");
+                this.chatManager.addWindow();
+            }
+            return null;
+        }
+        
+        if (text.startsWith("/names ") || text.startsWith("/who ")) {
+            return this.ircText(text);
+        }
+        
+        if (text.startsWith("/kick ")) {
+            const content = text.substring(6);
+            this.chatManager.addWindow();
+            return this.ircText("/kick " + activeWindow + " " + this.escapeHtml(content));
+        }
+        
+        if (text.startsWith("/away ")) {
+            const content = text.substring(6);
+            this.chatManager.addWindow();
+            return this.ircText("/away " + this.escapeHtml(content));
+        }
+        
+        if (text.startsWith("/me ")) {
+            const content = text.substring(4);
+            if (window.ircParser) {
+                window.ircParser.output = activeWindow;
+                window.ircParser.parseOutput("* <span style=\"color: " + this.chatManager.getColor(activeWindow, window.user) + ";\">" + this.chatManager.getStatus(activeWindow, window.user) + window.user + "</span> " + content);
+            }
+            this.chatManager.addWindow();
+            return this.ircText("/privmsg " + activeWindow + " " + String.fromCharCode(1) + "ACTION " + this.escapeHtml(content) + String.fromCharCode(1));
+        }
+        
+        if (text.startsWith("/msg ")) {
+            const content = text.substring(5);
+            const target = content.split(" ", 1)[0];
+            const message = content.substring(target.length + 1);
+            if (window.ircParser) {
+                window.ircParser.output = activeWindow;
+                window.ircParser.parseOutput("&raquo; " + target + " " + message);
+            }
+            this.chatManager.addWindow();
+            return this.ircText("/privmsg " + target + " " + this.escapeHtml(message));
+        }
+        
+        if (text.startsWith("/notice ")) {
+            const content = text.substring(8);
+            const target = content.split(" ", 1)[0];
+            const message = content.substring(target.length + 1);
+            if (window.ircParser) {
+                window.ircParser.output = activeWindow;
+                window.ircParser.parseOutput("-" + target + "- " + message);
+            }
+            this.chatManager.addWindow();
+            return this.ircText("/notice " + target + " " + this.escapeHtml(message));
+        }
+        
+        if (text.startsWith("/part ")) {
+            const content = text.substring(6);
+            const target = content.split(" ", 1)[0];
+            const reason = content.substring(target.length);
+            this.chatManager.setWindow(target);
+            if (window.ircParser) {
+                window.ircParser.output = target;
+                window.ircParser.parseOutput("*** " + window.user + " has left " + target);
+            }
+            this.chatManager.addWindow();
+            return this.ircText("/part " + target + " " + this.escapeHtml(reason));
+        }
+        
+        if (text.startsWith("/quit ")) {
+            const content = text.substring(6);
+            if (window.ircParser) {
+                window.ircParser.output = activeWindow;
+                window.ircParser.parseOutput("*** " + window.user + " has quit IRC (Quit: " + this.escapeHtml(content) + ")");
+            }
+            this.chatManager.addWindow();
+            return this.ircText("/quit " + this.escapeHtml(content));
+        }
+        
+        return this.ircText(text);
     }
-    return ircText(text);
-}
-
-function ircText(text) {
-    var content = text.split(" ");
-    var result = "";
-    for (var i = 0; i < content.length; i++) {
-        if (i === 1 && (text.toLowerCase().startsWith("/quit") || text.toLowerCase().startsWith("/away"))) {
-            result += " :";
-        } else
-        if (i === 2 && text.toLowerCase().startsWith("/privmsg")) {
-            result += " :";
-        } else 
-        if (i === 2 && text.toLowerCase().startsWith("/notice")) {
-            result += " :";
-        } else 
-        if (i === 2 && content.length !== 3 && !text.toLowerCase().startsWith("/mode") && !text.toLowerCase().startsWith("/away") && !text.toLowerCase().startsWith("/quit") && !text.toLowerCase().startsWith("/kick")) {
-            result += " :";
-        } else if (i === 3 && text.toLowerCase().startsWith("/kick")) {
-            result += " :";
+    
+    ircText(text) {
+        const content = text.split(" ");
+        let result = "";
+        
+        for (let i = 0; i < content.length; i++) {
+            // Add colon (:) before message content
+            if (i === 1 && (text.toLowerCase().startsWith("/quit") || text.toLowerCase().startsWith("/away"))) {
+                result += " :";
+            } else if (i === 2 && text.toLowerCase().startsWith("/privmsg")) {
+                result += " :";
+            } else if (i === 2 && text.toLowerCase().startsWith("/notice")) {
+                result += " :";
+            } else if (i === 2 && content.length !== 3 && 
+                       !text.toLowerCase().startsWith("/mode") && 
+                       !text.toLowerCase().startsWith("/away") && 
+                       !text.toLowerCase().startsWith("/quit") && 
+                       !text.toLowerCase().startsWith("/kick")) {
+                result += " :";
+            } else if (i === 3 && text.toLowerCase().startsWith("/kick")) {
+                result += " :";
+            } else {
+                result += " ";
+            }
+            result += content[i];
+        }
+        
+        return result.trim();
+    }
+    
+    clearMessage() {
+        this.messageInput.value = "";
+        this.messageInput.focus();
+    }
+    
+    emoticon(text) {
+        this.messageInput.value += text;
+        this.messageInput.focus();
+    }
+    
+    messageUp() {
+        this.messageCounter++;
+        if (this.messageCounter < this.messageHistory.length) {
+            this.messageInput.value = this.messageHistory[this.messageCounter];
+            this.messageInput.focus();
+        }
+    }
+    
+    messageDown() {
+        if (this.messageCounter <= 0) {
+            this.messageInput.value = "";
         } else {
-            result += " ";
+            this.messageCounter--;
+            this.messageInput.value = this.messageHistory[this.messageCounter];
+            this.messageInput.focus();
         }
-        result += content[i];
     }
-    return result.trim();
-}
-
-function clearMessage() {
-    message.value = "";
-    message.focus();
-}
-
-function emoticon(text) {
-    message.value = message.value + text;
-    message.focus();
-}
-
-function messageUp() {
-    messageCounter++;
-    if (messageCounter < messageHistory.length) {
-        message.value = messageHistory[messageCounter];
-        message.focus();
-    }
-}
-
-function messageDown() {
-    if (messageCounter <= 0) {
-        message.value = "";
-    } else {
-        messageCounter--;
-        message.value = messageHistory[messageCounter];
-        message.focus();
-    }
-}
-
-function tab() {
-    var msg = message.value;
-    var arr = null;
-    var parse = null;
-    var content = "";
-    if (msg.includes(" ")) {
-        arr = msg.split(" ");
-        parse = arr[arr.length - 1];
-        arr[arr.length - 1] = parse_tab(parse, false);
-        for (const elem of arr) {
-            content += elem;
-            content += " ";
+    
+    tab() {
+        const msg = this.messageInput.value;
+        let content = "";
+        
+        if (msg.includes(" ")) {
+            const arr = msg.split(" ");
+            const parse = arr[arr.length - 1];
+            arr[arr.length - 1] = this.chatManager.parseTab(parse, false);
+            content = arr.join(" ");
+        } else {
+            content = this.chatManager.parseTab(msg, true);
         }
-        content = content.trim();
-    } else {
-       content = parse_tab(msg, true); 
+        
+        this.messageInput.value = content;
     }
-    message.value = content;
+    
+    escapeHtml(text) {
+        const element = document.createElement("p");
+        element.appendChild(document.createTextNode(text));
+        return element.innerHTML;
+    }
+    
+    unescapeHtml(text) {
+        const element = document.createElement("p");
+        element.innerHTML = text;
+        return element.childNodes.length === 0 ? "" : element.childNodes[0].nodeValue;
+    }
 }
 
-function escapeHtml(e) {
-    let n = document.createElement("p");
-    return n.appendChild(document.createTextNode(e)), n.innerHTML;
-}
+// Initialize Post Manager
+const postManager = new PostManager(chatManager);
+postManager.initialize();
+window.postManager = postManager;
 
-function unescapeHtml(e) {
-    let n = document.createElement("p");
-    return n.innerHTML = e, 0 === n.childNodes.length ? "" : n.childNodes[0].nodeValue;
-}
+// Legacy functions for compatibility
+let message = document.getElementById("message");
+function clearMessageHistory() { postManager.clearMessageHistory(); }
+function addMessageHistory(msg) { postManager.addMessageHistory(msg); }
+function submitChatInput(keyEvent) { return postManager.submitChatInput(keyEvent); }
+function focusText() { postManager.focusText(); }
+function control(code) { postManager.control(code); }
+function sendText() { postManager.sendText(); }
+function submitText() { postManager.submitText(); }
+function submitTextMessage(text) { postManager.submitTextMessage(text); }
+function setTextMessage(text) { postManager.setTextMessage(text); }
+function parseText(text) { return postManager.parseText(text); }
+function ircText(text) { return postManager.ircText(text); }
+function clearMessage() { postManager.clearMessage(); }
+function emoticon(text) { postManager.emoticon(text); }
+function messageUp() { postManager.messageUp(); }
+function messageDown() { postManager.messageDown(); }
+function tab() { postManager.tab(); }
+function escapeHtml(text) { return postManager.escapeHtml(text); }
+function unescapeHtml(text) { return postManager.unescapeHtml(text); }

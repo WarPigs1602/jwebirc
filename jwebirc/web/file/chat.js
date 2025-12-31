@@ -1,1066 +1,1257 @@
-var win = document.defaultView;
-let cw = new Array();
-let aw = 'Status';
-let nav_window = document.getElementById("nav_window");
-let right = document.getElementById("right");
-let nv = document.createElement("nv");
-let output = "Status";
-let user_color = null;
-let chat_window = document.getElementById("chat_window");
-let topic_window = document.getElementById("topic_window");
-var socket = new WebSocket(location.origin.replace(/^http/, 'ws') + "/mwebirc/Webchat");
-var login = true;
-var highlight = false;
-nv.innerHTML = '';
-window.onbeforeunload = function () {
-    return "WarnOnClose";
-};
-const colors = [
-    'white',
-    'black',
-    'navy',
-    'green',
-    'red',
-    'brown',
-    'purple',
-    'olive',
-    'yellow',
-    'lightgreen',
-    'teal',
-    'cyan',
-    'blue',
-    'pink',
-    'gray',
-    'lightgray'
-];
+/**
+ * jwebirc 2.0 - Modern IRC Web Client
+ * Main Chat Manager Class
+ * @author Andreas Pschorn
+ * @license MIT
+ */
 
-add_page('Status', 'status', true);
-parse_page(get_timestamp() + " mwebirc 1.0\n");
-parse_page(get_timestamp() + " &copy; 2024 by Andreas Pschorn\n");
-parse_page(get_timestamp() + " <a href=\"https://github.com/WarPigs1602/mwebirc\" target=\"_blank\">https://github.com/WarPigs1602/mwebirc</a>\n");
-parse_page(get_timestamp() + " Licensed under the MIT License\n");
-parse_page(get_timestamp() + " <span style=\"color: #ff0000\">==</span> Connecting to server, please wait...\n");
-
-function get_user() {
-    return user;
-}
-
-function set_window(win) {
-    aw = win;
-    add_window();
-}
-
-function parse_control(text) {
-    var content = text;
-    var arr = null;
-    var elem = 0;
-    if (text.includes(String.fromCharCode(3))) {
-        arr = text.split(String.fromCharCode(3));
-        var open = false;
-        content = arr[0];
-        var cnt = 0;
-        for (var i = 1; i < arr.length; i++) {
-            var color = "#000000";
-            var bgcolor = "#FFFFFF";
-            var code = arr[i].split("")[0] + arr[i].split("")[1] + arr[i].split("")[2] + arr[i].split("")[3] + arr[i].split("")[4].replace(/[^0-9,]/g, "");
-            if (code.length > 0 && arr[i].startsWith(code)) {
-                var control = new Array();
-                if (code.includes(",")) {
-                    control = code.split(",");
-                } else {
-                    control.push(code);
-                }
-                if (control.length === 1) {
-                    for (var j = 0; j < colors.length; j++) {
-                        if (j === parseInt(control[0])) {
-                            color = colors[j];
-                            cnt++;
-                            elem++;
-                        }
+class ChatManager {
+    constructor() {
+        // IRC color definitions
+        this.colors = [
+            'white', 'black', 'navy', 'green', 'red', 'brown',
+            'purple', 'olive', 'yellow', 'lightgreen', 'teal',
+            'cyan', 'blue', 'pink', 'gray', 'lightgray'
+        ];
+        
+        // State variables
+        this.win = document.defaultView;
+        this.channels = [];
+        this.activeWindow = 'Status';
+        this.output = 'Status';
+        this.userColor = null;
+        this.socket = null;
+        this.login = true;
+        this.highlight = false;
+        
+        // DOM elements
+        this.navWindow = null;
+        this.right = null;
+        this.chatWindow = null;
+        this.topicWindow = null;
+        this.navElement = document.createElement("nv");
+        this.eventBar = null;
+        this.eventBarTimeout = null;
+        this.typingBar = null;
+        this.typingUsers = new Map(); // Map<channel, Map<user, timeout>>
+        this.typingTimeout = 5000; // 5 seconds until typing indicator disappears
+        this.capabilities = {
+            requested: [],
+            available: [],
+            enabled: []
+        };
+        this.capNegotiationActive = false;
+        
+        // Server PREFIX mapping: modes -> symbols (e.g., 'qaohv' -> '~&@%+')
+        this.serverPrefixes = {
+            modes: 'ov',
+            symbols: '@+'
+        };
+    }
+    
+    /**
+     * Requests IRC capabilities
+     * Note: Server initiates CAP LS 302 if SASL is enabled
+     * Client only responds to CAP messages from server
+     */
+    requestCapabilities() {
+        this.capNegotiationActive = true;
+        
+        // List of desired capabilities - only message-tags (SASL added if available)
+        const desiredCaps = [
+            'message-tags'
+        ];
+        
+        this.capabilities.requested = [...desiredCaps];
+        console.log('Ready for capability negotiation. Waiting for server CAP LS...');
+        // Server will send CAP LS 302, we respond to it
+    }
+    
+    /**
+     * Processes CAP LS response (available capabilities)
+     * @param {Array} caps - Array of available capabilities
+     */
+    handleCapLS(caps) {
+        this.capabilities.available = caps;
+        console.log('Available capabilities:', caps.join(', '));
+        
+        // Request only desired capabilities that are actually available
+        const toRequest = this.capabilities.requested.filter(cap => caps.includes(cap));
+        
+        // Also request SASL if it's available (backend may require it)
+        if (caps.includes('sasl') && !toRequest.includes('sasl')) {
+            toRequest.unshift('sasl');
+        }
+        
+        if (toRequest.length > 0) {
+            // Request the available desired capabilities
+            if (window.postManager) {
+                // Send with / prefix as required by server
+                window.postManager.sendRawMessage('/' + 'CAP REQ :' + toRequest.join(' '));
+                console.log('Requesting caps:', toRequest.join(', '));
+            }
+        } else {
+            // No capabilities available, end negotiation
+            this.endCapNegotiation();
+        }
+    }
+    
+    /**
+     * Processes CAP ACK response (confirmed capabilities)
+     * @param {Array} caps - Array of activated capabilities
+     */
+    handleCapACK(caps) {
+        // Replace capabilities list (not push, to avoid duplicates)
+        this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
+        console.log('Capabilities enabled:', caps.join(', '));
+        
+        this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> Capabilities enabled: " + caps.join(', ') + "\n");
+        this.addWindow();
+        
+        // End CAP negotiation
+        this.endCapNegotiation();
+    }
+    
+    /**
+     * Processes CAP NAK response (rejected capabilities)
+     * @param {Array} caps - Array of rejected capabilities
+     */
+    handleCapNAK(caps) {
+        console.log('Capabilities rejected:', caps.join(', '));
+        this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Capabilities rejected: " + caps.join(', ') + "\n");
+        this.addWindow();
+        
+        // End CAP negotiation even on rejection
+        this.endCapNegotiation();
+    }
+    
+    /**
+     * Ends CAP negotiation
+     */
+    endCapNegotiation() {
+        if (this.capNegotiationActive) {
+            if (window.postManager) {
+                window.postManager.sendRawMessage('/CAP END');
+                console.log('CAP negotiation ended');
+            }
+            this.capNegotiationActive = false;
+        }
+    }
+    
+    /**
+     * Checks if a capability is enabled
+     * @param {string} cap - The capability to check
+     * @returns {boolean}
+     */
+    hasCapability(cap) {
+        const hasIt = this.capabilities.enabled.includes(cap);
+        console.log(`Checking capability '${cap}':`, hasIt, '| Enabled caps:', this.capabilities.enabled.join(', '));
+        return hasIt;
+    }
+    
+    /**
+     * Parses PREFIX from IRC 005 (ISUPPORT) message
+     * Example: PREFIX=(qaohv)~&@%+ -> modes: qaohv, symbols: ~&@%+
+     * @param {string} prefixString - The PREFIX value from 005
+     */
+    parseServerPrefix(prefixString) {
+        // Expected format: PREFIX=(modes)symbols
+        const match = prefixString.match(/^PREFIX=\(([a-z]+)\)(.+)$/i);
+        if (match) {
+            this.serverPrefixes.modes = match[1];
+            this.serverPrefixes.symbols = match[2];
+            console.log('Server PREFIX:', this.serverPrefixes);
+        }
+    }
+    
+    /**
+     * Gets the symbol for a given mode
+     * @param {string} mode - The mode letter (e.g., 'o', 'v')
+     * @returns {string} The corresponding symbol (e.g., '@', '+')
+     */
+    getModeSymbol(mode) {
+        const index = this.serverPrefixes.modes.indexOf(mode);
+        return index >= 0 ? this.serverPrefixes.symbols[index] : '';
+    }
+    
+    /**
+     * Gets the mode for a given symbol
+     * @param {string} symbol - The symbol (e.g., '@', '+')
+     * @returns {string} The corresponding mode letter (e.g., 'o', 'v')
+     */
+    getSymbolMode(symbol) {
+        const index = this.serverPrefixes.symbols.indexOf(symbol);
+        return index >= 0 ? this.serverPrefixes.modes[index] : '';
+    }
+    
+    /**
+     * Checks if a character is a status symbol
+     * @param {string} char - The character to check
+     * @returns {boolean}
+     */
+    isStatusSymbol(char) {
+        return this.serverPrefixes.symbols.includes(char);
+    }
+    
+    /**
+     * Gets a visual emoji/icon for a status symbol
+     * @param {string} symbol - The status symbol (e.g., '@', '+')
+     * @returns {string} The corresponding emoji/icon
+     */
+    getStatusEmoji(symbol) {
+        const mode = this.getSymbolMode(symbol);
+        const emojiMap = {
+            'q': '👑', // Owner/Founder - Crown
+            'a': '🛡️', // Admin/Protected - Shield
+            'o': '⭐', // Operator - Star
+            'h': '⚡', // Half-op - Lightning
+            'v': '💬'  // Voice - Speech bubble
+        };
+        return emojiMap[mode] || symbol;
+    }
+    
+    /**
+     * Processes typing notification (tagmsg)
+     * @param {string} channel - The channel
+     * @param {string} user - The user who is typing
+     */
+    handleTypingNotification(channel, user, state = 'active') {
+        console.log('handleTypingNotification called - channel:', channel, 'user:', user, 'state:', state, 'activeWindow:', this.activeWindow);
+        
+        // Create map for this channel if not present
+        if (!this.typingUsers.has(channel)) {
+            this.typingUsers.set(channel, new Map());
+        }
+        
+        const channelTyping = this.typingUsers.get(channel);
+        
+        if (state === 'active') {
+            if (channelTyping.has(user)) {
+                clearTimeout(channelTyping.get(user));
+            }
+            console.log('Adding user to typing list:', user);
+            const timeout = setTimeout(() => {
+                this.removeTypingUser(channel, user);
+            }, this.typingTimeout);
+            channelTyping.set(user, timeout);
+            this.updateTypingBar(channel);
+        } else if (state === 'paused' || state === 'done') {
+            console.log('Removing user from typing list due to state:', state);
+            this.removeTypingUser(channel, user);
+            // Instantly hide typing bar for done/paused without transition
+            if (this.typingBar && channel.toLowerCase() === this.activeWindow.toLowerCase()) {
+                this.typingBar.classList.add('hide');
+                this.typingBar.classList.remove('visible');
+                // Remove hide class after a moment to restore transition for next show
+                setTimeout(() => {
+                    if (this.typingBar) {
+                        this.typingBar.classList.remove('hide');
                     }
-                } else if (control.length === 2) {
-                    for (var j = 0; j < colors.length; j++) {
-                        if (j === parseInt(control[0])) {
-                            color = colors[j];
-                            cnt++;
-                            elem++;
-                        }
-                        if (j === parseInt(control[1])) {
-                            bgcolor = colors[j];
-                        }
-                    }
-                }
-                arr[i] = arr[i].substring(code.length);
-                if (control.length === 1) {
-                    content += "<span style=\"color: " + color + ";\">";
-                }
-                if (control.length === 2) {
-                    content += "<span style=\"color: " + color + "; background-color: " + bgcolor + ";\">";
-                }
-                content += end_codes(arr[i], elem);
-            } else {
-                content += "</span>";
-                content += end_codes(arr[i], elem);
+                }, 50);
+            }
+        } else {
+            console.log('Unknown typing state, removing user to avoid stale entry');
+            this.removeTypingUser(channel, user);
+        }
+    }
+    
+    /**
+     * Removes a user from the typing list
+     * @param {string} channel - The channel
+     * @param {string} user - The user
+     */
+    removeTypingUser(channel, user) {
+        if (this.typingUsers.has(channel)) {
+            const channelTyping = this.typingUsers.get(channel);
+            if (channelTyping.has(user)) {
+                clearTimeout(channelTyping.get(user));
+                channelTyping.delete(user);
+                this.updateTypingBar(channel);
             }
         }
-        if (cnt > 0) {
-            while (cnt !== 0) {
+    }
+    
+    /**
+     * Updates the typing bar display
+     * @param {string} channel - The channel
+     */
+    updateTypingBar(channel) {
+        // Only for the active channel
+        if (channel.toLowerCase() !== this.activeWindow.toLowerCase()) {
+            if (this.typingBar) {
+                this.typingBar.classList.remove('visible');
+            }
+            return;
+        }
+        
+        if (!this.typingBar) {
+            this.typingBar = document.getElementById('typingBar');
+        }
+        
+        if (!this.typingBar) return;
+        
+        const channelTyping = this.typingUsers.get(channel);
+        if (!channelTyping || channelTyping.size === 0) {
+            this.typingBar.classList.remove('visible');
+            return;
+        }
+        
+        const typingUsersList = Array.from(channelTyping.keys());
+        const typingText = document.getElementById('typingText');
+        
+        if (typingText) {
+            let text = '';
+            if (typingUsersList.length === 1) {
+                text = `${typingUsersList[0]} is typing`;
+            } else if (typingUsersList.length === 2) {
+                text = `${typingUsersList[0]} and ${typingUsersList[1]} are typing`;
+            } else if (typingUsersList.length === 3) {
+                text = `${typingUsersList[0]}, ${typingUsersList[1]} and ${typingUsersList[2]} are typing`;
+            } else {
+                text = `${typingUsersList.length} users are typing`;
+            }
+            typingText.textContent = text;
+        }
+        
+        this.typingBar.classList.add('visible');
+    }
+    
+    /**
+     * Clears all typing indicators for a channel
+     * @param {string} channel - The channel
+     */
+    clearTypingForChannel(channel) {
+        if (this.typingUsers.has(channel)) {
+            const channelTyping = this.typingUsers.get(channel);
+            channelTyping.forEach(timeout => clearTimeout(timeout));
+            channelTyping.clear();
+            this.updateTypingBar(channel);
+        }
+    }
+    
+    initialize() {
+        // Get DOM elements
+        this.navWindow = document.getElementById("nav_window");
+        this.right = document.getElementById("right");
+        this.chatWindow = document.getElementById("chat_window");
+        this.topicWindow = document.getElementById("topic_window");
+        this.eventBar = document.getElementById("eventBar");
+        this.typingBar = document.getElementById("typingBar");
+        
+        // Initialize WebSocket
+        const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsPath = location.pathname.split('/')[1];
+        this.socket = new WebSocket(wsProtocol + '//' + location.host + '/' + wsPath + '/Webchat');
+        
+        this.setupWebSocket();
+        this.initializePages();
+    }
+    
+    setupWebSocket() {
+        this.socket.onopen = (event) => {
+            console.log('WebSocket connected successfully');
+            // Don't show connection message - request capabilities silently
+            
+            // Request IRCv3 capabilities
+            this.requestCapabilities();
+        };
+        
+        this.socket.onerror = (errorEvent) => {
+            console.error('WebSocket error:', errorEvent);
+            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection error: " + (errorEvent.message || 'Unknown error') + "\n");
+            this.addWindow();
+            this.scrollToEnd("#chat_window", 100);
+        };
+        
+        this.socket.onclose = (closeEvent) => {
+            console.log('WebSocket disconnected. Code:', closeEvent.code, 'Reason:', closeEvent.reason);
+            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection to server closed!\n");
+            this.addWindow();
+            this.scrollToEnd("#chat_window", 100);
+        };
+        
+        this.socket.onmessage = (messageEvent) => {
+            try {
+                const msg = JSON.parse(messageEvent.data);
+                const { message, category } = msg;
+                
+                // Debug: Log all incoming messages
+                if (message.startsWith('@')) {
+                    console.log('Received message with tags:', message);
+                }
+                
+                if (category === "error") {
+                    this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: " + message + "\n");
+                    this.addWindow();
+                } else if (category === "chat") {
+                    if (message !== "Ping? Pong!") {
+                        if (window.ircParser) {
+                            window.ircParser.parseOutput(message);
+                        }
+                        this.addWindow();
+                    }
+                } else {
+                    this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Unknown category: " + category + "\n");
+                    this.addWindow();
+                }
+            } catch (error) {
+                console.error('Error parsing message:', error);
+                this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error parsing message\n");
+            }
+        };
+    }
+    
+    initializePages() {
+        this.navElement.innerHTML = '';
+        window.onbeforeunload = () => "WarnOnClose";
+        
+        this.addPage('Status', 'status', true);
+        this.parsePage(this.getTimestamp() + " jwebirc 2.0\n");
+        this.parsePage(this.getTimestamp() + " &copy; 2024-2025 by Andreas Pschorn\n");
+        this.parsePage(this.getTimestamp() + " <a href=\"https://github.com/WarPigs1602/jwebirc\" target=\"_blank\">https://github.com/WarPigs1602/jwebirc</a>\n");
+        this.parsePage(this.getTimestamp() + " Licensed under the MIT License\n");
+        this.parsePage(this.getTimestamp() + " <span style=\"color: #ffaa00\">==</span> Connecting to server, please wait...\n");
+    }
+    
+    parseControl(text) {
+        let content = text;
+        let arr = null;
+        let elem = 0;
+        
+        // Color codes (^C)
+        if (text.includes(String.fromCharCode(3))) {
+            arr = text.split(String.fromCharCode(3));
+            let open = false;
+            content = arr[0];
+            let cnt = 0;
+            
+            for (let i = 1; i < arr.length; i++) {
+                let color = "#000000";
+                let bgcolor = "#FFFFFF";
+                
+                // Extract color code safely
+                let chars = arr[i].split("");
+                let codeStr = "";
+                for (let j = 0; j < Math.min(5, chars.length); j++) {
+                    codeStr += chars[j];
+                }
+                let code = codeStr.replace(/[^0-9,]/g, "");
+                
+                if (code.length > 0 && arr[i].startsWith(code)) {
+                    let control = code.includes(",") ? code.split(",") : [code];
+                    
+                    if (control.length === 1) {
+                        for (let j = 0; j < this.colors.length; j++) {
+                            if (j === parseInt(control[0])) {
+                                color = this.colors[j];
+                                cnt++;
+                                elem++;
+                            }
+                        }
+                    } else if (control.length === 2) {
+                        for (let j = 0; j < this.colors.length; j++) {
+                            if (j === parseInt(control[0])) color = this.colors[j];
+                            if (j === parseInt(control[1])) bgcolor = this.colors[j];
+                        }
+                        cnt++;
+                        elem++;
+                    }
+                    
+                    arr[i] = arr[i].substring(code.length);
+                    content += control.length === 1 
+                        ? `<span style="color: ${color};">` 
+                        : `<span style="color: ${color}; background-color: ${bgcolor};">`;
+                    content += this.endCodes(arr[i], elem);
+                } else {
+                    content += "</span>" + this.endCodes(arr[i], elem);
+                }
+            }
+            
+            while (cnt > 0) {
                 content += "</span>";
                 cnt--;
                 elem--;
             }
+            text = content;
         }
-        text = content;
+        
+        // Bold (^B)
+        text = this.parseFormatCode(text, String.fromCharCode(2), "font-weight: bold");
+        // Italic (^])
+        text = this.parseFormatCode(text, String.fromCharCode(29), "font-style: italic");
+        // Strikethrough (^^)
+        text = this.parseFormatCode(text, String.fromCharCode(30), "text-decoration: line-through");
+        // Underline (^_)
+        text = this.parseFormatCode(text, String.fromCharCode(31), "text-decoration: underline");
+        
+        return text.trim();
     }
-    if (text.includes(String.fromCharCode(2))) {
-        arr = text.split(String.fromCharCode(2));
-        var open = false;
-        content = arr[0];
-        for (var i = 1; i < arr.length; i++) {
+    
+    parseFormatCode(text, code, style) {
+        if (!text.includes(code)) return text;
+        
+        const arr = text.split(code);
+        let content = arr[0];
+        let open = false;
+        
+        for (let i = 1; i < arr.length; i++) {
             if (!open) {
-                content += "<span style=\"font-weight: bold;\">";
+                content += `<span style="${style};">`;
                 open = true;
-                elem++;
-                content += end_codes(arr[i], elem);
             } else {
-                elem--;
                 content += "</span>";
-                content += end_codes(arr[i], elem);
                 open = false;
             }
+            content += arr[i];
         }
-        if (open) {
-            content += "</span>";
-            elem--;
-        }
-        text = content;
+        
+        if (open) content += "</span>";
+        return content;
     }
-    if (text.includes(String.fromCharCode(29))) {
-        arr = text.split(String.fromCharCode(29));
-        var open = false;
-        content = arr[0];
-        for (var i = 1; i < arr.length; i++) {
-            if (!open) {
-                content += "<span style=\"font-style: italic;\">";
-                open = true;
-                elem++;
-                content += end_codes(arr[i], elem);
-            } else {
-                elem--;
-                content += "</span>";
-                content += end_codes(arr[i], elem);
-                open = false;
-            }
-        }
-        if (open) {
-            elem--;
-            content += "</span>";
-        }
-        text = content;
-    }
-    if (text.includes(String.fromCharCode(30))) {
-        arr = text.split(String.fromCharCode(30));
-        var open = false;
-        content = arr[0];
-        for (var i = 1; i < arr.length; i++) {
-            if (!open) {
-                content += "<span style=\"text-decoration: line-through;\">";
-                open = true;
-                elem++;
-                content += end_codes(arr[i], elem);
-            } else {
-                elem--;
-                content += "</span>";
-                content += end_codes(arr[i], elem);
-                open = false;
-            }
-        }
-        if (open) {
-            elem--;
-            content += "</span>";
-        }
-        text = content;
-    }
-    if (text.includes(String.fromCharCode(31))) {
-        arr = text.split(String.fromCharCode(31));
-        var open = false;
-        content = arr[0];
-        for (var i = 1; i < arr.length; i++) {
-            if (!open) {
-                content += "<span style=\"text-decoration: underline;\">";
-                open = true;
-                elem++;
-                content += end_codes(arr[i], elem);
-            } else {
-                elem--;
-                content += "</span>";
-                content += end_codes(arr[i], elem);
-                open = false;
-            }
-        }
-        if (open) {
-            elem--;
-            content += "</span>";
-        }
-        text = content;
-    }
-    return text.trim();
-}
-
-function end_codes(text, elem) {
-    var content = text;
-    if (text.includes(String.fromCharCode(15))) {
-        arr = text.split(String.fromCharCode(15));
-        content = arr[0];
-        for (var j = 1; j < arr.length; j++) {
+    
+    endCodes(text, elem) {
+        if (!text.includes(String.fromCharCode(15))) return text;
+        
+        const arr = text.split(String.fromCharCode(15));
+        let content = arr[0];
+        
+        for (let j = 1; j < arr.length; j++) {
             while (elem >= 0) {
                 content += "</span>";
                 elem--;
-                continue;
             }
-            if (elem === -1) {
-                elem = 0;
-            }
-            content += "</span>";
+            elem = 0;
             content += arr[j];
         }
+        
+        return content;
     }
-    return content;
-}
-
-function add_nick(channel, nick, host, color) {
-    var elem = null;
-    var voice = false;
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            if (elem.nicks.length === 0) {
-                color = user_color;
-            }
-            if (nick.startsWith("+@")) {
-                nick = nick.substring(1);
-                voice = true;
-            }
-            if (nick.length > 15)  {
-                nick = nick.substring(0,14);
-            }
-            if (!elem.nicks.some(e => e.nick === nick)) {
-                elem.nicks.push({
-                    nick: nick,
-                    host: host,
-                    color: color,
-                    voice: voice
-                });
-            }
-        }
-    });
-    sort_status(channel);
-    render_userlist(channel);
-}
-
-function getRandomColor() {
-    var letters = '0123456789ABCDEF';
-    var color = '#';
-    for (var i = 0; i < 6; i++) {
-        if (i === 2) {
-            color += letters[Math.floor(Math.random() * 10)];
-        } else {
-            color += letters[Math.floor(Math.random() * 16)];
-        }
-    }
-    return color;
-}
-
-function parse_channels(channel) {
-    if (!channel.includes(",")) {
-        if (!is_channel(channel)) {
-            return "#" + channel;
-        }
-    }
-    var ch = channel.split(",");
-    var data = "";
-    for (const elem of ch) {
-        if (!is_channel(elem)) {
-            data += "#";
-        }
-        data += elem;
-        data += ",";
-    }
-    return data.substring(0, data.length - 1);
-}
-
-function set_host(channel, nick, host) {
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            var parsed = null;
-            var status = get_status(channel, nick);
-            if (status.length === 1) {
-                parsed = status + nick;
-            } else {
-                parsed = nick;
-            }
-            for (const name of elem.nicks) {
-                var color = name.color;
-                var voice = name.voice;
-                if (name.nick.toLowerCase() === parsed.toLowerCase()) {
-                    let i = elem.nicks.findIndex(data => data.nick === parsed);
-                    elem.nicks.splice(i, 1, {
-                        nick: parsed,
-                        host: host,
-                        color: color,
-                        voice: voice
-                    });
-                    return;
+    
+    addNick(channel, nick, host, color) {
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                if (elem.nicks.length === 0) color = this.userColor;
+                
+                // Extract all status symbols from the beginning of nick
+                let status = '';
+                while (nick.length > 0 && this.isStatusSymbol(nick[0])) {
+                    status += nick[0];
+                    nick = nick.substring(1);
+                }
+                
+                // Keep only the highest status (first symbol)
+                if (status.length > 0) {
+                    status = status[0];
+                }
+                
+                if (nick.length > 15) nick = nick.substring(0, 14);
+                
+                const fullNick = status + nick;
+                if (!elem.nicks.some(e => e.nick === fullNick)) {
+                    elem.nicks.push({ nick: fullNick, host, color });
                 }
             }
-        }
+        });
+        
+        this.sortStatus(channel);
+        this.renderUserlist(channel);
     }
-}
-
-function set_mode(channel, line) {
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            for (const name of elem.nicks) {
-                var nick = name.nick;
-                var host = name.host;
-                var color = name.color;
-                var voice = name.voice;
-                var parsed = null;
-                if (line.includes(" ")) {
-                    var modes = line.split(" ");
-                    if (modes[0].includes("-") || modes[0].includes("+")) {
-                        var mode = modes[0].split("");
-                        var add = false;
-                        var remove = false;
-                        var flag = 0;
-                        var nickname = get_nick(channel, nick);
-                        var status = get_status(channel, nickname);
-                        for (let j = 0; j < mode.length; j++) {
-                            if (mode[j] === "-") {
-                                remove = true;
-                                add = false;
-                                flag++;
-                                continue;
-                            } else if (mode[j] === "+") {
-                                add = true;
-                                remove = false;
-                                flag++;
-                                continue;
-                            } else if (mode[j] === "o") {
-                                if (add) {
-                                    if (status === "+") {
-                                        voice = true;
-                                    }
-                                    status = "@";
-                                } else if (remove) {
-                                    if (voice) {
-                                        status = "+";
-                                    } else {
-                                        status = "";
-                                    }
-                                }
-                            } else if (mode[j] === "v") {
-                                if (add) {
-                                    if (status !== "@") {
-                                        status = "+";
-                                    }
-                                    voice = true;
-                                } else if (remove) {
-                                    if (status !== "@") {
-                                        status = "";
-                                    }
-                                    voice = false;
-                                }
-                            } else {
-                                flag++;
-                                continue;
-                            }
-
-                            if (modes[j - flag + 1] === nickname) {
-                                parsed = status + nickname;
-                                let i = elem.nicks.findIndex(data => data.nick === nick);
-                                elem.nicks.splice(i, 1, {
-                                    nick: parsed,
-                                    host: host,
-                                    color: color,
-                                    voice: voice
-                                });
-                            }
-                        }
+    
+    getRandomColor() {
+        const pastelColors = [
+            '#a78bfa', '#c084fc', '#e879f9', '#f0abfc', '#fb7185',
+            '#fda4af', '#fdba74', '#fcd34d', '#fde047', '#bef264',
+            '#86efac', '#6ee7b7', '#5eead4', '#7dd3fc', '#93c5fd',
+            '#a5b4fc', '#c4b5fd', '#d8b4fe', '#f9a8d4', '#fbcfe8'
+        ];
+        return pastelColors[Math.floor(Math.random() * pastelColors.length)];
+    }
+    
+    parseChannels(channel) {
+        if (!channel.includes(",")) {
+            return this.isChannel(channel) ? channel : "#" + channel;
+        }
+        
+        const channels = channel.split(",");
+        return channels.map(ch => this.isChannel(ch) ? ch : "#" + ch).join(",");
+    }
+    
+    setHost(channel, nick, host) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                const status = this.getStatus(channel, nick);
+                const parsed = status.length === 1 ? status + nick : nick;
+                
+                for (const name of elem.nicks) {
+                    if (name.nick.toLowerCase() === parsed.toLowerCase()) {
+                        const i = elem.nicks.findIndex(data => data.nick === parsed);
+                        elem.nicks.splice(i, 1, {
+                            nick: parsed,
+                            host: host,
+                            color: name.color
+                        });
+                        return;
                     }
                 }
             }
         }
     }
-    sort_status(channel);
-    render_userlist(channel);
-}
-
-function del_nick(channel, nick) {
-    for (const elem of cw) {
-        var parsed = null;
-        var status = get_status(channel, nick);
-        if (status && status.length === 1) {
-            parsed = status + nick;
-        } else {
-            parsed = nick;
-        }
-        if (elem.page.toLowerCase() === channel.toLowerCase() && elem.nicks.some(e => e.nick === parsed)) {
-            let i = elem.nicks.findIndex(data => data.nick === parsed);
-            elem.nicks.splice(i, 1);
-        }
-    }
-    sort_status(channel);
-    render_userlist(channel);
-}
-
-function is_nick(channel, nick) {
-    var flag = false;
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            if (elem.nicks.length === 0) {
-                flag = false;
-                break;
-            }
+    
+    setMode(channel, line) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() !== channel.toLowerCase()) continue;
+            
             for (const name of elem.nicks) {
-                var nickname = get_status(channel, nick) + nick;
-                if (name.nick === nickname) {
-                    flag = true;
+                const { nick, host, color } = name;
+                let parsed = null;
+                
+                if (!line.includes(" ")) continue;
+                
+                const modes = line.split(" ");
+                if (!modes[0].includes("-") && !modes[0].includes("+")) continue;
+                
+                const mode = modes[0].split("");
+                let add = false;
+                let remove = false;
+                let flag = 0;
+                let nickname = this.getNick(channel, nick);
+                let currentStatus = this.getStatus(channel, nickname);
+                let currentStatusMode = currentStatus ? this.getSymbolMode(currentStatus) : '';
+                
+                for (let j = 0; j < mode.length; j++) {
+                    if (mode[j] === "-") {
+                        remove = true;
+                        add = false;
+                        flag++;
+                        continue;
+                    } else if (mode[j] === "+") {
+                        add = true;
+                        remove = false;
+                        flag++;
+                        continue;
+                    }
+                    
+                    // Check if this mode is a channel user mode
+                    const modeChar = mode[j];
+                    if (!this.serverPrefixes.modes.includes(modeChar)) {
+                        flag++;
+                        continue;
+                    }
+                    
+                    // Check if this mode change applies to this user
+                    if (modes[j - flag + 1] !== nickname) {
+                        continue;
+                    }
+                    
+                    if (add) {
+                        // Add mode: use new mode if it's higher priority than current
+                        const newModeIndex = this.serverPrefixes.modes.indexOf(modeChar);
+                        const currentModeIndex = currentStatusMode ? this.serverPrefixes.modes.indexOf(currentStatusMode) : -1;
+                        
+                        if (currentModeIndex === -1 || newModeIndex < currentModeIndex) {
+                            currentStatusMode = modeChar;
+                            currentStatus = this.getModeSymbol(modeChar);
+                        }
+                    } else if (remove) {
+                        // Remove mode
+                        if (currentStatusMode === modeChar) {
+                            // Find next highest mode for this user (check all modes)
+                            let nextHighestMode = '';
+                            for (let k = 0; k < this.serverPrefixes.modes.length; k++) {
+                                const checkMode = this.serverPrefixes.modes[k];
+                                if (checkMode !== modeChar) {
+                                    // Would need to track all user modes, for now just clear status
+                                    nextHighestMode = '';
+                                    break;
+                                }
+                            }
+                            currentStatusMode = nextHighestMode;
+                            currentStatus = nextHighestMode ? this.getModeSymbol(nextHighestMode) : '';
+                        }
+                    }
+                    
+                    parsed = currentStatus + nickname;
+                    const i = elem.nicks.findIndex(data => data.nick === nick);
+                    elem.nicks.splice(i, 1, { nick: parsed, host, color });
                 }
             }
         }
+        
+        this.sortStatus(channel);
+        this.renderUserlist(channel);
     }
-    return flag;
-}
-
-function clear_nicks(channel) {
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            for (const name of elem.nicks) {
+    
+    delNick(channel, nick) {
+        for (const elem of this.channels) {
+            const status = this.getStatus(channel, nick);
+            const parsed = status && status.length === 1 ? status + nick : nick;
+            
+            if (elem.page.toLowerCase() === channel.toLowerCase() && elem.nicks.some(e => e.nick === parsed)) {
+                const i = elem.nicks.findIndex(data => data.nick === parsed);
+                elem.nicks.splice(i, 1);
+            }
+        }
+        
+        this.sortStatus(channel);
+        this.renderUserlist(channel);
+    }
+    
+    isNick(channel, nick) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                if (elem.nicks.length === 0) return false;
+                
+                const nickname = this.getStatus(channel, nick) + nick;
+                if (elem.nicks.some(name => name.nick === nickname)) return true;
+            }
+        }
+        return false;
+    }
+    
+    clearNicks(channel) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
                 elem.nicks.splice(0, elem.nicks.length);
                 return;
             }
         }
     }
-}
-
-function quit(nick, reason) {
-    if (nick.toLowerCase() === user.toLowerCase()) {
-        user = nick;
-    }
-    for (const elem of cw) {
-        for (const name of elem.nicks) {
-            var channel = elem.page;
-            var parsed = null;
-            var status = get_status(channel, nick);
-            var color = get_color(channel, nick);
-            if (status && status.length === 1) {
-                parsed = status + nick;
-            } else {
-                parsed = nick;
-            }
-            if (name.nick.toLowerCase() === parsed.toLowerCase()) {
-                if (is_channel(channel)) {
-                    let i = elem.nicks.findIndex(data => data.nick === parsed);
-                    elem.nicks.splice(i, 1);
-                    sort_status(channel);
-                    render_userlist(channel);
+    
+    quit(nick, reason) {
+        if (nick.toLowerCase() === window.user.toLowerCase()) {
+            window.user = nick;
+        }
+        
+        for (const elem of this.channels) {
+            for (const name of elem.nicks) {
+                const channel = elem.page;
+                const status = this.getStatus(channel, nick);
+                const color = this.getColor(channel, nick);
+                const parsed = status && status.length === 1 ? status + nick : nick;
+                
+                if (name.nick.toLowerCase() === parsed.toLowerCase()) {
+                    if (this.isChannel(channel)) {
+                        const i = elem.nicks.findIndex(data => data.nick === parsed);
+                        elem.nicks.splice(i, 1);
+                        this.sortStatus(channel);
+                        this.renderUserlist(channel);
+                    }
+                    
+                    const reasonText = reason.length !== 0 ? " (" + reason + ")" : "";
+                    this.parsePages(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + parsed + "</span> has left IRC" + reasonText + "\n", channel);
                 }
-                if (reason.length !== 0) {
-                    reason = " (" + reason + ")";
+            }
+        }
+    }
+    
+    changeNick(oldnick, newnick) {
+        if (oldnick.toLowerCase() === window.user.toLowerCase()) {
+            window.user = newnick;
+        }
+        
+        for (const elem of this.channels) {
+            for (const name of elem.nicks) {
+                const channel = elem.page;
+                const status = this.getStatus(channel, oldnick);
+                const parsed = status && status.length === 1 ? status + oldnick : oldnick;
+                const parsed2 = status && status.length === 1 ? status + newnick : newnick;
+                
+                if (name.nick.toLowerCase() === parsed.toLowerCase()) {
+                    const { host, color } = name;
+                    
+                    if (this.isChannel(channel)) {
+                        const i = elem.nicks.findIndex(data => data.nick === parsed);
+                        elem.nicks.splice(i, 1, { nick: parsed2, host, color });
+                        this.sortStatus(channel);
+                        this.renderUserlist(channel);
+                    }
+                    
+                    this.parsePages(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + parsed + "</span> has changed his nick to <span style=\"color: " + color + ";\">" + newnick + "</span>\n", channel);
+                    break;
                 }
-                parse_pages(get_timestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + parsed + "</span> has left IRC" + reason + "\n", channel);
             }
         }
     }
-}
-
-function change_nick(oldnick, newnick) {
-    if (oldnick.toLowerCase() === user.toLowerCase()) {
-        user = newnick;
+    
+    isChannel(channel) {
+        return channel.startsWith("#") || channel.startsWith("&");
     }
-    for (const elem of cw) {
-        for (const name of elem.nicks) {
-            var channel = elem.page;
-            var parsed = null;
-            var parsed2 = null;
-            var status = get_status(channel, oldnick);
-            if (status && status.length === 1) {
-                parsed = status + oldnick;
-                parsed2 = status + newnick;
-            } else {
-                parsed = oldnick;
-                parsed2 = newnick;
+    
+    sortStatus(channel) {
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                elem.nicks.sort((x, y) => {
+                    // Get status symbols
+                    const xStatus = x.nick.length > 0 && this.isStatusSymbol(x.nick[0]) ? x.nick[0] : '';
+                    const yStatus = y.nick.length > 0 && this.isStatusSymbol(y.nick[0]) ? y.nick[0] : '';
+                    
+                    // Get status priority (lower index = higher priority)
+                    const xPriority = xStatus ? this.serverPrefixes.symbols.indexOf(xStatus) : 999;
+                    const yPriority = yStatus ? this.serverPrefixes.symbols.indexOf(yStatus) : 999;
+                    
+                    // Sort by status priority first
+                    if (xPriority !== yPriority) {
+                        return xPriority - yPriority;
+                    }
+                    
+                    // Then sort alphabetically by nickname (without status)
+                    const xName = xStatus ? x.nick.substring(1) : x.nick;
+                    const yName = yStatus ? y.nick.substring(1) : y.nick;
+                    return xName.localeCompare(yName);
+                });
             }
-            if (name.nick.toLowerCase() === parsed.toLowerCase()) {
-                var host = name.host;
-                var color = name.color;
-                var voice = name.voice;
-                if (is_channel(channel)) {
-                    let i = elem.nicks.findIndex(data => data.nick === parsed);
-                    elem.nicks.splice(i, 1, {
-                        nick: parsed2,
-                        host: host,
-                        color: color,
-                        voice: voice
-                    });
-                    sort_status(channel);
-                    render_userlist(channel);
+        });
+    }
+    
+    parseUrl(url) {
+        try {
+            const link = new URL(url);
+            return `<a href="${link.href}" target="_blank">${link.href}</a>`;
+        } catch (err) {
+            return url;
+        }
+    }
+    
+    renderUserlist(channel) {
+        const content = this.parseChannel(channel);
+        
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                const doc = document.createElement("ulist_" + content);
+                doc.innerHTML = "";
+                
+                elem.nicks.forEach(nick => {
+                    // Extract status symbol and nickname
+                    let statusSymbol = '';
+                    let displayNick = nick.nick;
+                    
+                    if (nick.nick.length > 0 && this.isStatusSymbol(nick.nick[0])) {
+                        statusSymbol = nick.nick[0];
+                        displayNick = nick.nick.substring(1);
+                    }
+                    
+                    // Create colored status emoji/icon combined with nick
+                    let statusHtml = '';
+                    if (statusSymbol) {
+                        const emoji = this.getStatusEmoji(statusSymbol);
+                        statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusSymbol}">${emoji}</span>`;
+                    }
+                    
+                    doc.innerHTML += `<span class="nick-entry" style="color: ${nick.color};">${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
+                });
+                
+                while (this.right.firstChild) {
+                    this.right.removeChild(this.right.firstChild);
                 }
-                parse_pages(get_timestamp() + "  <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + parsed + "</span> has changed his nick to <span style=\"color: " + color + ";\">" + newnick + "</span>\n", channel);
-                break;
+                
+                this.parseFrame(channel, elem.type);
+                this.right.appendChild(doc);
             }
-        }
+        });
     }
-}
-
-function is_channel(channel) {
-    var flag = false;
-    if (channel.startsWith("#") || channel.startsWith("&")) {
-        flag = true;
-    }
-    return flag;
-}
-
-function parse_flags(nick, name) {
-    flag = false;
-    if (nick === name.substring(1)) {
-        flag = true;
-    }
-    if (nick.substring(1) === name) {
-        flag = true;
-    }
-    if (nick === name) {
-        flag = true;
-    }
-    return flag;
-}
-
-function sort_status(channel) {
-    var elem = null;
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            elem.nicks.sort(SortArray);
-        }
-    });
-}
-
-function SortArray(x, y) {
-    return x.nick.localeCompare(y.nick);
-}
-
-function parse_url(url) {
-    try {
-        const link = new URL(url);
-        return "<a href=\"" + link.href + "\" target=\"_blank\">" + link.href + "</a>";
-    } catch (err) {
-        return url;
-    }
-}
-function render_userlist(channel) {
-    var content = parse_channel(channel);
-    var elem = null;
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            var nick = null;
-            var doc = document.createElement("ulist_" + content);
-            doc.innerHTML = "";
-            elem.nicks.forEach(async (nick) => {
-                doc.innerHTML += "<span style=\"color: " + nick.color + ";\">" + nick.nick + "</span>\n";
-            });
-            while (right.firstChild) {
-                right.removeChild(right.firstChild);
-            }
-            parse_frame(channel, elem.type);
-            right.appendChild(doc);
-        }
-    });
-    return status;
-}
-
-function parse_frame(channel, type) {
-    const right = document.querySelectorAll(".right_frame");
-    const cf = document.querySelectorAll(".chat_frame");
-    const tf = document.querySelectorAll(".topic_frame");
-    if (type !== "channel" || !window.matchMedia("(min-width: 600px)").matches) {
-        for (const frame of right) {
-            frame.style.cssText = 'display: none;';
-        }
-        for (const frame of cf) {
-            frame.style.cssText = "right: 3px; top: 25px;";
-        }
-        for (const frame of tf) {
-            frame.style.cssText = 'display: none;';
-        }
-    } else {
-        for (const frame of right) {
-            frame.style.cssText = "display: initial;";
-        }
-        for (const frame of cf) {
-            frame.style.cssText = "right: 200px; top: 47px;";
-        }
-        for (const frame of tf) {
-            frame.style.cssText = 'display: initial;';
-        }
-    }
-}
-function parse_status(channel, nickname) {
-    var status = null;
-    if (channel.startsWith("#") || channel.startsWith("&")) {
-        if (nickname.startsWith("@") || nickname.startsWith("+")) {
-            status = nickname.substring(0, 1);
+    
+    parseFrame(channel, type) {
+        const right = document.querySelectorAll(".right_frame");
+        const cf = document.querySelectorAll(".chat_frame");
+        const tf = document.querySelectorAll(".topic_frame");
+        const container = document.querySelector(".chat-container");
+        
+        if (type !== "channel" || !window.matchMedia("(min-width: 600px)").matches) {
+            // Status window or non-channel: use full width
+            if (container) container.classList.add('status-view');
+            right.forEach(frame => frame.style.cssText = 'display: none;');
+            cf.forEach(frame => frame.style.cssText = "right: 3px; top: 25px;");
+            tf.forEach(frame => frame.style.cssText = 'display: none;');
         } else {
-            status = "";
+            // Channel window: show nicklist
+            if (container) container.classList.remove('status-view');
+            right.forEach(frame => frame.style.cssText = "display: initial;");
+            cf.forEach(frame => frame.style.cssText = "right: 200px; top: 47px;");
+            tf.forEach(frame => frame.style.cssText = 'display: initial;');
         }
     }
-    return status;
-}
-
-function get_status(channel, nickname) {
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            for (const nick of elem.nicks) {
-                if (nick.nick.startsWith("@")) {
-                    if (nick.nick.toLowerCase() === "@" + nickname.toLowerCase()) {
-                        return "@";
-                    }
-                } else if (nick.nick.startsWith("+")) {
-                    if (nick.nick.toLowerCase() === "+" + nickname.toLowerCase()) {
-                        return "+";
+    
+    getStatus(channel, nickname) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                for (const nick of elem.nicks) {
+                    // Check if nick has a status symbol
+                    if (nick.nick.length > 0 && this.isStatusSymbol(nick.nick[0])) {
+                        const status = nick.nick[0];
+                        const name = nick.nick.substring(1);
+                        if (name.toLowerCase() === nickname.toLowerCase()) {
+                            return status;
+                        }
+                    } else if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
+                        return "";
                     }
                 }
             }
         }
+        return "";
     }
-    return "";
-}
-
-function get_color(channel, nickname) {
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            for (const nick of elem.nicks) {
-                if (nick.nick.startsWith("@")) {
-                    if (nick.nick.toLowerCase() === "@" + nickname.toLowerCase()) {
-                        return nick.color;
-                    }
-                } else if (nick.nick.startsWith("+")) {
-                    if (nick.nick.toLowerCase() === "+" + nickname.toLowerCase()) {
-                        return nick.color;
-                    }
-                } else {
-                    if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
+    
+    getColor(channel, nickname) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                for (const nick of elem.nicks) {
+                    // Check with status symbol
+                    if (nick.nick.length > 0 && this.isStatusSymbol(nick.nick[0])) {
+                        const name = nick.nick.substring(1);
+                        if (name.toLowerCase() === nickname.toLowerCase()) {
+                            return nick.color;
+                        }
+                    } else if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
                         return nick.color;
                     }
                 }
             }
         }
+        return "";
     }
-    return "";
-}
-
-function parse_tab(nickname, start) {
-    if (!is_channel(aw)) {
+    
+    parseTab(nickname, start) {
+        if (!this.isChannel(this.activeWindow)) return nickname;
+        
+        if (nickname.startsWith("#") || nickname.startsWith("&")) {
+            for (const elem of this.channels) {
+                if (elem.page.toLowerCase().startsWith(nickname.toLowerCase())) {
+                    return start ? elem.page + ": " : elem.page;
+                }
+            }
+        } else {
+            for (const elem of this.channels) {
+                if (elem.page.toLowerCase() === this.activeWindow.toLowerCase()) {
+                    for (const nick of elem.nicks) {
+                        const name = this.getNick(this.activeWindow, nick.nick);
+                        if (name.toLowerCase().startsWith(nickname.toLowerCase())) {
+                            return start ? name + ": " : name;
+                        }
+                    }
+                }
+            }
+        }
+        
         return nickname;
     }
-    if (nickname.startsWith("#") || nickname.startsWith("&")) {
-        for (const elem of cw) {
-            if (elem.page.toLowerCase().startsWith(nickname.toLowerCase())) {
-                var name = elem.page;
-                if (start) {
-                    return name + ": ";
-                } else {
-                    return name;
-                }
-            }
-        }
-    } else {
-        for (const elem of cw) {
-            if (elem.page.toLowerCase() === aw.toLowerCase()) {
-                for (const nick of elem.nicks) {
-                    var name = get_nick(aw, nick.nick);
-                    if (name.toLowerCase().startsWith(nickname.toLowerCase())) {
-                        if (start) {
-                            return name + ": ";
-                        } else {
-                            return name;
+    
+    getNick(channel, nickname) {
+        let status = null;
+        
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                elem.nicks.forEach(nick => {
+                    if (nick.nick.length > 0 && this.isStatusSymbol(nick.nick[0])) {
+                        if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
+                            status = nick.nick.substring(1);
                         }
-                    }
-                }
-            }
-        }
-    }
-    return nickname;
-}
-
-function get_nick(channel, nickname) {
-    var elem = null;
-    var status = null;
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            var nick = null;
-            elem.nicks.forEach(async (nick) => {
-                if (nick.nick.startsWith("@") || nick.nick.startsWith("+")) {
-                    if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
-                        status = nick.nick.substring(1, nick.nick.length);
-                    }
-                } else {
-                    if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
+                    } else if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
                         status = nick.nick;
                     }
-                }
-            });
-        }
-    });
-    return status;
-}
-
-function parse_channel(channel) {
-    return channel.replace(/[^a-zA-Z0-9]/g, "_");
-}
-
-function add_page(page, type, open) {
-    var content = parse_channel(page);
-    if (content.length === 0) {
-        return;
+                });
+            }
+        });
+        
+        return status;
     }
-    cw.push({
-        type: type.toLowerCase(),
-        page: page,
-        elem: document.createElement(content),
-        topic: "",
-        setted: 0,
-        by: "",
-        nicks: new Array()
-    });
-    if (open) {
-        set_window(page);
+    
+    parseChannel(channel) {
+        return channel.replace(/[^a-zA-Z0-9]/g, "_");
     }
-    refresh_nav();
-    add_window();
-}
-
-function render_topic(channel) {
-    if (!channel) {
-        return;
+    
+    addPage(page, type, open) {
+        const content = this.parseChannel(page);
+        if (content.length === 0) return;
+        
+        this.channels.push({
+            type: type.toLowerCase(),
+            page: page,
+            elem: document.createElement(content),
+            topic: "",
+            setted: 0,
+            by: "",
+            nicks: []
+        });
+        
+        if (open) this.setWindow(page);
+        this.refreshNav();
+        this.addWindow();
     }
-    var content = parse_channel(channel);
-    var elem = null;
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase() && channel.toLowerCase() === aw.toLowerCase()) {
-            var nick = null;
-            var text = elem.topic;
-            var arr = null;
-            var parsed = "";
-            if (text.includes(" ")) {
-                arr = text.split(" ");
+    
+    renderTopic(channel) {
+        if (!channel) return;
+        
+        const content = this.parseChannel(channel);
+        
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase() && channel.toLowerCase() === this.activeWindow.toLowerCase()) {
+                let text = elem.topic;
+                let parsed = "";
+                
+                const arr = text.includes(" ") ? text.split(" ") : [text];
                 for (const part of arr) {
                     if (part.startsWith("http://") || part.startsWith("https://")) {
-                        if (part.endsWith("\n")) {
-                            parsed += parse_url(part);
-                            parsed += "\n";
-                        } else {
-                            parsed += parse_url(part);
-                        }
+                        parsed += this.parseUrl(part);
+                        if (part.endsWith("\n")) parsed += "\n";
                     } else {
                         parsed += part;
                     }
-                    parsed += " ";
+                    if (arr.length > 1) parsed += " ";
                 }
+                
+                const topic = this.parseControl(parsed.trim());
+                const wrapper = document.createElement("div");
+                wrapper.className = "topic-wrapper";
+                wrapper.innerHTML = topic && topic.length !== 0 
+                    ? channel + ":&nbsp;" + topic 
+                    : channel + ":&nbsp;(No topic set)";
+                
+                while (this.topicWindow.firstChild) {
+                    this.topicWindow.removeChild(this.topicWindow.firstChild);
+                }
+                this.topicWindow.appendChild(wrapper);
+            }
+        });
+    }
+    
+    setTopic(channel, topic) {
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                elem.topic = topic;
+            }
+        });
+        this.renderTopic(channel);
+    }
+    
+    getTopic(channel) {
+        let topic = null;
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                topic = elem.topic;
+            }
+        });
+        return topic;
+    }
+    
+    updateTopic(channel, by, time) {
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                elem.by = by;
+                elem.setted = time;
+            }
+        });
+    }
+    
+    delPage(page) {
+        if (this.channels.length === 0) return;
+        
+        this.channels.forEach(elem => {
+            if (elem.page.toLowerCase() === page.toLowerCase() && elem.type.toLowerCase() !== "status") {
+                const i = this.channels.findIndex(data => data.page === page);
+                this.channels.splice(i, 1);
+            }
+        });
+        
+        this.refreshNav();
+        this.setWindow("Status");
+    }
+    
+    refreshNav() {
+        for (let i = 0; i < this.channels.length; i++) {
+            const isActive = this.channels[i].page === this.activeWindow ? ' active' : '';
+            
+            if (i === 0) {
+                this.navElement.innerHTML = `<nv class="${isActive}" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</nv> `;
             } else {
-                if (text.startsWith("http://") || text.startsWith("https://")) {
-                    if (text.endsWith("\n")) {
-                        parsed += parse_url(text);
-                    } else {
-                        parsed += parse_url(text);
-                        parsed += "\n";
-                    }
+                if (this.channels[i].page.startsWith("#") || this.channels[i].page.startsWith("&")) {
+                    this.navElement.innerHTML += `<nv class="${isActive}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${this.channels[i].page} Closed tab!');">✕</span></nv> `;
                 } else {
-                    parsed += text;
+                    this.navElement.innerHTML += `<nv class="${isActive}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${this.channels[i].page}');">✕</span></nv> `;
                 }
             }
-            topic = parse_control(parsed.trim());
-            var doc = document.createElement("topic_" + content);
-            if (topic && topic.length !== 0) {
-                doc.innerHTML = channel + ": " + topic;
-            } else {
-                doc.innerHTML = channel + ": (No topic set)";
-            }
-            while (topic_window.firstChild) {
-                topic_window.removeChild(topic_window.firstChild);
-            }
-            topic_window.appendChild(doc);
         }
-    });
-}
-
-function set_topic(channel, topic) {
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            elem.topic = topic;
+        
+        while (this.navWindow.firstChild) {
+            this.navWindow.removeChild(this.navWindow.firstChild);
         }
-    });
-    render_topic(channel);
-}
-
-function get_topic(channel) {
-    var topic = null;
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            topic = elem.topic;
-        }
-    });
-    return topic;
-}
-
-function update_topic(channel, by, time) {
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === channel.toLowerCase()) {
-            elem.by = by;
-            elem.setted = time;
-        }
-    });
-}
-
-function del_page(page) {
-    if (cw.length === 0) {
-        return;
+        this.navWindow.appendChild(this.navElement);
     }
-    cw.forEach(async (elem) => {
-        if (elem.page.toLowerCase() === page.toLowerCase() && elem.type.toLowerCase() !== "status") {
-            let i = cw.findIndex(data => data.page === page);
-            cw.splice(i, 1);
-        }
-    });
-    refresh_nav();
-    set_window("Status");
-}
-
-function refresh_nav() {
-    for (var i = 0; i < cw.length; i++) {
-        if (i === 0) {
-            nv.innerHTML = '<a href="#" onclick="set_window(\'' + cw[i].page + '\');"> ' + cw[i].page + '</a> ';
-        } else {
-            if (cw[i].page.startsWith("#") || cw[i].page.startsWith("&")) {
-                nv.innerHTML += '<a href="#" onclick="set_window(\'' + cw[i].page + '\');"> ' + cw[i].page + '</a> <a href="#" onclick="submitTextMessage(\'/part ' + cw[i].page + ' Closed tab!\');">X</a> ';
-            } else {
-                nv.innerHTML += '<a href="#" onclick="set_window(\'' + cw[i].page + '\');"> ' + cw[i].page + '</a> <a href="#" onclick="del_page(\'' + cw[i].page + '\');">X</a> ';
-            }
-        }
-    }
-    while (nav_window.firstChild) {
-        nav_window.removeChild(nav_window.firstChild);
-    }
-    nav_window.appendChild(nv);
-}
-
-function parse_pages2(text, cnt) {
-    cnt.elem.innerHTML += text;
-}
-
-function parse_pages(text, pg) {
-    for (const elem of cw) {
-        if (elem.page.toLowerCase() === pg.toLowerCase()) {
-            if (highlight) {
-                text = "<span style=\"color: #990000\">" + text;
-            }
-            var arr = null;
-            var parsed = "";
-            if (text.includes(" ")) {
-                arr = text.split(" ");
+    
+    parsePages(text, pg) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === pg.toLowerCase()) {
+                // Don't apply highlight in query windows (private messages)
+                const isQuery = elem.type === 'query';
+                if (this.highlight && !isQuery) {
+                    text = `<span style="color: #ff6b6b; font-weight: 600;">${text}`;
+                }
+                
+                const arr = text.includes(" ") ? text.split(" ") : [text];
+                let parsed = "";
+                
                 for (const part of arr) {
                     if (part.startsWith("http://") || part.startsWith("https://")) {
-                        if (part.endsWith("\n")) {
-                            parsed += parse_url(part);
-                            parsed += "\n";
-                        } else {
-                            parsed += parse_url(part);
-                        }
+                        parsed += this.parseUrl(part);
+                        if (part.endsWith("\n")) parsed += "\n";
                     } else {
                         parsed += part;
                     }
-                    parsed += " ";
+                    if (arr.length > 1) parsed += " ";
                 }
-            } else {
-                if (text.startsWith("http://") || text.startsWith("https://")) {
-                    if (text.endsWith("\n")) {
-                        parsed += parse_url(text);
-                    } else {
-                        parsed += parse_url(text);
-                        parsed += "\n";
-                    }
-                } else {
-                    parsed += text;
+                
+                parsed = this.parseControl(parsed.trim());
+                
+                if (this.highlight && !isQuery) {
+                    parsed += "</span>";
+                    this.highlight = false;
+                } else if (this.highlight && isQuery) {
+                    // Reset highlight flag for queries without applying styling
+                    this.highlight = false;
                 }
+                
+                elem.elem.innerHTML += parsed.trim() + "\n";
+                return;
             }
-            parsed = parse_control(parsed.trim());
-            if (highlight) {
-                parsed += "</span>";
-                highlight = false;
-            }
-            elem.elem.innerHTML += parsed.trim() + "\n";
-            return;
         }
     }
-}
-
-function parse_page(text) {
-    if (highlight) {
-        text = "<span style=\"color: #990000\">" + text;
-    }
-    for (const elem of cw) {
-        var arr = null;
-        var parsed = "";
-        if (text.includes(" ")) {
-            arr = text.split(" ");
+    
+    parsePage(text) {
+        if (this.highlight) {
+            text = `<span style="color: #ff6b6b; font-weight: 600;">${text}`;
+        }
+        
+        for (const elem of this.channels) {
+            const arr = text.includes(" ") ? text.split(" ") : [text];
+            let parsed = "";
+            
             for (const part of arr) {
                 if (part.startsWith("http://") || part.startsWith("https://")) {
-                    if (part.endsWith("\n")) {
-                        parsed += parse_url(part.substring(0, part.length - 5));
-                        parsed += "\n";
-                    } else {
-                        parsed += parse_url(part);
-                    }
+                    const cleanPart = part.endsWith("\n") ? part.substring(0, part.length - 1) : part;
+                    parsed += this.parseUrl(cleanPart);
+                    if (part.endsWith("\n")) parsed += "\n";
                 } else {
                     parsed += part;
                 }
-                parsed += " ";
+                if (arr.length > 1) parsed += " ";
             }
-        } else {
-            if (text.startsWith("http://") || text.startsWith("https://")) {
-                if (text.endsWith("\n")) {
-                    parsed += parse_url(text.substring(0, text.length - 5));
-                } else {
-                    parsed += parse_url(text);
-                    parsed += "\n";
+            
+            parsed = this.parseControl(parsed.trim());
+            
+            if (this.highlight) {
+                parsed += "</span>";
+                this.highlight = false;
+            }
+            
+            elem.elem.innerHTML += parsed.trim() + "\n";
+        }
+    }
+    
+    isPage(page) {
+        return this.channels.some(channel => channel.page.toLowerCase() === page.toLowerCase());
+    }
+    
+    scrollToEnd(block, duration = 100) {
+        block = block || $("html, body");
+        if (typeof block === 'string') block = $(block);
+        
+        if (block.length) {
+            block.animate({ scrollTop: block.get(0).scrollHeight }, duration);
+        }
+    }
+    
+    redirect(url) {
+        this.win.top.location.href = url;
+    }
+    
+    redirectChat(url) {
+        this.win.location.href = url;
+    }
+    
+    getPage(page) {
+        for (const channel of this.channels) {
+            if (channel.page.toLowerCase() === page.toLowerCase()) {
+                return channel.elem;
+            }
+        }
+        return null;
+    }
+    
+    addWindow() {
+        if (this.activeWindow) {
+            const content = this.getPage(this.activeWindow.toString());
+            this.chatWindow.innerHTML = content.innerHTML;
+            
+            this.channels.forEach(elem => {
+                if (elem.page.toLowerCase() === this.activeWindow.toLowerCase()) {
+                    this.parseFrame(elem.page, elem.type);
                 }
-            } else {
-                parsed += text;
-            }
-        }
-        parsed = parse_control(parsed.trim());
-        if (highlight) {
-            parsed += "</span>";
-            highlight = false;
-        }
-        elem.elem.innerHTML += parsed.trim() + "\n";
-    }
-}
-
-function is_page(page) {
-    for (let i = 0; i < cw.length; i++) {
-        if (cw[i].page.toLowerCase() === page.toLowerCase()) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function scrollToEnd(block, duration) {
-    // if block not passed scroll to end of page
-    block = block || $("html, body");
-    duration = duration || 100;
-    // you can pass also block's jQuery selector instead of jQuery object
-    if (typeof block === 'string') {
-        block = $(block);
-    }
-
-    // if exists at list one block
-    if (block.length) {
-        block.animate({
-            scrollTop: block.get(0).scrollHeight
-        }, duration);
-    }
-}
-
-function redirect(url) {
-    win.top.location.href = url;
-}
-
-function redirect_chat(url) {
-    win.location.href = url;
-}
-
-function get_page(page) {
-    for (let i = 0; i < cw.length; i++) {
-        if (cw[i].page.toLowerCase() === page.toLowerCase()) {
-            return cw[i].elem;
-        }
-    }
-    return null;
-}
-
-function add_window() {
-    if (aw) {
-        var content = get_page(aw.toString());
-        chat_window.innerHTML = content.innerHTML;
-        cw.forEach(async (elem) => {
-            if (elem.page.toLowerCase() === aw.toLowerCase()) {
-                parse_frame(elem.page, elem.type);
-            }
-        });
-        sort_status(aw);
-        render_userlist(aw);
-        render_topic(aw);
-        scrollToEnd("#chat_window", 1);
-    } else {
-        var elem = null;
-        cw.forEach(async (elem) => {
-            chat_window.innerHTML = elem.elem.innerHTML;
-            parse_frame(elem.page, elem.type);
-            scrollToEnd("#chat_window", 1);
-        });
-    }
-}
-
-function get_date(date) {
-    return new Date(date).toLocaleString();
-}
-
-
-function get_timestamp() {
-    var time = new Date();
-    var hour = time.getHours();
-    var minute = (time.getMinutes() < 10 ? '0' + time.getMinutes() : time.getMinutes());
-    var second = (time.getSeconds() < 10 ? '0' + time.getSeconds() : time.getSeconds());
-    return "[" + hour + ":" + minute + ":" + second + "]";
-}
-
-// callback-Funktion wird gerufen, wenn die Verbindung erfolgreich aufgebaut werden konnte
-
-socket.onopen = function () {
-
-    console.log("Succesfully connected...");
-};
-// callback-Funktion wird gerufen, wenn eine neue Websocket-Nachricht eintrifft
-
-socket.onmessage = function (messageEvent) {
-    var msg = JSON.parse(messageEvent.data);
-    var message = msg.message;
-    var category = msg.category;
-    if (category === "error") {
-        parse_page(get_timestamp() + "  <span style=\"color: #ff0000\">==</span> Error: " + message + "");
-        add_window();
-    } else if (category === "chat") {
-        if (message === "Ping? Pong!") {
-            return;
+            });
+            
+            this.sortStatus(this.activeWindow);
+            this.renderUserlist(this.activeWindow);
+            this.renderTopic(this.activeWindow);
+            this.scrollToEnd("#chat_window", 1);
         } else {
-            parse_output(message);
-            add_window();
+            this.channels.forEach(elem => {
+                this.chatWindow.innerHTML = elem.elem.innerHTML;
+                this.parseFrame(elem.page, elem.type);
+                this.scrollToEnd("#chat_window", 1);
+            });
         }
-    } else {
-        parse_page(get_timestamp() + "  <span style=\"color: #ff0000\">==</span> Unknown category: " + category + "");
-        add_window();
     }
-};
-// callback-Funktion wird gerufen, wenn ein Fehler auftritt
-
-socket.onerror = function (errorEvent) {
-    parse_page(get_timestamp() + "  <span style=\"color: #ff0000\">==</span> Connection to server lost: " + errorEvent.reason + "");
-    add_window();
-    scrollToEnd("#chat_window", 100);
-};
-socket.onclose = function (closeEvent) {
-    parse_page(get_timestamp() + "  <span style=\"color: #ff0000\">==</span> Connection to server closed!");
-    add_window();
-    scrollToEnd("#chat_window", 100);
+    
+    getDate(date) {
+        return new Date(date).toLocaleString();
+    }
+    
+    getTimestamp() {
+        const time = new Date();
+        const hour = time.getHours();
+        const minute = (time.getMinutes() < 10 ? '0' + time.getMinutes() : time.getMinutes());
+        const second = (time.getSeconds() < 10 ? '0' + time.getSeconds() : time.getSeconds());
+        return `[${hour}:${minute}:${second}]`;
+    }
+    
+    setWindow(win) {
+        this.activeWindow = win;
+        this.addWindow();
+        this.renderTopic(win); // Update topic for new channel
+        this.refreshNav(); // Update navigation to show active tab
+        this.updateTypingBar(win); // Update typing indicator for new channel
+    }
+    
+    getActiveWindow() {
+        return this.activeWindow;
+    }
+    
+    setOutput(output) {
+        this.output = output;
+    }
+    
+    getOutput() {
+        return this.output;
+    }
+    
+    setHighlight(highlight) {
+        this.highlight = highlight;
+    }
 }
-;
+
+// Initialize ChatManager
+const chatManager = new ChatManager();
+
+// Start initialization when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => chatManager.initialize());
+} else {
+    chatManager.initialize();
+}
+
+// Legacy function exports for compatibility
+function set_window(win) { chatManager.setWindow(win); }
+function get_user() { return window.user; }
+function submitTextMessage(text) { if (window.postManager) window.postManager.submitTextMessage(text); }
+function del_page(page) { chatManager.delPage(page); }
+function parse_output(text) { if (window.ircParser) window.ircParser.parseOutput(text); }
+function add_nick(channel, nick, host, color) { chatManager.addNick(channel, nick, host, color); }
+function getRandomColor() { return chatManager.getRandomColor(); }

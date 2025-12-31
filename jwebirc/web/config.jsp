@@ -21,4 +21,5 @@
     String webircMode = "WEBIRC";
     String webircCgi = "CGIIRC";
     String hmacTemporal = "1337";
+    String saslEnabled = "true"; // Enable SASL authentication option in login form
 %>

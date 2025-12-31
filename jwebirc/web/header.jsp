@@ -2,22 +2,35 @@
     Document   : header
     Created on : 17.08.2024, 13:38:44
     Author     : Andreas Pschorn
+    Updated    : 31.12.2025
 --%>
 
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
     <head>
-        <title>MidiAndMore.Net - IRC Network</title>
-        <meta content="Andreas Pschorn" name="author">
-        <meta content="&copy;2024 by Andreas Pschorn" name="description">
-        <meta content="MidiAndMore.Net" name="software">
-        <meta content="text/html; charset=UTF-8" http-equiv="content-type">
-        <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">  
-        <link rel="stylesheet" media="screen" href="file/style.css" type="text/css">  
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"> 
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        
+        <title>MidiAndMore IRC - Login</title>
+        
+        <!-- Meta Tags -->
+        <meta name="author" content="Andreas Pschorn">
+        <meta name="description" content="Web-based IRC client for MidiAndMore.Net">
+        <meta name="theme-color" content="#990000">
+        
+        <!-- Favicon -->
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>💬</text></svg>">
+        
+        <!-- Stylesheets -->
+        <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
+        <link rel="stylesheet" href="file/style.css" type="text/css">
+        
+        <!-- Icons -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+        
+        <!-- Scripts -->
         <script src="file/jquery.js"></script>
     </head>
     <body>
-        <div id="pagecontent">

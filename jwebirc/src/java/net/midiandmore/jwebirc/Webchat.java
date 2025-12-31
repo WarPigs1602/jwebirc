@@ -75,6 +75,9 @@ public class Webchat {
         var webircMode = (String) getHttpSession().getAttribute("webchat_mode");
         var webircCgi = (String) getHttpSession().getAttribute("webchat_cgi");
         var hmac = (String) getHttpSession().getAttribute("hmac_temporal");
+        var useSasl = (String) getHttpSession().getAttribute("use_sasl");
+        var saslUsername = (String) getHttpSession().getAttribute("sasl_username");
+        var saslPassword = (String) getHttpSession().getAttribute("sasl_password");
         if (config.getUserProperties().containsKey(forwardedForHeader.toLowerCase()) && ip.contains(forwardedForIps)) {
             hostname = (String) config.getUserProperties().getOrDefault(forwardedForHeader.toLowerCase(), "127.0.0.1");
             try {
@@ -87,20 +90,50 @@ public class Webchat {
             }
 
         }
-        if (hostname.contains("%")) {
-            hostname = hostname.substring(0, hostname.indexOf("%"));
-        }
-        if (ip.contains("%")) {
-            ip = ip.substring(0, ip.indexOf("%"));
-        }
+        // Parse IPv6 addresses first to get canonical form
         if (ip.contains(":")) {
+            // Remove zone ID if present (e.g., fe80::1%eth0 -> fe80::1)
+            if (ip.contains("%")) {
+                ip = ip.substring(0, ip.indexOf("%"));
+            }
             ip = parseIpv6(ip);
         }
         if (hostname.contains(":")) {
+            // Remove zone ID if present
+            if (hostname.contains("%")) {
+                hostname = hostname.substring(0, hostname.indexOf("%"));
+            }
             hostname = parseIpv6(hostname);
         }
         getSession().setMaxIdleTimeout(sessionTimeout);
-        setParser(new IrcParser(host, port, ssl, serverPassword, ident, user, password, webircMode, webircCgi, hmac));
+        
+        // Create IRC parser with proper error handling
+        try {
+            setParser(new IrcParser(host, port, ssl, serverPassword, ident, user, password, webircMode, webircCgi, hmac));
+            
+            // Set SASL parameters if enabled
+            if (useSasl != null && useSasl.equals("true") && saslUsername != null && !saslUsername.isBlank()) {
+                getParser().setUseSasl(true);
+                getParser().setSaslUsername(saslUsername);
+                getParser().setSaslPassword(saslPassword != null ? saslPassword : "");
+            } else {
+                getParser().setUseSasl(false);
+            }
+        } catch (IOException ex) {
+            Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "Failed to connect to IRC server: " + ex.getMessage(), ex);
+            try {
+                session.getBasicRemote().sendText(Json.createObjectBuilder()
+                        .add("category", "error")
+                        .add("target", "")
+                        .add("message", "Connection failed: " + ex.getMessage())
+                        .build().toString());
+                session.close();
+            } catch (IOException e) {
+                // Ignore
+            }
+            return;
+        }
+        
         String dispip = null;
         var nick = (String) getHttpSession().getAttribute("param-nick");
         var channel = (String) getHttpSession().getAttribute("param-channel");
@@ -130,9 +163,16 @@ public class Webchat {
         try {
             IPAddressString str = new IPAddressString(ip);
             IPAddress addr = str.toAddress();
-            return addr.toCompressedString();
+            // Return full canonical string for IPv6 without compression
+            // Example: 2001:0db8:0000:0000:0000:0000:0000:0001
+            if (addr.isIPv6()) {
+                return addr.toIPv6().toFullString();
+            } else {
+                return addr.toCanonicalString();
+            }
         } catch (AddressStringException e) {
-            //e.getMessage has validation error
+            // If parsing fails, return original string
+            System.err.println("Failed to parse IP address: " + ip + " - " + e.getMessage());
         }
         return ip;
     }
@@ -161,7 +201,12 @@ public class Webchat {
             args[0] = text;
             args[1] = "";
         }
-        args[0] = args[0].toUpperCase();
+        
+        // Only convert to uppercase if not a message tag (IRCv3)
+        // Message tags start with @ and are case-sensitive
+        if (!args[0].startsWith("@")) {
+            args[0] = args[0].toUpperCase();
+        }
         getParser().submitMessage("%s %s", args[0], args[1]);
     }
 
