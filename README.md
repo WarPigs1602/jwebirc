@@ -7,6 +7,11 @@ A modern web-based IRC (Internet Relay Chat) client built with Java EE, WebSocke
 - **WebSocket-based Communication**: Real-time IRC communication using modern WebSocket technology
 - **WEBIRC/CGIIRC Support**: Supports WEBIRC and CGIIRC protocols for proper IP forwarding
 - **SASL Authentication**: Optional SASL authentication support for secure login
+- **Bot Protection**: Multiple CAPTCHA options to prevent automated abuse
+  - Cloudflare Turnstile
+  - Google reCAPTCHA v2
+  - Google reCAPTCHA v3
+  - Google reCAPTCHA Enterprise
 - **Emoji Picker**: Built-in emoji support for modern chat experience
 - **Responsive Design**: Bootstrap-based responsive UI that works on desktop and mobile devices
 - **Session Management**: Automatic session handling with configurable timeouts
@@ -57,7 +62,13 @@ String webchatUser = "jwebirc";                    // Default username
 String webchatRealname = "https://your-site.com/"; // Realname field
 String webircMode = "WEBIRC";                      // WEBIRC or CGIIRC
 String saslEnabled = "true";                       // Enable SASL authentication
+
+// CAPTCHA Configuration
+String captchaEnabled = "false";                   // Enable CAPTCHA protection
+String captchaType = "TURNSTILE";                  // TURNSTILE, RECAPTCHA_V2, RECAPTCHA_V3, RECAPTCHA_ENTERPRISE
 ```
+
+For detailed CAPTCHA configuration, see [CAPTCHA_SETUP.md](CAPTCHA_SETUP.md).
 
 ### 3. Build the Project
 
@@ -100,6 +111,23 @@ String forwardedForHeader = "X-Forwarded-For";  // Header name for forwarded IP
 String forwardedForIps = "127.0.0.1";           // Trusted proxy IPs
 ```
 
+### CAPTCHA Protection
+Configure bot protection in `web/config.jsp`:
+```jsp
+String captchaEnabled = "true";                    // Enable CAPTCHA
+String captchaType = "TURNSTILE";                  // CAPTCHA provider
+String turnstileSiteKey = "your-site-key";         // Provider site key
+String turnstileSecretKey = "your-secret-key";     // Provider secret key
+```
+
+Supported CAPTCHA types:
+- **TURNSTILE**: Cloudflare Turnstile (recommended)
+- **RECAPTCHA_V2**: Google reCAPTCHA v2 (checkbox)
+- **RECAPTCHA_V3**: Google reCAPTCHA v3 (invisible, score-based)
+- **RECAPTCHA_ENTERPRISE**: Google reCAPTCHA Enterprise
+
+See [CAPTCHA_SETUP.md](CAPTCHA_SETUP.md) for detailed setup instructions.
+
 ### Security
 - Configure HTTPS enforcement in `web/WEB-INF/web.xml`
 - Set secure cookie flags for production environments
@@ -113,7 +141,8 @@ jwebirc/
 │   └── net/midiandmore/jwebirc/
 │       ├── Webchat.java        # WebSocket endpoint
 │       ├── IrcParser.java      # IRC protocol parser
-│       └── IrcThread.java      # IRC connection handler
+│       ├── IrcThread.java      # IRC connection handler
+│       └── CaptchaValidator.java # CAPTCHA validation
 ├── web/                         # Web application files
 │   ├── *.jsp                   # JSP pages
 │   ├── file/                   # Static resources
@@ -126,7 +155,8 @@ jwebirc/
 │   └── WEB-INF/
 │       ├── web.xml            # Web application descriptor
 │       └── pom.xml            # Maven dependencies
-└── build.xml                   # Ant build script
+├── build.xml                   # Ant build script
+└── CAPTCHA_SETUP.md           # CAPTCHA configuration guide
 ```
 
 ## Usage

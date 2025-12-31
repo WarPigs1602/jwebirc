@@ -22,4 +22,29 @@
     String webircCgi = "CGIIRC";
     String hmacTemporal = "1337";
     String saslEnabled = "true"; // Enable SASL authentication option in login form
+    
+    // =============== CAPTCHA Configuration ===============
+    // CAPTCHA Type: NONE, TURNSTILE, RECAPTCHA_V2, RECAPTCHA_V3, RECAPTCHA_ENTERPRISE
+    String captchaEnabled = "false"; // Set to "true" to enable CAPTCHA
+    String captchaType = "TURNSTILE"; // Choose: TURNSTILE, RECAPTCHA_V2, RECAPTCHA_V3, RECAPTCHA_ENTERPRISE
+    
+    // Cloudflare Turnstile Configuration
+    String turnstileSiteKey = "1x00000000000000000000AA"; // Your Turnstile site key (visible)
+    String turnstileSecretKey = "1x0000000000000000000000000000000AA"; // Your Turnstile secret key (server-side)
+    
+    // Google reCAPTCHA v2 Configuration
+    String recaptchaV2SiteKey = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"; // Your reCAPTCHA v2 site key
+    String recaptchaV2SecretKey = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"; // Your reCAPTCHA v2 secret key
+    
+    // Google reCAPTCHA v3 Configuration
+    String recaptchaV3SiteKey = "6LdqmCAqAAAAAJLpfQv9hGgYmHl8xT5qT3l6v8Z7"; // Your reCAPTCHA v3 site key
+    String recaptchaV3SecretKey = "6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k"; // Your reCAPTCHA v3 secret key
+    String recaptchaV3MinScore = "0.5"; // Minimum score (0.0 to 1.0, typically 0.5)
+    
+    // Google reCAPTCHA Enterprise Configuration
+    String recaptchaEnterpriseEnabled = "false"; // Set to "true" for Enterprise
+    String recaptchaEnterpriseProjectId = "your-project-id"; // Your Google Cloud project ID
+    String recaptchaEnterpriseSiteKey = "your-site-key"; // Your reCAPTCHA Enterprise site key
+    String recaptchaEnterpriseApiKey = "your-api-key"; // Your Google Cloud API key
+    String recaptchaEnterpriseMinScore = "0.5"; // Minimum score (0.0 to 1.0)
 %>

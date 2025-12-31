@@ -42,6 +42,66 @@
     }
     var paramConnect = request.getParameter("connect");
     if (paramConnect != null) {
+        // CAPTCHA Validation
+        String captchaError = null;
+        if (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) {
+            String captchaToken = request.getParameter("captchaToken");
+            String remoteIp = request.getRemoteAddr();
+            
+            // Get forwarded IP if applicable
+            String forwardedFor = request.getHeader(forwardedForHeader);
+            if (forwardedFor != null && !forwardedFor.isEmpty() && forwardedForIps.contains(remoteIp)) {
+                remoteIp = forwardedFor.split(",")[0].trim();
+            }
+            
+            CaptchaValidator.CaptchaType cType = CaptchaValidator.CaptchaType.NONE;
+            String siteKey = "";
+            String secretKey = "";
+            String projectId = "";
+            double minScore = 0.5;
+            
+            // Determine CAPTCHA type and keys
+            if (captchaType != null) {
+                switch (captchaType.toUpperCase()) {
+                    case "TURNSTILE":
+                        cType = CaptchaValidator.CaptchaType.TURNSTILE;
+                        secretKey = turnstileSecretKey;
+                        break;
+                    case "RECAPTCHA_V2":
+                        cType = CaptchaValidator.CaptchaType.RECAPTCHA_V2;
+                        secretKey = recaptchaV2SecretKey;
+                        break;
+                    case "RECAPTCHA_V3":
+                        cType = CaptchaValidator.CaptchaType.RECAPTCHA_V3;
+                        secretKey = recaptchaV3SecretKey;
+                        minScore = Double.parseDouble(recaptchaV3MinScore);
+                        break;
+                    case "RECAPTCHA_ENTERPRISE":
+                        cType = CaptchaValidator.CaptchaType.RECAPTCHA_ENTERPRISE;
+                        projectId = recaptchaEnterpriseProjectId;
+                        siteKey = recaptchaEnterpriseSiteKey;
+                        secretKey = recaptchaEnterpriseApiKey;
+                        minScore = Double.parseDouble(recaptchaEnterpriseMinScore);
+                        break;
+                }
+            }
+            
+            // Validate CAPTCHA
+            boolean captchaValid = CaptchaValidator.validate(cType, captchaToken, secretKey, 
+                                                            remoteIp, projectId, siteKey, minScore);
+            
+            if (!captchaValid) {
+                captchaError = "CAPTCHA validation failed. Please try again.";
+            }
+        }
+        
+        if (captchaError != null) {
+            // Display error and show form again
+            paramConnect = null; // Prevent connection
+        }
+    }
+    
+    if (paramConnect != null) {
         var paramNick = request.getParameter("nick");
         if (paramNick == null) {
             paramNick = "";
@@ -170,6 +230,35 @@
 } else {
 %>
 <jsp:include page="header.jsp"/>
+
+<!-- CAPTCHA Scripts -->
+<% 
+String activeCaptchaType = (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) ? captchaType : "NONE";
+String activeSiteKey = "";
+
+if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
+    activeSiteKey = turnstileSiteKey;
+%>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<%
+} else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_V2")) {
+    activeSiteKey = recaptchaV2SiteKey;
+%>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<%
+} else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_V3")) {
+    activeSiteKey = recaptchaV3SiteKey;
+%>
+<script src="https://www.google.com/recaptcha/api.js?render=<%= activeSiteKey %>"></script>
+<%
+} else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_ENTERPRISE")) {
+    activeSiteKey = recaptchaEnterpriseSiteKey;
+%>
+<script src="https://www.google.com/recaptcha/enterprise.js?render=<%= activeSiteKey %>"></script>
+<%
+}
+%>
+
 <div class="login-container">
     <div class="login-card">
         <div class="login-header">
@@ -264,8 +353,9 @@
             });
         </script>
         
-        <form method="POST" name="login" action="" target="_top" accept-charset="utf-8" class="login-form">
+        <form method="POST" name="login" action="" target="_top" accept-charset="utf-8" class="login-form" id="loginForm">
             <input name="connect" value="true" type="hidden">
+            <input type="hidden" id="captchaToken" name="captchaToken" value="">
             
             <div class="form-floating mb-3">
                 <input class="form-control" 
@@ -327,7 +417,32 @@
             </div>
             <% } %>
             
-                <button class="btn btn-primary btn-lg w-100" type="submit">
+            <!-- CAPTCHA Widget -->
+            <% if (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) { %>
+            <div class="mb-3">
+                <% if (captchaType.equalsIgnoreCase("TURNSTILE")) { %>
+                    <!-- Cloudflare Turnstile -->
+                    <div class="cf-turnstile" data-sitekey="<%= turnstileSiteKey %>" data-callback="onCaptchaSuccess"></div>
+                <% } else if (captchaType.equalsIgnoreCase("RECAPTCHA_V2")) { %>
+                    <!-- Google reCAPTCHA v2 -->
+                    <div class="g-recaptcha" data-sitekey="<%= recaptchaV2SiteKey %>" data-callback="onCaptchaSuccess"></div>
+                <% } else if (captchaType.equalsIgnoreCase("RECAPTCHA_V3")) { %>
+                    <!-- Google reCAPTCHA v3 (invisible) -->
+                    <input type="hidden" id="recaptchaV3Token" name="recaptchaV3Token">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt"></i> Protected by reCAPTCHA v3
+                    </small>
+                <% } else if (captchaType.equalsIgnoreCase("RECAPTCHA_ENTERPRISE")) { %>
+                    <!-- Google reCAPTCHA Enterprise (invisible) -->
+                    <input type="hidden" id="recaptchaEnterpriseToken" name="recaptchaEnterpriseToken">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt"></i> Protected by reCAPTCHA Enterprise
+                    </small>
+                <% } %>
+            </div>
+            <% } %>
+            
+                <button class="btn btn-primary btn-lg w-100" type="submit" id="submitBtn">
                     <i class="fas fa-sign-in-alt"></i> Join chat
             </button>
         </form>
@@ -340,6 +455,56 @@
         </div>
     </div>
 </div>
+
+<!-- CAPTCHA JavaScript -->
+<script>
+    const captchaEnabled = <%= (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) ? "true" : "false" %>;
+    const captchaType = "<%= activeCaptchaType %>";
+    const captchaSiteKey = "<%= activeSiteKey %>";
+    
+    // CAPTCHA success callback
+    function onCaptchaSuccess(token) {
+        document.getElementById('captchaToken').value = token;
+    }
+    
+    // Form submission handler
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        if (!captchaEnabled) {
+            return true;
+        }
+        
+        if (captchaType === 'RECAPTCHA_V3') {
+            e.preventDefault();
+            grecaptcha.ready(function() {
+                grecaptcha.execute(captchaSiteKey, {action: 'login'}).then(function(token) {
+                    document.getElementById('captchaToken').value = token;
+                    document.getElementById('loginForm').submit();
+                });
+            });
+            return false;
+        } else if (captchaType === 'RECAPTCHA_ENTERPRISE') {
+            e.preventDefault();
+            grecaptcha.enterprise.ready(function() {
+                grecaptcha.enterprise.execute(captchaSiteKey, {action: 'login'}).then(function(token) {
+                    document.getElementById('captchaToken').value = token;
+                    document.getElementById('loginForm').submit();
+                });
+            });
+            return false;
+        } else {
+            // For TURNSTILE and RECAPTCHA_V2, check if token is set
+            const token = document.getElementById('captchaToken').value;
+            if (!token) {
+                alert('Please complete the CAPTCHA verification.');
+                e.preventDefault();
+                return false;
+            }
+        }
+        
+        return true;
+    });
+</script>
+
 <jsp:include page="footer.jsp"/> 
 <%
     }
