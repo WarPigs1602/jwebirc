@@ -1,0 +1,24 @@
+<%-- 
+    Document   : config
+    Created on : 17.08.2024, 15:37:18
+    Author     : Andreas Pschorn
+--%>
+<%@page contentType="text/html" pageEncoding="UTF-8"%>
+<%!
+    String webchatSessionTimeout = "300000";
+    String sessionTimeout = "500";
+    String webchatHost = "localhost";
+    String webchatBind = "127.0.0.1";
+    String webchatPort = "6669";
+    String webchatSsl = "false";
+    String webchatServerPassword = "";
+    String webchatIdent = "webchat";
+    String webchatUser = "jwebirc";
+    String webchatPassword = "password";
+    String webchatRealname = "https://irc.midiandmore.net/";
+    String forwardedForHeader = "X-Forwarded-For";
+    String forwardedForIps = "127.0.0.1";
+    String webircMode = "WEBIRC";
+    String webircCgi = "CGIIRC";
+    String hmacTemporal = "1337";
+%>

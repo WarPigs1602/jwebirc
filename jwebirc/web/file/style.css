@@ -1,0 +1,140 @@
+a, a:hover {
+    color: #990000;
+}
+
+a {
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+body {
+    padding: 0px;
+    margin: 0px;
+    font-size: 12px;
+    color: #000000;
+    text-align: left;
+    background-color: #660000;
+}
+
+html {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.post_frame textarea {
+    font-family: sans-serif;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#pagecontent {
+    font-size: 12px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 30em;
+    height: 20em;
+    margin-left: -15em;
+    margin-top: -10em;
+}
+
+.post_field {
+    border: 0px solid #0000AA;
+    font-size: 13px;
+    text-align: left;
+    font-style: normal;
+    font-weight: normal;
+    width: 100%;
+    padding-top: .25rem;
+    white-space: no-wrap;
+}
+
+.post_button {
+    border: 1px solid #0000AA;
+    font-size: 13px;
+    text-align: left;
+    font-style: normal;
+    font-weight: normal;
+    background-color: #ffffff;
+    top: 0px;
+    position: relative;
+    white-space: no-wrap;
+}
+
+.post_frame {
+    border: 0px solid;
+
+    position: absolute;
+}
+
+.chat_frame, .right_frame, .top_frame, .topic_frame {
+    font-size: 13px;
+    object-fit: fill;
+    border: 1px solid #000000;
+    background-color: #FFFFFF;
+    padding: 3px;
+    margin: 3px;
+    overflow-y: scroll;
+    overflow-x: auto;
+    position: absolute;
+    box-shadow: 0px 6px 6px rgba(0, 0, 0, 0.5);
+    border-radius:3px;
+
+}
+
+.topic_frame    {
+    top:25px;
+    left: 0px;
+    right: 3px;
+    height: 22px;
+    white-space: pre;
+}
+
+.top_frame    {
+    top:3px;
+    left: 0px;
+    right: 3px;
+    height: 22px;
+}
+
+.chat_frame    {
+    top: 47px;
+    left: 0px;
+    right: 200px;
+    bottom: 31px;
+    white-space: pre;
+}
+.right_frame   {
+    top:25px;
+    right: 3px;
+    width: 200px;
+    bottom: 31px;
+    white-space: pre;
+}
+.post_frame   {
+    left: 3px;
+    right: 0px;
+    bottom: 3px;
+}
+
+.chat_frame {
+    text-align: left;
+}
+
+.post_frame {
+    padding-right: .5rem;
+}
+
+html, body{
+    padding:0px;
+    margin:0px;
+    width:100vw;
+}
+
+body * {
+    margin:0;
+    padding:0;
+}
