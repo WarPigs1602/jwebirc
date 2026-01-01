@@ -10,7 +10,10 @@ class LoginOptionsManager {
     constructor() {
         this.uiPrefs = {
             fontSize: 14,
-            hue: 0
+            hue: 0,
+            hideTopic: false,
+            hideNicklist: false,
+            navLeft: false
         };
         this.optionsMenu = null;
         this.optionsToggle = null;
@@ -55,12 +58,21 @@ class LoginOptionsManager {
             let stored = localStorage.getItem('jwebirc_ui');
             if (stored) {
                 const parsed = JSON.parse(stored);
-                // Extract only fontSize and hue
+                // Extract all preferences
                 if (parsed.fontSize !== undefined) {
                     this.uiPrefs.fontSize = parsed.fontSize;
                 }
                 if (parsed.hue !== undefined) {
                     this.uiPrefs.hue = parsed.hue;
+                }
+                if (parsed.hideTopic !== undefined) {
+                    this.uiPrefs.hideTopic = parsed.hideTopic;
+                }
+                if (parsed.hideNicklist !== undefined) {
+                    this.uiPrefs.hideNicklist = parsed.hideNicklist;
+                }
+                if (parsed.navLeft !== undefined) {
+                    this.uiPrefs.navLeft = parsed.navLeft;
                 }
             }
         } catch (e) {
@@ -73,6 +85,9 @@ class LoginOptionsManager {
      * Supported parameters:
      * - fontSize: 12-18 (pixels)
      * - hue: 0-360 (degrees)
+     * - hideTopic: true/false
+     * - hideNicklist: true/false
+     * - navLeft: true/false
      */
     applyUrlParameters() {
         const params = new URLSearchParams(window.location.search);
@@ -91,6 +106,19 @@ class LoginOptionsManager {
             if (!isNaN(hueVal) && hueVal >= 0 && hueVal <= 360) {
                 this.uiPrefs.hue = hueVal;
             }
+        }
+        
+        // Boolean parameters
+        if (params.has('hideTopic')) {
+            this.uiPrefs.hideTopic = params.get('hideTopic') === 'true';
+        }
+        
+        if (params.has('hideNicklist')) {
+            this.uiPrefs.hideNicklist = params.get('hideNicklist') === 'true';
+        }
+        
+        if (params.has('navLeft')) {
+            this.uiPrefs.navLeft = params.get('navLeft') === 'true';
         }
     }
     
@@ -133,6 +161,33 @@ class LoginOptionsManager {
                 this.savePreferences();
                 this.applyHue();
                 document.getElementById('loginHueValue').textContent = `${hue}°`;
+            });
+        }
+        
+        // Hide Topic toggle
+        const hideTopicControl = document.getElementById('loginOptHideTopic');
+        if (hideTopicControl) {
+            hideTopicControl.addEventListener('change', (e) => {
+                this.uiPrefs.hideTopic = e.target.checked;
+                this.savePreferences();
+            });
+        }
+        
+        // Hide Nicklist toggle
+        const hideNicklistControl = document.getElementById('loginOptHideNicklist');
+        if (hideNicklistControl) {
+            hideNicklistControl.addEventListener('change', (e) => {
+                this.uiPrefs.hideNicklist = e.target.checked;
+                this.savePreferences();
+            });
+        }
+        
+        // Sidebar Mode toggle
+        const navLeftControl = document.getElementById('loginOptNavLeft');
+        if (navLeftControl) {
+            navLeftControl.addEventListener('change', (e) => {
+                this.uiPrefs.navLeft = e.target.checked;
+                this.savePreferences();
             });
         }
     }
@@ -180,6 +235,9 @@ class LoginOptionsManager {
         // Update slider values
         const fontSizeControl = document.getElementById('loginOptFontSize');
         const hueControl = document.getElementById('loginOptHue');
+        const hideTopicControl = document.getElementById('loginOptHideTopic');
+        const hideNicklistControl = document.getElementById('loginOptHideNicklist');
+        const navLeftControl = document.getElementById('loginOptNavLeft');
         
         if (fontSizeControl) {
             fontSizeControl.value = this.uiPrefs.fontSize;
@@ -189,6 +247,18 @@ class LoginOptionsManager {
         if (hueControl) {
             hueControl.value = this.uiPrefs.hue;
             document.getElementById('loginHueValue').textContent = `${this.uiPrefs.hue}°`;
+        }
+        
+        if (hideTopicControl) {
+            hideTopicControl.checked = this.uiPrefs.hideTopic;
+        }
+        
+        if (hideNicklistControl) {
+            hideNicklistControl.checked = this.uiPrefs.hideNicklist;
+        }
+        
+        if (navLeftControl) {
+            navLeftControl.checked = this.uiPrefs.navLeft;
         }
         
         // Apply styles
@@ -207,7 +277,10 @@ class LoginOptionsManager {
             const existing = localStorage.getItem('jwebirc_ui');
             let allPrefs = {
                 fontSize: this.uiPrefs.fontSize,
-                hue: this.uiPrefs.hue
+                hue: this.uiPrefs.hue,
+                hideTopic: this.uiPrefs.hideTopic,
+                hideNicklist: this.uiPrefs.hideNicklist,
+                navLeft: this.uiPrefs.navLeft
             };
             
             // Merge with existing chat preferences
@@ -217,7 +290,10 @@ class LoginOptionsManager {
                     allPrefs = {
                         ...parsed,
                         fontSize: this.uiPrefs.fontSize,
-                        hue: this.uiPrefs.hue
+                        hue: this.uiPrefs.hue,
+                        hideTopic: this.uiPrefs.hideTopic,
+                        hideNicklist: this.uiPrefs.hideNicklist,
+                        navLeft: this.uiPrefs.navLeft
                     };
                 } catch (e) {
                     // If parse fails, just use our values

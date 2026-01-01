@@ -698,12 +698,18 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         // Get UI preferences from localStorage (login options)
         let defaultFontSize = 14;
         let defaultHue = 0;
+        let defaultHideTopic = false;
+        let defaultHideNicklist = false;
+        let defaultNavLeft = false;
         try {
             const stored = localStorage.getItem('jwebirc_ui');
             if (stored) {
                 const parsed = JSON.parse(stored);
                 defaultFontSize = parsed.fontSize || 14;
                 defaultHue = parsed.hue || 0;
+                defaultHideTopic = parsed.hideTopic || false;
+                defaultHideNicklist = parsed.hideNicklist || false;
+                defaultNavLeft = parsed.navLeft || false;
             }
         } catch (e) {
             // Use defaults if localStorage is unavailable
@@ -775,7 +781,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             const channels = document.getElementById('embedChannel').value;
             
             configModal.remove();
-            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue);
+            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultNavLeft);
         };
         
         // Handle Cancel button
@@ -791,12 +797,15 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         };
     }
     
-    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue) {
+    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft) {
         const baseUrl = window.location.origin + window.location.pathname;
         
         // Use provided values or get defaults
         const fontSize = overrideFontSize !== undefined ? overrideFontSize : 14;
         const hue = overrideHue !== undefined ? overrideHue : 0;
+        const hideTopic = overrideHideTopic !== undefined ? overrideHideTopic : false;
+        const hideNicklist = overrideHideNicklist !== undefined ? overrideHideNicklist : false;
+        const navLeft = overrideNavLeft !== undefined ? overrideNavLeft : false;
         
         let url = baseUrl + '?connect=1';
         if (nickname && nickname.trim()) {
@@ -808,6 +817,15 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         // Add UI preferences to URL
         url += '&fontSize=' + fontSize;
         url += '&hue=' + hue;
+        if (hideTopic) {
+            url += '&hideTopic=true';
+        }
+        if (hideNicklist) {
+            url += '&hideNicklist=true';
+        }
+        if (navLeft) {
+            url += '&navLeft=true';
+        }
         
         const embedCode = '<iframe src="' + url.replace(/"/g, '&quot;') + '" width="800" height="600" frameborder="0" style="border: 1px solid #ccc;"></iframe>';
         
@@ -844,8 +862,12 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         
         // UI Options display
         const uiInfo = document.createElement('div');
+        let uiDisplay = 'Font Size: ' + fontSize + 'px, Hue: ' + hue + '°';
+        if (hideTopic) uiDisplay += ', Hide Topic: ✓';
+        if (hideNicklist) uiDisplay += ', Hide Nicklist: ✓';
+        if (navLeft) uiDisplay += ', Sidebar Mode: ✓';
         uiInfo.style.cssText = 'background: #fff9e6; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
-        uiInfo.innerHTML = '<i class="fas fa-sliders-h"></i> <strong>Display Options:</strong> Font Size: ' + fontSize + 'px, Hue: ' + hue + '°';
+        uiInfo.innerHTML = '<i class="fas fa-sliders-h"></i> <strong>Display Options:</strong> ' + uiDisplay;
         modalContent.appendChild(uiInfo);
         
         const linkLabel = document.createElement('p');

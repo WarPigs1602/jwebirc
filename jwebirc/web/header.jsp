@@ -80,6 +80,29 @@
                         </div>
                     </div>
                     <div class="nav-dropdown-divider"></div>
+                    <label class="nav-dropdown-item" for="loginOptHideTopic">
+                        <div class="nav-dropdown-item-left">
+                            <i class="fas fa-bars"></i>
+                            <span>Hide Topic</span>
+                        </div>
+                        <input type="checkbox" id="loginOptHideTopic" class="nav-toggle">
+                    </label>
+                    <label class="nav-dropdown-item" for="loginOptHideNicklist">
+                        <div class="nav-dropdown-item-left">
+                            <i class="fas fa-users"></i>
+                            <span>Hide Nicklist</span>
+                        </div>
+                        <input type="checkbox" id="loginOptHideNicklist" class="nav-toggle">
+                    </label>
+                    <div class="nav-dropdown-divider"></div>
+                    <label class="nav-dropdown-item" for="loginOptNavLeft">
+                        <div class="nav-dropdown-item-left">
+                            <i class="fas fa-align-left"></i>
+                            <span>Sidebar Mode</span>
+                        </div>
+                        <input type="checkbox" id="loginOptNavLeft" class="nav-toggle">
+                    </label>
+                    <div class="nav-dropdown-divider"></div>
                     <div class="nav-dropdown-item slider-item">
                         <div class="nav-dropdown-item-header">
                             <i class="fas fa-palette"></i>
