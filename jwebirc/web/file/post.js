@@ -14,6 +14,13 @@ class PostManager {
         this.typingTimer = null;
         this.isTyping = false;
         this.typingTimeout = 4000; // 4 seconds between typing notifications
+        
+        // Tab completion state
+        this.tabCompletionPrefix = '';
+        this.tabCompletionMatches = [];
+        this.tabCompletionIndex = -1;
+        this.tabCompletionWordStart = -1;
+        this.lastTabTime = 0;
     }
     
     initialize() {
@@ -282,9 +289,23 @@ class PostManager {
         }
         
         if (text.startsWith("/kick ")) {
-            const content = text.substring(6);
+            const content = text.substring(6).trim();
             this.chatManager.addWindow();
-            return this.ircText("/kick " + activeWindow + " " + this.escapeHtml(content));
+            
+            // Parse the content to check if channel is already specified
+            const parts = content.split(' ');
+            
+            let finalCommand;
+            // If first part starts with # or &, it's already a full command
+            if (parts.length > 0 && (parts[0].startsWith('#') || parts[0].startsWith('&'))) {
+                // Already has channel: /kick #channel nick [reason]
+                finalCommand = "/kick " + content;
+            } else {
+                // No channel, add current window: /kick nick [reason]
+                finalCommand = "/kick " + activeWindow + " " + content;
+            }
+            
+            return this.ircText(finalCommand);
         }
         
         if (text.startsWith("/away ")) {
@@ -340,6 +361,55 @@ class PostManager {
             return this.ircText("/part " + target + " " + this.escapeHtml(reason));
         }
         
+        if (text.startsWith("/hop")) {
+            // /hop command - leave and rejoin channel
+            const args = text.substring(4).trim();
+            let channel = args;
+            
+            if (!channel || channel.length === 0) {
+                // No channel specified, use active window
+                channel = activeWindow;
+            }
+            
+            // Check if it's a valid channel
+            if (!this.chatManager.isChannel(channel)) {
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Invalid channel: " + channel + "\n");
+                this.chatManager.addWindow();
+                return null;
+            }
+            
+            this.chatManager.setWindow(channel);
+            this.chatManager.addWindow();
+            
+            // Send PART followed by JOIN
+            const partCommand = this.ircText("/part " + channel);
+            const joinCommand = this.ircText("/join " + channel);
+            
+            // Send both commands
+            if (partCommand) {
+                const msg = {
+                    category: "chat",
+                    message: partCommand,
+                    target: ""
+                };
+                this.chatManager.socket.send(JSON.stringify(msg));
+            }
+            
+            // Delay JOIN to ensure PART completes first
+            setTimeout(() => {
+                if (joinCommand) {
+                    const msg = {
+                        category: "chat",
+                        message: joinCommand,
+                        target: ""
+                    };
+                    this.chatManager.socket.send(JSON.stringify(msg));
+                }
+            }, 500);
+            
+            return null;
+        }
+        
         if (text.startsWith("/quit ")) {
             const content = text.substring(6);
             if (window.ircParser) {
@@ -350,7 +420,82 @@ class PostManager {
             return this.ircText("/quit " + this.escapeHtml(content));
         }
         
+        // CTCP commands
+        if (text.toLowerCase().startsWith("/ctcp ")) {
+            return this.handleCtcpCommand(text, activeWindow);
+        }
+        
+        // Shortcut CTCP commands
+        if (text.toLowerCase().startsWith("/version ")) {
+            const target = text.substring(9).trim();
+            return this.sendCtcp(target, "VERSION");
+        }
+        
+        if (text.toLowerCase().startsWith("/time ")) {
+            const target = text.substring(6).trim();
+            return this.sendCtcp(target, "TIME");
+        }
+        
+        if (text.toLowerCase().startsWith("/ping ")) {
+            const target = text.substring(6).trim();
+            const timestamp = Date.now().toString();
+            return this.sendCtcp(target, "PING", timestamp);
+        }
+        
+        if (text.toLowerCase().startsWith("/clientinfo ")) {
+            const target = text.substring(12).trim();
+            return this.sendCtcp(target, "CLIENTINFO");
+        }
+        
         return this.ircText(text);
+    }
+    
+    /**
+     * Handles generic /ctcp command
+     * @param {string} text - The full command text
+     * @param {string} activeWindow - The active window
+     * @returns {string} The IRC command to send
+     */
+    handleCtcpCommand(text, activeWindow) {
+        const parts = text.substring(6).trim().split(" ");
+        if (parts.length < 2) {
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Usage: /ctcp <target> <command> [args]\n");
+            this.chatManager.addWindow();
+            return null;
+        }
+        
+        const target = parts[0];
+        const command = parts[1].toUpperCase();
+        const args = parts.slice(2).join(" ");
+        
+        return this.sendCtcp(target, command, args);
+    }
+    
+    /**
+     * Sends a CTCP request
+     * @param {string} target - The target nick or channel
+     * @param {string} command - The CTCP command
+     * @param {string} args - Optional arguments
+     * @returns {string} The IRC command to send
+     */
+    sendCtcp(target, command, args = "") {
+        if (!target || target.length === 0) {
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: No target specified\n");
+            this.chatManager.addWindow();
+            return null;
+        }
+        
+        const ctcpMessage = args ? `${command} ${args}` : command;
+        
+        // Display sent CTCP request
+        if (window.ircParser) {
+            window.ircParser.output = this.chatManager.getActiveWindow();
+            window.ircParser.parseOutput(` <span style="color: #00aaff">==</span> CTCP ${command} request sent to <span style="font-weight: bold;">${target}</span>${args ? ': ' + args : ''}`);
+        }
+        this.chatManager.addWindow();
+        
+        // Send as PRIVMSG with \001 delimiters
+        return `/privmsg ${target} :${String.fromCharCode(1)}${ctcpMessage}${String.fromCharCode(1)}`;
     }
     
     ircText(text) {
@@ -365,13 +510,15 @@ class PostManager {
                 result += " :";
             } else if (i === 2 && text.toLowerCase().startsWith("/notice")) {
                 result += " :";
+            } else if (i === 3 && text.toLowerCase().startsWith("/kick")) {
+                // For kick: /kick #channel nick :reason
+                // Add colon before the reason (4th element onwards)
+                result += " :";
             } else if (i === 2 && content.length !== 3 && 
                        !text.toLowerCase().startsWith("/mode") && 
                        !text.toLowerCase().startsWith("/away") && 
                        !text.toLowerCase().startsWith("/quit") && 
                        !text.toLowerCase().startsWith("/kick")) {
-                result += " :";
-            } else if (i === 3 && text.toLowerCase().startsWith("/kick")) {
                 result += " :";
             } else {
                 result += " ";
@@ -393,37 +540,95 @@ class PostManager {
     }
     
     messageUp() {
+        this.resetTabCompletion();
         this.messageCounter++;
         if (this.messageCounter < this.messageHistory.length) {
             this.messageInput.value = this.messageHistory[this.messageCounter];
+            this.messageInput.selectionStart = this.messageInput.value.length;
+            this.messageInput.selectionEnd = this.messageInput.value.length;
             this.messageInput.focus();
+        } else {
+            this.messageCounter = this.messageHistory.length - 1;
         }
     }
     
     messageDown() {
+        this.resetTabCompletion();
         if (this.messageCounter <= 0) {
             this.messageInput.value = "";
+            this.messageCounter = -1;
         } else {
             this.messageCounter--;
             this.messageInput.value = this.messageHistory[this.messageCounter];
-            this.messageInput.focus();
+            this.messageInput.selectionStart = this.messageInput.value.length;
+            this.messageInput.selectionEnd = this.messageInput.value.length;
         }
+        this.messageInput.focus();
     }
     
     tab() {
         const msg = this.messageInput.value;
-        let content = "";
+        const cursorPos = this.messageInput.selectionStart;
+        const now = Date.now();
         
-        if (msg.includes(" ")) {
-            const arr = msg.split(" ");
-            const parse = arr[arr.length - 1];
-            arr[arr.length - 1] = this.chatManager.parseTab(parse, false);
-            content = arr.join(" ");
+        // Get the word being completed from cursor position - optimized
+        let wordStart = cursorPos;
+        while (wordStart > 0 && msg[wordStart - 1] !== ' ') {
+            wordStart--;
+        }
+        const currentWord = msg.substring(wordStart, cursorPos);
+        
+        // Check if this is a continuation of the previous tab completion
+        // Must have same position AND same prefix that was originally used for completion
+        const isContinuation = (now - this.lastTabTime) < 500 && // Within 500ms
+                              this.tabCompletionWordStart === wordStart &&
+                              this.tabCompletionPrefix === currentWord &&
+                              this.tabCompletionMatches.length > 0;
+        
+        if (isContinuation) {
+            // Continue cycling through existing matches
+            this.tabCompletionIndex = (this.tabCompletionIndex + 1) % this.tabCompletionMatches.length;
         } else {
-            content = this.chatManager.parseTab(msg, true);
+            // Start new completion - reset state and fetch new matches
+            this.tabCompletionWordStart = wordStart;
+            this.tabCompletionPrefix = currentWord;
+            this.tabCompletionMatches = this.chatManager.getTabCompletions(currentWord);
+            
+            // Early return if no matches
+            if (this.tabCompletionMatches.length === 0) {
+                this.lastTabTime = now;
+                return;
+            }
+            
+            // Start from first match on new completion
+            this.tabCompletionIndex = 0;
         }
         
-        this.messageInput.value = content;
+        // Ensure we have valid matches and index before accessing
+        if (this.tabCompletionMatches.length === 0 || this.tabCompletionIndex < 0) {
+            this.lastTabTime = now;
+            return;
+        }
+        
+        const completion = this.tabCompletionMatches[this.tabCompletionIndex];
+        
+        // Replace the word with the completion
+        const isStartOfLine = wordStart === 0;
+        const completedWord = isStartOfLine ? completion + ": " : completion;
+        const newValue = msg.substring(0, wordStart) + completedWord + msg.substring(cursorPos);
+        
+        this.messageInput.value = newValue;
+        const newCursorPos = wordStart + completedWord.length;
+        this.messageInput.setSelectionRange(newCursorPos, newCursorPos);
+        this.lastTabTime = now;
+    }
+    
+    resetTabCompletion() {
+        this.tabCompletionPrefix = '';
+        this.tabCompletionMatches = [];
+        this.tabCompletionIndex = -1;
+        this.tabCompletionWordStart = -1;
+        this.lastTabTime = 0;
     }
     
     escapeHtml(text) {
@@ -481,6 +686,14 @@ class PostManager {
 const postManager = new PostManager(chatManager);
 postManager.initialize();
 window.postManager = postManager;
+
+// Initialize IRC Parser (after irc.js has been loaded)
+if (window.IRCParser) {
+    const ircParser = new window.IRCParser(chatManager);
+    window.ircParser = ircParser;
+} else {
+    console.warn('[IRC Parser] IRCParser class not found - IRC message parsing will not work');
+}
 
 // Legacy functions for compatibility
 let message = document.getElementById("message");

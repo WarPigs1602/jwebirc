@@ -35,6 +35,8 @@ class ChatManager {
         this.typingBar = null;
         this.typingUsers = new Map(); // Map<channel, Map<user, timeout>>
         this.typingTimeout = 5000; // 5 seconds until typing indicator disappears
+        this.awayStatus = new Map(); // Map<nick, boolean> - track away status for all nicks
+        this.joinedChannels = new Set(); // Set of channels to rejoin on next login
         this.capabilities = {
             requested: [],
             available: [],
@@ -57,9 +59,10 @@ class ChatManager {
     requestCapabilities() {
         this.capNegotiationActive = true;
         
-        // List of desired capabilities - only message-tags (SASL added if available)
+        // List of desired capabilities
         const desiredCaps = [
-            'message-tags'
+            'message-tags',
+            'away-notify'
         ];
         
         this.capabilities.requested = [...desiredCaps];
@@ -71,24 +74,30 @@ class ChatManager {
      * @param {Array} caps - Array of available capabilities
      */
     handleCapLS(caps) {
+        console.log('[CAP] Server capabilities:', caps);
         this.capabilities.available = caps;
         
         // Request only desired capabilities that are actually available
         const toRequest = this.capabilities.requested.filter(cap => caps.includes(cap));
+        console.log('[CAP] Requested caps that are available:', toRequest);
         
         // Also request SASL if it's available (backend may require it)
         if (caps.includes('sasl') && !toRequest.includes('sasl')) {
             toRequest.unshift('sasl');
+            console.log('[CAP] Added SASL to request');
         }
         
         if (toRequest.length > 0) {
             // Request the available desired capabilities
             if (window.postManager) {
                 // Send with / prefix as required by server
-                window.postManager.sendRawMessage('/' + 'CAP REQ :' + toRequest.join(' '));
+                const reqCommand = '/CAP REQ :' + toRequest.join(' ');
+                console.log('[CAP] Sending:', reqCommand);
+                window.postManager.sendRawMessage(reqCommand);
             }
         } else {
             // No capabilities available, end negotiation
+            console.log('[CAP] No desired capabilities available, ending negotiation');
             this.endCapNegotiation();
         }
     }
@@ -98,12 +107,14 @@ class ChatManager {
      * @param {Array} caps - Array of activated capabilities
      */
     handleCapACK(caps) {
+        console.log('[CAP] ACK received for:', caps);
         // Replace capabilities list (not push, to avoid duplicates)
         this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
         
         // Don't show message here - will be shown when negotiation ends
         
         // End CAP negotiation
+        console.log('[CAP] Ending negotiation after ACK');
         this.endCapNegotiation();
     }
     
@@ -112,10 +123,12 @@ class ChatManager {
      * @param {Array} caps - Array of rejected capabilities
      */
     handleCapNAK(caps) {
+        console.log('[CAP] NAK received for:', caps);
         this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Capabilities rejected: " + caps.join(', ') + "\n");
         this.addWindow();
         
         // End CAP negotiation even on rejection
+        console.log('[CAP] Ending negotiation after NAK');
         this.endCapNegotiation();
     }
     
@@ -123,17 +136,24 @@ class ChatManager {
      * Ends CAP negotiation
      */
     endCapNegotiation() {
+        console.log('[CAP] endCapNegotiation called, active:', this.capNegotiationActive);
         if (this.capNegotiationActive) {
             if (window.postManager) {
+                console.log('[CAP] Sending CAP END');
                 window.postManager.sendRawMessage('/CAP END');
             }
             this.capNegotiationActive = false;
             
             // Show all enabled capabilities once at the end
             if (this.capabilities.enabled.length > 0) {
+                console.log('[CAP] Enabled capabilities:', this.capabilities.enabled);
                 this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> Capabilities enabled: " + this.capabilities.enabled.join(', ') + "\n");
                 this.addWindow();
+            } else {
+                console.log('[CAP] No capabilities were enabled');
             }
+        } else {
+            console.log('[CAP] Negotiation already ended, skipping');
         }
     }
     
@@ -337,49 +357,85 @@ class ChatManager {
         
         this.setupWebSocket();
         this.initializePages();
+        this.initNickContextMenu(); // Initialize context menu once
     }
     
     setupWebSocket() {
         this.socket.onopen = (event) => {
-            // Don't show connection message - request capabilities silently
-            
+            console.log('[WebSocket] Connection opened');
             // Request IRCv3 capabilities
             this.requestCapabilities();
         };
         
         this.socket.onerror = (errorEvent) => {
-            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection error: " + (errorEvent.message || 'Unknown error') + "\n");
+            console.error('[WebSocket] Error:', errorEvent);
+            const errorMsg = errorEvent.message || errorEvent.type || 'Unknown WebSocket error';
+            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection error: " + errorMsg + "\n");
             this.addWindow();
             this.scrollToEnd("#chat_window", 100);
         };
         
         this.socket.onclose = (closeEvent) => {
-            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection to server closed!\n");
+            console.log('[WebSocket] Connection closed. Code:', closeEvent.code, 'Reason:', closeEvent.reason);
+            let closeMsg = "Connection to server closed";
+            if (closeEvent.code) {
+                closeMsg += " (Code: " + closeEvent.code + ")";
+            }
+            if (closeEvent.reason) {
+                closeMsg += " - " + closeEvent.reason;
+            }
+            // Provide more helpful messages based on close code
+            if (closeEvent.code === 1006) {
+                closeMsg += " - Abnormal connection closure. Check server connectivity.";
+            } else if (closeEvent.code === 1002) {
+                closeMsg += " - Protocol error";
+            } else if (closeEvent.code === 1003) {
+                closeMsg += " - Unsupported data";
+            }
+            
+            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> " + closeMsg + "\n");
             this.addWindow();
             this.scrollToEnd("#chat_window", 100);
+            
+            // Optional: Attempt reconnection
+            if (!closeEvent.wasClean && closeEvent.code !== 1000) {
+                this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Connection lost unexpectedly. Please reload the page to reconnect.\n");
+                this.addWindow();
+            }
         };
         
         this.socket.onmessage = (messageEvent) => {
             try {
                 const msg = JSON.parse(messageEvent.data);
-                const { message, category } = msg;
+                const { message, category, target } = msg;
                 
                 if (category === "error") {
+                    console.error('[WebSocket] Server error:', message);
                     this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: " + message + "\n");
                     this.addWindow();
                 } else if (category === "chat") {
                     if (message !== "Ping? Pong!") {
                         if (window.ircParser) {
+                            // If target is "active", force output to active window
+                            if (target === "active") {
+                                const activeWindow = this.getActiveWindow();
+                                if (activeWindow) {
+                                    window.ircParser.output = activeWindow;
+                                }
+                            }
                             window.ircParser.parseOutput(message);
                         }
                         this.addWindow();
                     }
                 } else {
+                    console.warn('[WebSocket] Unknown category:', category);
                     this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Unknown category: " + category + "\n");
                     this.addWindow();
                 }
             } catch (error) {
-                this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error parsing message\n");
+                console.error('[WebSocket] Error parsing message:', error);
+                this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error parsing server message: " + error.message + "\n");
+                this.addWindow();
             }
         };
     }
@@ -394,6 +450,52 @@ class ChatManager {
         this.parsePage(this.getTimestamp() + " <a href=\"https://github.com/WarPigs1602/jwebirc\" target=\"_blank\">https://github.com/WarPigs1602/jwebirc</a>\n");
         this.parsePage(this.getTimestamp() + " Licensed under the MIT License\n");
         this.parsePage(this.getTimestamp() + " <span style=\"color: #ffaa00\">==</span> Connecting to server, please wait...\n");
+        
+        // Load saved channels for rejoin
+        this.loadSavedChannels();
+    }
+    
+    saveChannelList() {
+        // Save the list of channels to localStorage
+        const channelList = Array.from(this.joinedChannels);
+        sessionStorage.setItem('jwebirc_channels', JSON.stringify(channelList));
+    }
+    
+    loadSavedChannels() {
+        // Load saved channels from localStorage
+        try {
+            const saved = sessionStorage.getItem('jwebirc_channels');
+            if (saved) {
+                this.joinedChannels = new Set(JSON.parse(saved));
+            }
+        } catch (e) {
+            console.warn('Could not load saved channels:', e);
+        }
+    }
+    
+    addToChannelMemory(channel) {
+        // Add channel to memory
+        if (this.isChannel(channel)) {
+            this.joinedChannels.add(channel.toLowerCase());
+            this.saveChannelList();
+        }
+    }
+    
+    removeFromChannelMemory(channel) {
+        // Remove channel from memory
+        if (this.isChannel(channel)) {
+            this.joinedChannels.delete(channel.toLowerCase());
+            this.saveChannelList();
+        }
+    }
+    
+    rejoinSavedChannels() {
+        // Rejoin all saved channels
+        if (this.joinedChannels.size > 0 && window.postManager) {
+            for (const channel of this.joinedChannels) {
+                window.postManager.submitTextMessage("/join " + channel);
+            }
+        }
     }
     
     parseControl(text) {
@@ -575,7 +677,7 @@ class ChatManager {
         return text;
     }
     
-    addNick(channel, nick, host, color) {
+    addNick(channel, nick, host, color, isAway = false) {
         this.channels.forEach(elem => {
             if (elem.page.toLowerCase() === channel.toLowerCase()) {
                 if (elem.nicks.length === 0) color = this.userColor;
@@ -596,7 +698,9 @@ class ChatManager {
                 
                 const fullNick = status + nick;
                 if (!elem.nicks.some(e => e.nick === fullNick)) {
-                    elem.nicks.push({ nick: fullNick, host, color });
+                    // Check global away status if not explicitly provided
+                    let awayStatus = isAway || this.awayStatus.get(nick.toLowerCase()) || false;
+                    elem.nicks.push({ nick: fullNick, host, color, away: awayStatus });
                 }
             }
         });
@@ -765,6 +869,36 @@ class ChatManager {
         }
     }
     
+    setAwayStatus(nick, isAway) {
+        // Store away status in global map (for WHO queries before nicks are added)
+        this.awayStatus.set(nick.toLowerCase(), isAway);
+        
+        // Also update in channel nick lists if they exist
+        this.channels.forEach(elem => {
+            if (elem.type === 'channel') {
+                elem.nicks.forEach(nickData => {
+                    // Extract status symbol and nickname
+                    let displayNick = nickData.nick;
+                    if (displayNick.length > 0 && this.isStatusSymbol(displayNick[0])) {
+                        displayNick = displayNick.substring(1);
+                    }
+                    
+                    if (displayNick.toLowerCase() === nick.toLowerCase()) {
+                        nickData.away = isAway;
+                    }
+                });
+                // Only re-render if we actually updated a nick in this channel
+                if (elem.nicks.some(n => {
+                    let dn = n.nick;
+                    if (dn.length > 0 && this.isStatusSymbol(dn[0])) dn = dn.substring(1);
+                    return dn.toLowerCase() === nick.toLowerCase();
+                })) {
+                    this.renderUserlist(elem.page);
+                }
+            }
+        });
+    }
+    
     quit(nick, reason) {
         if (nick.toLowerCase() === window.user.toLowerCase()) {
             window.user = nick;
@@ -885,7 +1019,10 @@ class ChatManager {
                         statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusSymbol}">${emoji}</span>`;
                     }
                     
-                    doc.innerHTML += `<span class="nick-entry" style="color: ${nick.color};">${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
+                    // Add away indicator - only show as transparent and italic
+                    const awayClass = nick.away ? ' away' : '';
+                    
+                    doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};">${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
                 });
                 
                 while (this.right.firstChild) {
@@ -981,6 +1118,48 @@ class ChatManager {
         }
         
         return nickname;
+    }
+    
+    getTabCompletions(prefix) {
+        const completions = [];
+        const prefixLower = prefix.toLowerCase();
+        
+        // Channel completion
+        if (prefix.startsWith("#") || prefix.startsWith("&")) {
+            for (const elem of this.channels) {
+                if (elem.page.toLowerCase().startsWith(prefixLower)) {
+                    completions.push(elem.page);
+                }
+            }
+        } else if (this.isChannel(this.activeWindow)) {
+            // Nick completion in current channel - optimized with direct access
+            const activeWindowLower = this.activeWindow.toLowerCase();
+            for (const elem of this.channels) {
+                if (elem.page.toLowerCase() === activeWindowLower) {
+                    // Use Map for faster deduplication and lookup
+                    const nicksMap = new Map();
+                    
+                    for (const nick of elem.nicks) {
+                        const name = this.getNick(this.activeWindow, nick.nick);
+                        // Match if prefix is empty or if nick starts with prefix
+                        if (!prefix || name.toLowerCase().startsWith(prefixLower)) {
+                            // Use Map to track: allows fast deduplication and priority handling
+                            nicksMap.set(name.toLowerCase(), name);
+                        }
+                    }
+                    
+                    // Convert to array and sort only if we have results
+                    if (nicksMap.size > 0) {
+                        completions.push(...Array.from(nicksMap.values()).sort(
+                            (a, b) => a.toLowerCase().localeCompare(b.toLowerCase())
+                        ));
+                    }
+                    break;
+                }
+            }
+        }
+        
+        return completions;
     }
     
     getNick(channel, nickname) {
@@ -1282,6 +1461,243 @@ class ChatManager {
     
     setHighlight(highlight) {
         this.highlight = highlight;
+    }
+    
+    /**
+     * Initialize nick context menu (called once on startup)
+     */
+    initNickContextMenu() {
+        // Create context menu
+        const menu = document.createElement('div');
+        menu.id = 'nick-context-menu';
+        menu.className = 'nick-context-menu';
+        // Menu content will be populated dynamically when shown
+        document.body.appendChild(menu);
+        
+        // Use event delegation on right frame for nick clicks
+        document.addEventListener('click', (e) => {
+            const nickEntry = e.target.closest('.nick-entry');
+            if (nickEntry) {
+                e.preventDefault();
+                e.stopPropagation();
+                const nick = nickEntry.dataset.nick;
+                if (nick) {
+                    this.showNickContextMenu(e.clientX, e.clientY, nick, this.activeWindow);
+                }
+            } else if (!e.target.closest('.nick-context-menu')) {
+                // Close menu when clicking outside
+                this.hideNickContextMenu();
+            }
+        });
+    }
+    
+    /**
+     * Show nick context menu at position
+     */
+    showNickContextMenu(x, y, nick, channel) {
+        const menu = document.getElementById('nick-context-menu');
+        if (!menu) return;
+        
+        menu.dataset.currentNick = nick;
+        menu.dataset.currentChannel = channel;
+        
+        // Get user's own status in channel
+        const myStatus = this.getStatus(channel, window.user);
+        const targetStatus = this.getStatus(channel, nick);
+        
+        // Build menu dynamically based on permissions
+        const menuItems = [];
+        
+        // Always available: Query, WHOIS, Version
+        menuItems.push(
+            { icon: '💬', label: 'Private Message', action: 'query' },
+            { icon: 'ℹ️', label: 'WHOIS', action: 'whois' },
+            { icon: '🔍', label: 'Version', action: 'version' }
+        );
+        
+        // Channel operations (only if in a channel)
+        if (channel.startsWith('#') || channel.startsWith('&')) {
+            const isOwnNick = nick.toLowerCase() === window.user.toLowerCase();
+            
+            if (!isOwnNick) {
+                menuItems.push({ separator: true });
+                
+                // Get mode info
+                const modeEmojis = {
+                    'q': '👑', // Owner - Crown
+                    'a': '🛡️', // Admin - Shield
+                    'o': '⭐', // Op - Star
+                    'h': '⚡', // Half-op - Lightning
+                    'v': '💬'  // Voice - Speech
+                };
+                
+                const modeLabels = {
+                    'q': 'Owner',
+                    'a': 'Admin',
+                    'o': 'Op',
+                    'h': 'Half-Op',
+                    'v': 'Voice'
+                };
+                
+                // Add give/take mode options for each available mode
+                // Only show if user has permission (higher or equal status)
+                for (let i = 0; i < this.serverPrefixes.modes.length; i++) {
+                    const mode = this.serverPrefixes.modes[i];
+                    const symbol = this.serverPrefixes.symbols[i];
+                    const emoji = modeEmojis[mode] || '🔸';
+                    const label = modeLabels[mode] || mode.toUpperCase();
+                    
+                    // User needs at least the same level to manage this mode
+                    const myModeIndex = myStatus ? this.serverPrefixes.symbols.indexOf(myStatus) : -1;
+                    const canManage = myModeIndex >= 0 && myModeIndex <= i;
+                    
+                    if (canManage) {
+                        // Check if target has this mode
+                        const hasMode = targetStatus === symbol;
+                        
+                        if (hasMode) {
+                            menuItems.push({
+                                icon: '⚫',
+                                label: `Remove ${label}`,
+                                action: 'mode',
+                                mode: `-${mode}`,
+                                emoji: emoji
+                            });
+                        } else {
+                            menuItems.push({
+                                icon: emoji,
+                                label: `Give ${label}`,
+                                action: 'mode',
+                                mode: `+${mode}`,
+                                emoji: emoji
+                            });
+                        }
+                    }
+                }
+                
+                // Kick/Ban options (needs op or higher)
+                const myModeIndex = myStatus ? this.serverPrefixes.symbols.indexOf(myStatus) : -1;
+                const opIndex = this.serverPrefixes.modes.indexOf('o');
+                const hasOpOrHigher = myModeIndex >= 0 && (opIndex === -1 || myModeIndex <= opIndex);
+                
+                if (hasOpOrHigher) {
+                    menuItems.push({ separator: true });
+                    menuItems.push(
+                        { icon: '👢', label: 'Kick', action: 'kick' },
+                        { icon: '🚫', label: 'Ban', action: 'ban' },
+                        { icon: '⛔', label: 'Kick + Ban', action: 'kickban' }
+                    );
+                }
+            }
+        }
+        
+        // Build HTML
+        let html = '';
+        menuItems.forEach(item => {
+            if (item.separator) {
+                html += '<div class="nick-context-menu-separator"></div>';
+            } else {
+                html += `<div class="nick-context-menu-item" data-action="${item.action}" data-mode="${item.mode || ''}">
+                    <span class="menu-icon">${item.icon}</span>
+                    <span>${item.label}</span>
+                </div>`;
+            }
+        });
+        
+        menu.innerHTML = html;
+        
+        // Re-attach event handlers
+        menu.querySelectorAll('.nick-context-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const action = item.dataset.action;
+                const mode = item.dataset.mode;
+                const nick = menu.dataset.currentNick;
+                const channel = menu.dataset.currentChannel;
+                this.handleNickAction(action, nick, channel, mode);
+                this.hideNickContextMenu();
+            });
+        });
+        
+        // Position menu
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+        menu.classList.add('show');
+        
+        // Adjust if menu would go off screen
+        setTimeout(() => {
+            const rect = menu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                menu.style.left = (x - rect.width) + 'px';
+            }
+            if (rect.bottom > window.innerHeight) {
+                menu.style.top = (y - rect.height) + 'px';
+            }
+        }, 0);
+    }
+    
+    /**
+     * Hide nick context menu
+     */
+    hideNickContextMenu() {
+        const menu = document.getElementById('nick-context-menu');
+        if (menu) {
+            menu.classList.remove('show');
+        }
+    }
+    
+    /**
+     * Handle nick context menu action
+     */
+    handleNickAction(action, nick, channel, mode) {
+        if (!window.postManager || !nick) return;
+        
+        switch (action) {
+            case 'query':
+                // Open private chat
+                window.postManager.submitTextMessage(`/query ${nick}`);
+                break;
+                
+            case 'whois':
+                window.postManager.submitTextMessage(`/whois ${nick}`);
+                break;
+                
+            case 'version':
+                window.postManager.submitTextMessage(`/ctcp ${nick} VERSION`);
+                break;
+                
+            case 'mode':
+                if (mode && (channel.startsWith('#') || channel.startsWith('&'))) {
+                    window.postManager.submitTextMessage(`/mode ${channel} ${mode} ${nick}`);
+                }
+                break;
+                
+            case 'kick':
+                if (channel.startsWith('#') || channel.startsWith('&')) {
+                    const reason = prompt(`Kick reason for ${nick}:`, 'Kicked');
+                    if (reason !== null) {
+                        console.log(`[handleNickAction] Sending command: /kick ${channel} ${nick} ${reason}`);
+                        window.postManager.submitTextMessage(`/kick ${channel} ${nick} ${reason}`);
+                    }
+                }
+                break;
+                
+            case 'ban':
+                if (channel.startsWith('#') || channel.startsWith('&')) {
+                    window.postManager.submitTextMessage(`/mode ${channel} +b ${nick}!*@*`);
+                }
+                break;
+                
+            case 'kickban':
+                if (channel.startsWith('#') || channel.startsWith('&')) {
+                    const reason = prompt(`Kickban reason for ${nick}:`, 'Banned');
+                    if (reason !== null) {
+                        window.postManager.submitTextMessage(`/mode ${channel} +b ${nick}!*@*`);
+                        setTimeout(() => {
+                        }, 100);
+                    }
+                }
+                break;
+        }
     }
 }
 

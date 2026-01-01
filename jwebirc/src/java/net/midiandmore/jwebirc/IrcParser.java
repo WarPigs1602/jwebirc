@@ -322,68 +322,89 @@ public class IrcParser {
         setPassword(password);
         
         // Create socket with SSL/TLS support if enabled
-        Socket socket;
-        if (ssl) {
-            try {
-                // Create a trust manager that accepts all certificates (for self-signed certs)
-                TrustManager[] trustAllCerts = new TrustManager[] {
-                    new X509TrustManager() {
-                        @Override
-                        public X509Certificate[] getAcceptedIssuers() {
-                            return null;
+        Socket plainSocket = null;
+        Socket connectedSocket = null;
+        try {
+            if (ssl) {
+                try {
+                    // Create a trust manager that accepts all certificates (for self-signed certs)
+                    TrustManager[] trustAllCerts = new TrustManager[] {
+                        new X509TrustManager() {
+                            @Override
+                            public X509Certificate[] getAcceptedIssuers() {
+                                return new X509Certificate[0];
+                            }
+                            @Override
+                            public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                                // Trust all clients
+                            }
+                            @Override
+                            public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                                // Trust all servers (for self-signed certificates)
+                            }
                         }
-                        @Override
-                        public void checkClientTrusted(X509Certificate[] certs, String authType) {
-                        }
-                        @Override
-                        public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                    };
+                    
+                    // Create SSL context with custom trust manager
+                    SSLContext sslContext = SSLContext.getInstance("TLS");
+                    sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+                    SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+                    
+                    // First create a plain socket and connect
+                    plainSocket = new Socket();
+                    plainSocket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout
+                    
+                    // Wrap the connected socket with SSL
+                    SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket(
+                        plainSocket,
+                        host,
+                        port,
+                        true // autoClose
+                    );
+                    
+                    // Enable all available TLS/SSL protocols for maximum compatibility
+                    String[] supportedProtocols = sslSocket.getSupportedProtocols();
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Supported protocols: {0}", String.join(", ", supportedProtocols));
+                    sslSocket.setEnabledProtocols(supportedProtocols);
+                    
+                    // Use all available cipher suites
+                    sslSocket.setUseClientMode(true);
+                    
+                    // Start SSL handshake
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Starting SSL handshake with {0}:{1}", new Object[]{host, port});
+                    sslSocket.startHandshake();
+                    connectedSocket = sslSocket;
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SSL/TLS connection established successfully");
+                } catch (Exception e) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SSL Error Details: " + e.getClass().getName() + ": " + e.getMessage(), e);
+                    // Clean up partial connection
+                    if (plainSocket != null && !plainSocket.isClosed()) {
+                        try {
+                            plainSocket.close();
+                        } catch (IOException ignored) {
                         }
                     }
-                };
-                
-                // Create SSL context with custom trust manager
-                SSLContext sslContext = SSLContext.getInstance("TLS");
-                sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-                SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
-                
-                // First create a plain socket and connect
-                Socket plainSocket = new Socket();
-                plainSocket.connect(new InetSocketAddress(host, port), 10000); // 10 second timeout
-                
-                // Wrap the connected socket with SSL
-                SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket(
-                    plainSocket,
-                    host,
-                    port,
-                    true // autoClose
-                );
-                
-                // Enable all available TLS/SSL protocols for maximum compatibility
-                String[] supportedProtocols = sslSocket.getSupportedProtocols();
-                System.out.println("Supported protocols: " + String.join(", ", supportedProtocols));
-                sslSocket.setEnabledProtocols(supportedProtocols);
-                
-                // Use all available cipher suites
-                sslSocket.setUseClientMode(true);
-                
-                // Start SSL handshake
-                System.out.println("Starting SSL handshake with " + host + ":" + port);
-                sslSocket.startHandshake();
-                socket = sslSocket;
-                System.out.println("SSL/TLS connection established successfully");
-            } catch (Exception e) {
-                System.err.println("SSL Error Details: " + e.getClass().getName() + ": " + e.getMessage());
-                e.printStackTrace();
-                throw new IOException("SSL connection failed: " + e.getMessage(), e);
+                    throw new IOException("SSL connection failed: " + e.getMessage(), e);
+                }
+            } else {
+                // Create regular socket for unencrypted connection
+                connectedSocket = new Socket();
+                connectedSocket.connect(new InetSocketAddress(InetAddress.getByName(host).getHostAddress(), port), 10000);
             }
-        } else {
-            // Create regular socket for unencrypted connection
-            socket = new Socket(InetAddress.getByName(host).getHostAddress(), port);
+            
+            setSocket(connectedSocket);
+            setOut(new PrintWriter(new OutputStreamWriter(connectedSocket.getOutputStream()), true)); // Auto-flush enabled
+            setIn(new BufferedReader(new InputStreamReader(connectedSocket.getInputStream())));
+        } catch (IOException e) {
+            // Cleanup on error
+            if (connectedSocket != null && !connectedSocket.isClosed()) {
+                try {
+                    connectedSocket.close();
+                } catch (IOException ignored) {
+                }
+            }
+            throw e;
         }
-        
-        setSocket(socket);
-        setOut(new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true)); // Auto-flush enabled
-        setIn(new BufferedReader(new InputStreamReader(socket.getInputStream())));
     }
 
     /**
@@ -419,7 +440,7 @@ public class IrcParser {
         
         // 2. If SASL is enabled, start capability negotiation
         if (isUseSasl()) {
-            System.out.println("Starting CAP negotiation for SASL...");
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Starting CAP negotiation for SASL...");
             capNegotiating = true;
             submitMessage("CAP LS 302");
             doSleep();
@@ -436,7 +457,7 @@ public class IrcParser {
             return; // Already logged in
         }
         
-        System.out.println("Completing login with NICK/USER...");
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Completing login with NICK/USER...");
         loginComplete = true;
         
         // Send NICK
@@ -454,12 +475,12 @@ public class IrcParser {
                 getUser() == null || getUser().isBlank() ||
                 getHostname() == null || getHostname().isBlank() ||
                 getIp() == null || getIp().isBlank()) {
-                System.err.println("WEBIRC Error - Missing parameters: Password=" + getPassword() + 
-                    ", User=" + getUser() + ", Hostname=" + getHostname() + ", IP=" + getIp());
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "WEBIRC Error - Missing parameters: Password={0}, User={1}, Hostname={2}, IP={3}", 
+                    new Object[]{getPassword(), getUser(), getHostname(), getIp()});
                 throw new IOException("WEBIRC requires password, user, hostname and IP");
             }
-            System.out.println("WEBIRC Debug - Password: " + getPassword() + ", User: " + getUser() + 
-                ", Hostname: " + getHostname() + ", IP: " + getIp());
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "WEBIRC Debug - Password={0}, User={1}, Hostname={2}, IP={3}", 
+                new Object[]{getPassword(), getUser(), getHostname(), getIp()});
             submitMessage("WEBIRC %s %s %s %s", getPassword(), getUser(), getHostname(), getIp());
             doSleep();
             submitMessage("USER %s 0 * :%s", getIdent(), getRealname());
@@ -493,12 +514,7 @@ public class IrcParser {
         // Handle CAP responses - format: server CAP * LS/ACK ...
         if (parts.length >= 3 && parts[1].equals("CAP")) {
             handleCap(parts, arr[1], session, arr[0]);
-            // Forward CAP messages to client for capability negotiation
-            if (parts.length >= 4) {
-                if (parts[3].equals("LS") || parts[3].equals("ACK") || parts[3].equals("NAK")) {
-                    sendText(":" + arr[0] + " " + arr[1] + "\n", session, "chat", "");
-                }
-            }
+            // Don't forward CAP messages to client (handled internally)
             return;
         }
         
@@ -512,9 +528,28 @@ public class IrcParser {
         // Handle numeric 903 (SASL success) and 904/905 (SASL failure)
         if (parts.length >= 2 && (parts[1].equals("903") || parts[1].equals("904") || parts[1].equals("905"))) {
             handleSaslEnd(parts, arr[1], session);
+            // Don't return here - forward SASL messages to client
+        }
+        
+        // Handle CTCP requests - format: :nick!user@host PRIVMSG target :\001COMMAND args\001
+        // Note: The ending \001 might not be present due to parsing
+        if (parts.length >= 3 && parts[1].equals("PRIVMSG") && arr[1].startsWith("\u0001")) {
+            // Answer the CTCP request
+            handleCtcpRequest(parts, arr[1], session);
+            // Forward to client for display (will be shown as incoming CTCP request)
+            sendText(":" + arr[0] + " :" + arr[1] + "\n", session, "chat", "");
             return;
         }
         
+        // Handle CTCP replies - format: :nick!user@host NOTICE target :\001COMMAND response\001
+        // Note: The ending \001 might not be present due to parsing
+        if (parts.length >= 3 && parts[1].equals("NOTICE") && arr[1].startsWith("\u0001")) {
+            // Forward CTCP reply to client for display in active window
+            sendText(":" + arr[0] + " :" + arr[1] + "\n", session, "chat", "active");
+            return;
+        }
+        
+        // Forward all other IRC messages to client
         sendText(arr[0] + " " + arr[1] + "\n", session, "chat", "");
     }
     
@@ -524,36 +559,138 @@ public class IrcParser {
         // CAP * LS :multi-prefix sasl...
         // Format: :server CAP * LS :caps (parts[0]=:server, parts[1]=CAP, parts[2]=*, parts[3]=LS)
         if (parts.length >= 4 && parts[3].equals("LS")) {
-            String caps = trailing;
-            System.out.println("CAP LS received: " + caps);
+            String capsString = trailing.trim();
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP LS received: {0}", capsString);
 
-            // If SASL is required but not offered, abort negotiation early
-            if (isUseSasl() && !caps.contains("sasl")) {
-                sendText(":Server NOTICE * :SASL not supported by server\n", session, "chat", "");
-                submitMessage("CAP END");
-                capNegotiating = false;
-                return;
+            // Parse available capabilities into a set for fast lookup
+            java.util.Set<String> availableCaps = new java.util.HashSet<>();
+            for (String cap : capsString.split("\\s+")) {
+                if (!cap.isEmpty()) {
+                    // Remove any capability modifiers (=, ~, etc.) for comparison
+                    String cleanCap = cap.split("=")[0];
+                    availableCaps.add(cleanCap.toLowerCase());
+                }
             }
             
-            // Don't request capabilities here - let the client (JavaScript) decide
-            // based on what it sees in CAP LS and what it needs.
-            // The client will send CAP REQ with all desired capabilities including SASL.
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Available capabilities: {0}", availableCaps);
+            
+            // Build list of capabilities to request
+            java.util.List<String> capsToRequest = new java.util.ArrayList<>();
+            
+            // Add SASL if required and available
+            if (isUseSasl()) {
+                if (availableCaps.contains("sasl")) {
+                    capsToRequest.add("sasl");
+                } else {
+                    sendText(":Server NOTICE * :SASL not supported by server\n", session, "chat", "");
+                    submitMessage("CAP END");
+                    capNegotiating = false;
+                    try {
+                        completeLogin();
+                    } catch (IOException e) {
+                        Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL unavailable", e);
+                    }
+                    return;
+                }
+            }
+            
+            // Add only essential capabilities
+            if (availableCaps.contains("away-notify")) {
+                capsToRequest.add("away-notify");
+            }
+            if (availableCaps.contains("message-tags")) {
+                capsToRequest.add("message-tags");
+            }
+            if (availableCaps.contains("chghost")) {
+                capsToRequest.add("chghost");
+            }
+            
+            // Request capabilities
+            if (!capsToRequest.isEmpty()) {
+                String capReq = String.join(" ", capsToRequest);
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Requesting capabilities: {0}", capReq);
+                submitMessage("CAP REQ :%s", capReq);
+                doSleep();
+            } else {
+                // No capabilities to request, end negotiation
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "No capabilities to request, ending negotiation");
+                submitMessage("CAP END");
+                capNegotiating = false;
+                try {
+                    completeLogin();
+                } catch (IOException e) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after CAP END", e);
+                }
+            }
         }
         // CAP * ACK :sasl ...
         // Format: :server CAP * ACK :sasl multi-prefix ...
         else if (parts.length >= 4 && parts[3].equals("ACK")) {
+            String ackedCaps = trailing.trim();
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP ACK received: {0}", ackedCaps);
+            
             // Forward CAP ACK to client for capability tracking
             sendText(":" + originalMessage + " " + trailing + "\n", session, "chat", "");
             
-            // Only handle SASL if it's part of the ACK
-            if (trailing.contains("sasl")) {
+            // Parse ACKed capabilities
+            java.util.Set<String> ackedCapSet = new java.util.HashSet<>();
+            for (String cap : ackedCaps.split("\\s+")) {
+                if (!cap.isEmpty()) {
+                    ackedCapSet.add(cap.toLowerCase());
+                }
+            }
+            
+            // Check if SASL was ACKed and we need to authenticate
+            if (ackedCapSet.contains("sasl") && isUseSasl()) {
                 try {
-                    System.out.println("CAP ACK received for SASL, starting authentication...");
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL capability ACKed, starting authentication...");
                     submitMessage("AUTHENTICATE PLAIN");
                     doSleep();
+                    // Don't end CAP negotiation yet, wait for SASL to complete
                 } catch (Exception e) {
-                    System.err.println("Error starting AUTHENTICATE: " + e.getMessage());
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error starting AUTHENTICATE", e);
+                    submitMessage("AUTHENTICATE *");
+                    submitMessage("CAP END");
+                    capNegotiating = false;
+                    try {
+                        completeLogin();
+                    } catch (IOException ex) {
+                        Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL error", ex);
+                    }
                 }
+            } else {
+                // No SASL or SASL not ACKed, end CAP negotiation immediately
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Ending CAP negotiation (no SASL or SASL not needed)");
+                submitMessage("CAP END");
+                capNegotiating = false;
+                try {
+                    completeLogin();
+                } catch (IOException e) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after CAP END", e);
+                }
+            }
+        }
+        // CAP * NAK :sasl ...
+        else if (parts.length >= 4 && parts[3].equals("NAK")) {
+            String nakedCaps = trailing.trim();
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "CAP NAK received: {0}", nakedCaps);
+            
+            // Check if SASL was rejected and is required
+            if (nakedCaps.toLowerCase().contains("sasl") && isUseSasl()) {
+                sendText(":Server NOTICE * :SASL capability rejected by server\n", session, "chat", "");
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL required but rejected by server");
+            } else {
+                sendText(":Server NOTICE * :Some capabilities rejected: " + nakedCaps + "\n", session, "chat", "");
+            }
+            
+            // End CAP negotiation - continue without rejected capabilities
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Ending CAP negotiation after NAK");
+            submitMessage("CAP END");
+            capNegotiating = false;
+            try {
+                completeLogin();
+            } catch (IOException e) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after CAP NAK", e);
             }
         }
     }
@@ -562,17 +699,22 @@ public class IrcParser {
         // Format: :server AUTHENTICATE + (parts[0]=:server, parts[1]=AUTHENTICATE, parts[2]=+)
         if (parts.length > 2 && parts[2].equals("+")) {
             try {
-                System.out.println("AUTHENTICATE + received, sending credentials...");
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending credentials...");
                 // Send SASL PLAIN authentication: base64(username\0username\0password)
                 String authString = getSaslUsername() + "\0" + getSaslUsername() + "\0" + getSaslPassword();
                 String base64Auth = java.util.Base64.getEncoder().encodeToString(authString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 submitMessage("AUTHENTICATE %s", base64Auth);
                 doSleep();
             } catch (Exception e) {
-                System.err.println("Error sending SASL credentials: " + e.getMessage());
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error sending SASL credentials", e);
                 submitMessage("AUTHENTICATE *");
                 submitMessage("CAP END");
                 capNegotiating = false;
+                try {
+                    completeLogin();
+                } catch (IOException ex) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL error", ex);
+                }
             }
         }
     }
@@ -581,17 +723,17 @@ public class IrcParser {
         String numeric = parts[1];
         if (numeric.equals("903")) {
             // SASL authentication successful
-            System.out.println("SASL authentication successful (903)");
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL authentication successful (903)");
             sendText(":Server NOTICE * :SASL authentication successful\n", session, "chat", "");
         } else if (numeric.equals("904") || numeric.equals("905")) {
             // SASL authentication failed
-            System.err.println("SASL authentication failed (" + numeric + "): " + trailing);
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "SASL authentication failed ({0}): {1}", new Object[]{numeric, trailing});
             sendText(":Server NOTICE * :SASL authentication failed: " + trailing + "\n", session, "chat", "");
         }
         
         // End capability negotiation
         if (capNegotiating) {
-            System.out.println("Ending capability negotiation (CAP END)");
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Ending capability negotiation (CAP END)");
             submitMessage("CAP END");
             capNegotiating = false;
             
@@ -599,8 +741,114 @@ public class IrcParser {
             try {
                 completeLogin();
             } catch (IOException e) {
-                System.err.println("Error completing login after SASL: " + e.getMessage());
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL", e);
             }
+        }
+    }
+    
+    /**
+     * Handles CTCP (Client-To-Client Protocol) requests
+     * @param parts The command parts
+     * @param trailing The CTCP command with \001 delimiters
+     * @param session The WebSocket session
+     */
+    private void handleCtcpRequest(String[] parts, String trailing, Session session) {
+        // Add ending \001 if missing (can happen due to parsing)
+        if (!trailing.endsWith("\u0001")) {
+            trailing = trailing + "\u0001";
+        }
+        
+        // Remove \001 delimiters
+        String ctcpContent = trailing.substring(1, trailing.length() - 1);
+        String[] ctcpParts = ctcpContent.split(" ", 2);
+        String ctcpCommand = ctcpParts[0].toUpperCase();
+        String ctcpArgs = ctcpParts.length > 1 ? ctcpParts[1] : "";
+        
+        // Extract sender nick from parts[0] (nick!user@host or :nick!user@host)
+        String sender = parts[0];
+        if (sender.startsWith(":")) {
+            sender = sender.substring(1);
+        }
+        String senderNick = sender.contains("!") ? sender.split("!")[0] : sender;
+        
+        // Extract target from parts[2]
+        String target = parts[2];
+        
+        System.out.println("=== CTCP Request Debug ===");
+        System.out.println("  Command: " + ctcpCommand);
+        System.out.println("  From: " + senderNick + " (full: " + sender + ")");
+        System.out.println("  To: " + target);
+        System.out.println("  Our nick: " + pendingNick);
+        System.out.println("  Args: " + ctcpArgs);
+        System.out.println("  Match? " + (pendingNick != null && target.equalsIgnoreCase(pendingNick)));
+        
+        // Only respond to CTCP requests directed at us (not channel CTCPs)
+        if (pendingNick == null || !target.equalsIgnoreCase(pendingNick)) {
+            System.out.println("  -> Ignoring (not for us)");
+            return;
+        }
+        
+        System.out.println("  -> Processing and sending reply");
+        
+        try {
+            String response = null;
+            
+            switch (ctcpCommand) {
+                case "VERSION":
+                    response = "jwebirc 2.0 - Java WebSocket IRC Client";
+                    break;
+                    
+                case "TIME":
+                    response = new java.text.SimpleDateFormat("EEE MMM dd HH:mm:ss yyyy", java.util.Locale.ENGLISH)
+                            .format(new java.util.Date());
+                    break;
+                    
+                case "PING":
+                    // Echo back the ping argument
+                    response = ctcpArgs;
+                    break;
+                    
+                case "CLIENTINFO":
+                    response = "VERSION TIME PING CLIENTINFO FINGER USERINFO SOURCE ACTION";
+                    break;
+                    
+                case "FINGER":
+                    // Provide user information (nickname, idle time, etc.)
+                    response = (pendingNick != null ? pendingNick : getUser()) + " - Idle: 0 seconds";
+                    break;
+                    
+                case "USERINFO":
+                    // Provide user information (typically same as realname)
+                    response = getRealname() != null ? getRealname() : "jwebirc user";
+                    break;
+                    
+                case "SOURCE":
+                    // Provide information about where to get the client
+                    response = "https://github.com/WarPigs1602/jwebirc";
+                    break;
+                    
+                case "ACTION":
+                    // ACTION is handled by the client, don't send automatic reply
+                    return;
+                    
+                default:
+                    // Unknown CTCP command - send ERRMSG
+                    System.out.println("Unknown CTCP command: " + ctcpCommand);
+                    // Send ERRMSG response for unknown commands
+                    submitMessage("NOTICE %s :\u0001ERRMSG %s :Unknown CTCP command\u0001", senderNick, ctcpCommand);
+                    System.out.println("Sent CTCP ERRMSG reply to " + senderNick);
+                    return;
+            }
+            
+            if (response != null) {
+                // Send CTCP reply back to sender
+                // Format: NOTICE sender :\001COMMAND response\001
+                submitMessage("NOTICE %s :\u0001%s %s\u0001", senderNick, ctcpCommand, response);
+                System.out.println("Sent CTCP " + ctcpCommand + " reply to " + senderNick);
+            }
+        } catch (Exception e) {
+            System.err.println("Error handling CTCP request: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -616,11 +864,11 @@ public class IrcParser {
         text = text.formatted(args);
         var o = getOut();
         if (o == null) {
-            System.err.println("ERROR: PrintWriter is null, cannot send: " + text);
+            Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "ERROR: PrintWriter is null, cannot send: {0}", text);
             return;
         }
         o.println(text);
-        System.out.println(">>> " + text);
+        Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "IRC >> {0}", text);
     }
 
     protected String escapeHtml(String text) {
@@ -632,14 +880,48 @@ public class IrcParser {
 
     protected void logout(String reason) {
         if (getOut() != null) {
-            submitMessage("QUIT :%s", reason);
-        }
-        if (getSocket() != null) {
             try {
-                getSocket().close();
-            } catch (IOException ex) {
-                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, null, ex);
+                submitMessage("QUIT :%s", reason);
+                getOut().flush();
+            } catch (Exception e) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Error sending QUIT message", e);
             }
+        }
+        closeConnection();
+    }
+    
+    /**
+     * Close the IRC connection and cleanup resources
+     */
+    public void closeConnection() {
+        // Close output stream
+        if (out != null) {
+            try {
+                out.close();
+            } catch (Exception e) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Error closing output stream", e);
+            }
+            out = null;
+        }
+        
+        // Close input stream
+        if (in != null) {
+            try {
+                in.close();
+            } catch (Exception e) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Error closing input stream", e);
+            }
+            in = null;
+        }
+        
+        // Close socket
+        if (socket != null && !socket.isClosed()) {
+            try {
+                socket.close();
+            } catch (IOException ex) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error closing socket", ex);
+            }
+            socket = null;
         }
     }
 
@@ -651,8 +933,13 @@ public class IrcParser {
      * @param target
      */
     protected synchronized void sendText(String text, Session session, String category, String target) {
-        if (session == null || !session.isOpen()) {
-            System.err.println("WARNING: WebSocket session is null or closed");
+        if (session == null) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Cannot send message: WebSocket session is null");
+            return;
+        }
+        
+        if (!session.isOpen()) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Cannot send message: WebSocket session is closed");
             return;
         }
         
@@ -665,15 +952,17 @@ public class IrcParser {
                     continue;
                 }
                 synchronized (session) {
-                    session.getBasicRemote().sendText(Json.createObjectBuilder()
-                            .add("category", category)
-                            .add("target", target)
-                            .add("message", escapeHtml(tok))
-                            .build().toString());
+                    if (session.isOpen()) {
+                        session.getBasicRemote().sendText(Json.createObjectBuilder()
+                                .add("category", category)
+                                .add("target", target)
+                                .add("message", escapeHtml(tok))
+                                .build().toString());
+                    }
                 }
             }
         } catch (Exception ioe) {
-            System.err.println("ERROR sending WebSocket message: " + ioe.getMessage());
+            Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error sending WebSocket message: " + ioe.getMessage(), ioe);
             try {
                 synchronized (session) {
                     if (session.isOpen()) {

@@ -11,6 +11,52 @@ class IRCParser {
         this.login = true;
         this.channel = window.chan || '';
         this.user = window.user || '';
+        
+        // WHO command queue to avoid flooding the server
+        this.whoQueue = [];
+        this.whoTimer = null;
+        this.whoDelay = 2000; // 2 seconds delay between WHO commands
+    }
+    
+    /**
+     * Parse IRC message according to RFC 1459
+     * Format: [:prefix] <command> [params...] [:trailing]
+     * Returns: { prefix, command, params }
+     */
+    parseIrcMessage(text) {
+        let prefix = null;
+        let trailing = null;
+        let idx = 0;
+        
+        // Parse prefix
+        if (text[0] === ':') {
+            const spaceIdx = text.indexOf(' ');
+            if (spaceIdx > 0) {
+                prefix = text.substring(1, spaceIdx);
+                idx = spaceIdx + 1;
+            }
+        }
+        
+        // Find trailing (everything after " :")
+        const trailingIdx = text.indexOf(' :', idx);
+        if (trailingIdx !== -1) {
+            trailing = text.substring(trailingIdx + 2);
+            text = text.substring(idx, trailingIdx);
+        } else {
+            text = text.substring(idx);
+        }
+        
+        // Parse command and middle params
+        const parts = text.trim().split(' ');
+        const command = parts[0];
+        const params = parts.slice(1);
+        
+        // Add trailing as last param if it exists
+        if (trailing !== null) {
+            params.push(trailing);
+        }
+        
+        return { prefix, command, params };
     }
     
     parseOutput(text) {
@@ -53,6 +99,9 @@ class IRCParser {
         const arr = text.split(" ");
         const regex = /^[\d]+$/;
         
+        // Parse IRC message properly
+        const ircMsg = this.parseIrcMessage(text);
+        
         // CAP handling (IRCv3 Capabilities)
         if (arr[0].startsWith(':') && arr[1] === 'CAP') {
             this.handleCap(arr);
@@ -91,18 +140,18 @@ class IRCParser {
         }
         
         // Numeric replies
-        if (arr[1].match(regex)) {
-            return this.handleNumericReply(arr, text);
+        if (arr[1] && arr[1].match(regex)) {
+            return this.handleNumericReply(arr, text, ircMsg);
         }
-        
+
         // Command handling
         return this.handleCommand(arr, text);
     }
-    
-    handleNumericReply(arr, text) {
+
+    handleNumericReply(arr, text, ircMsg) {
         const code = arr[1];
         let parsed = "";
-        
+
         switch (code) {
             case "005": // Server features (ISUPPORT)
                 // Parse PREFIX parameter
@@ -111,7 +160,7 @@ class IRCParser {
                         this.chatManager.parseServerPrefix(arr[i]);
                     }
                 }
-                return this.handleGenericNumeric(arr, code, text);
+                return this.handleGenericNumeric(arr, code, text, ircMsg);
                 
             case "353": // Names list
                 const channel = arr[4];
@@ -133,7 +182,12 @@ class IRCParser {
                 return null;
                 
             case "352": // WHO reply
-                this.chatManager.setHost(arr[3], arr[7], arr[4] + "@" + arr[5]);
+                // :server 352 client-nick channel username host server nick flags :hopcount realname
+                const whoNick = arr[7];
+                const whoFlags = arr[8] || '';
+                this.chatManager.setHost(arr[3], whoNick, arr[4] + "@" + arr[5]);
+                const isAway = whoFlags.includes('G');
+                this.chatManager.setAwayStatus(whoNick, isAway);
                 return null;
                 
             case "311": // WHOIS user
@@ -143,11 +197,116 @@ class IRCParser {
             case "319": // WHOIS channels
                 this.output = this.chatManager.getActiveWindow();
                 return this.formatWhoisChannels(arr);
+
+            case "312": { // WHOIS server
+                this.output = this.chatManager.getActiveWindow();
+                const server = arr[4];
+                const info = arr.slice(5).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">server</span> : ${server}${info ? ' (' + info + ')' : ''}`;
+            }
+
+            case "313": { // WHOIS operator
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                const suffix = info ? ` (${info})` : '';
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${arr[3]}${suffix}`;
+            }
+
+            case "317": { // WHOIS idle / signon
+                this.output = this.chatManager.getActiveWindow();
+                const idleSeconds = parseInt(arr[4] || '0', 10);
+                const signonTs = parseInt(arr[5] || '0', 10) * 1000;
+                const idleText = isNaN(idleSeconds) ? '-' : `${idleSeconds}s`;
+                const signonText = signonTs > 0 ? new Date(signonTs).toLocaleString() : '-';
+                const timestamp = this.chatManager ? this.chatManager.getTimestamp() : '';
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">idle</span> : ${idleText}\n${timestamp} <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">signon</span> : ${signonText}`;
+            }
+
+            case "330": { // WHOIS logged in as (authname)
+                this.output = this.chatManager.getActiveWindow();
+                const authAs = arr[4];
+                const info = arr.slice(5).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">auth</span> : ${arr[3]} is logged in as ${authAs}${info ? ' (' + info + ')' : ''}`;
+            }
+
+            case "307": { // WHOIS registered nick (often 307)
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">registered</span> : ${arr[3]}${info ? ' (' + info + ')' : ''}`;
+            }
+
+            case "320": { // WHOIS additional info (identified, etc.)
+                this.output = this.chatManager.getActiveWindow();
+                // Format: :server 320 nick target :info message
+                const nick = arr[3];
+                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">info</span> : ${nick} ${info}`;
+            }
+
+            case "343": { // WHOIS oper type (RPL_WHOISOPERNAME)
+                this.output = this.chatManager.getActiveWindow();
+                // Format: :server 343 nick target :is opered as opertype
+                const nick = arr[3];
+                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${nick}`;
+            }
+
+            case "327": { // WHOIS real host/vhost
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">vhost</span> : ${info}`;
+            }
+
+            case "275": // Certificate fingerprint
+            case "276": { // Client certificate
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">certificate</span> : ${info}`;
+            }
+
+            case "318": { // End of WHOIS
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> ${info}`;
+            }
+
+            case "301": { // WHOIS away
+                this.output = this.chatManager.getActiveWindow();
+                const nick = arr[3];
+                const awayMsg = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                if (this.chatManager) {
+                    this.chatManager.setAwayStatus(nick, true);
+                }
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">away</span> : ${nick}${awayMsg ? ' (' + awayMsg + ')' : ''}`;
+            }
+
+            case "338": { // WHOIS actual host/IP
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">actual host</span> : ${info}`;
+            }
+
+            case "378": { // WHOIS connecting from
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">connecting</span> : ${info}`;
+            }
+
+            case "379": { // WHOIS modes
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">modes</span> : ${info}`;
+            }
+
+            case "671": { // WHOIS secure connection (SSL/TLS)
+                this.output = this.chatManager.getActiveWindow();
+                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">secure</span> : ${info}`;
+            }
                 
             case "001": // Welcome
-                this.output = this.chatManager.getActiveWindow();
-                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Signed on!\n");
-                return null;
+                this.output = "Status";
+                return " <span style=\"color: #ff0000\">==</span> Signed on!";
                 
             case "375": // MOTD start
                 this.output = "Status";
@@ -158,9 +317,7 @@ class IRCParser {
                 this.output = "Status";
                 // Get the full MOTD line after the nickname
                 const motdLine = text.substring(text.indexOf(arr[3]));
-                // Remove leading ":" and ":- " or ":" prefix if present
                 const cleanedMotd = motdLine.replace(/^:\s*-?\s*/, '');
-                // Use <pre> tag to preserve whitespace and formatting
                 return " <span style=\"color: #00aaff\">==</span> <span style=\"font-family: monospace; white-space: pre;\">" + cleanedMotd + "</span>";
                 
             case "376": // MOTD end
@@ -176,13 +333,13 @@ class IRCParser {
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
             default:
-                return this.handleGenericNumeric(arr, code, text);
+                return this.handleGenericNumeric(arr, code, text, ircMsg);
         }
     }
     
     handleCommand(arr, text) {
         const command = arr[1].toLowerCase();
-        
+
         switch (command) {
             case "notice":
                 return this.handleNotice(arr);
@@ -207,23 +364,59 @@ class IRCParser {
                 return this.handlePart(arr);
             case "kick":
                 return this.handleKick(arr);
+            case "away":
+                this.handleAway(arr);
+                return null;
+            case "chghost":
+                return this.handleChghost(arr);
             case "privmsg":
                 return this.handlePrivmsg(arr, text);
             default:
                 return text;
         }
     }
-    
+
     handleNotice(arr) {
         const nick = this.parseNick(arr[0]);
-        const message = arr.slice(3).join(" ");
-        
-        this.output = arr[0] === nick ? "Status" : nick;
-        
-        if (!this.chatManager.isPage(this.output)) {
-            this.chatManager.addPage(this.output, "query", false);
+        let message = arr.slice(3).join(" ");
+
+        // Remove leading : if present (IRC protocol format)
+        if (message.startsWith(':')) {
+            message = message.substring(1);
         }
-        
+
+        // Debug log - show full message
+        const firstChar = message.length > 0 ? message.charCodeAt(0) : -1;
+        const lastChar = message.length > 0 ? message.charCodeAt(message.length - 1) : -1;
+        console.log('NOTICE from', nick);
+        console.log('  Message:', message);
+        console.log('  Length:', message.length);
+        console.log('  First char code:', firstChar, 'Last char code:', lastChar);
+        console.log('  Starts with \\001?', firstChar === 1, 'Ends with \\001?', lastChar === 1);
+
+        // Check for CTCP reply (NOTICE with \001 delimiters)
+        // Note: The ending \001 might be lost due to split(" ") parsing
+        if (message.startsWith(String.fromCharCode(1))) {
+            console.log('✓ Detected CTCP reply - calling handleCtcpReply');
+            // Add ending \001 if missing
+            if (!message.endsWith(String.fromCharCode(1))) {
+                message = message + String.fromCharCode(1);
+                console.log('  Added missing ending \\001');
+            }
+            return this.handleCtcpReply(nick, message);
+        }
+
+        // Server notices should go to Status window, not create new query windows
+        if (nick.includes('.') || nick === 'Server' || arr[0] === nick) {
+            this.output = "Status";
+        } else {
+            this.output = nick;
+            if (!this.chatManager.isPage(this.output)) {
+                this.chatManager.addPage(this.output, "query", false);
+            }
+        }
+
+        // Display normal NOTICE message
         return `-${nick}- ${message}`;
     }
     
@@ -233,6 +426,11 @@ class IRCParser {
             if (this.channel.length !== 0 && window.postManager) {
                 const channelsToJoin = this.chatManager.parseChannels(this.channel);
                 window.postManager.submitTextMessage("/join " + channelsToJoin);
+            }
+            
+            // Rejoin previously saved channels
+            if (this.chatManager && window.postManager) {
+                this.chatManager.rejoinSavedChannels();
             }
             
             this.login = false;
@@ -302,8 +500,12 @@ class IRCParser {
             this.chatManager.userColor = color;
             this.output = channel;
             
+            // Save channel to memory for next login
+            this.chatManager.addToChannelMemory(channel);
+            
+            // Queue WHO command with delay to avoid flooding the server
             if (window.postManager) {
-                window.postManager.submitTextMessage("/who " + channel);
+                this.queueWhoCommand(channel);
             }
         } else {
             this.output = arr[2];
@@ -312,7 +514,6 @@ class IRCParser {
         
         return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${nick}</span> [${host}] has joined ${arr[2]}`;
     }
-    
     handlePart(arr) {
         const nick = this.parseNick(arr[0]);
         const color = this.chatManager.getColor(arr[2], nick);
@@ -321,8 +522,12 @@ class IRCParser {
         const host = this.parseHost(arr[0]);
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
-            this.output = this.chatManager.getActiveWindow();
             this.chatManager.delPage(arr[2]);
+            // Remove channel from memory when leaving
+            this.chatManager.removeFromChannelMemory(arr[2]);
+            this.output = this.chatManager.getActiveWindow();
+            // Refresh the active window display after closing the channel
+            this.chatManager.addWindow();
         } else {
             this.output = arr[2];
         }
@@ -331,7 +536,6 @@ class IRCParser {
         const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
         return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> [${host}] has left ${arr[2]}${reasonText}`;
     }
-    
     handleKick(arr) {
         const nick = this.parseNick(arr[0]);
         const color = this.chatManager.getColor(arr[2], arr[3]);
@@ -339,70 +543,183 @@ class IRCParser {
         const reason = arr.slice(4).join(" ");
         const host = this.parseHost(arr[0]);
         
-        this.output = window.user.toLowerCase() === nick.toLowerCase() ? this.chatManager.getActiveWindow() : arr[2];
+        // If our user was kicked, remove from channel memory
+        if (window.user.toLowerCase() === arr[3].toLowerCase()) {
+            this.chatManager.delPage(arr[2]);
+            this.chatManager.removeFromChannelMemory(arr[2]);
+            this.output = this.chatManager.getActiveWindow();
+            // Refresh the active window display after closing the channel
+            this.chatManager.addWindow();
+        } else {
+            this.output = arr[2];
+        }
         this.chatManager.delNick(arr[2], arr[3]);
         
         const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
         return ` <span style="color: #ff0000">==</span> <span style="color: ${this.chatManager.getColor(arr[2], nick)};">${this.chatManager.getStatus(arr[2], nick)}${nick}</span> [${host}] has kicked <span style="color: ${color};">${status}${arr[3]}</span>${reasonText}`;
     }
     
+    handleAway(arr) {
+        // AWAY command format: :nick!user@host AWAY :away message
+        // or: :nick!user@host AWAY (when coming back)
+        const nick = this.parseNick(arr[0]);
+        const isAway = arr.length > 2 && arr[2] !== '';
+        
+        // Update away status for this nick in all channels
+        if (this.chatManager) {
+            this.chatManager.setAwayStatus(nick, isAway);
+        }
+    }
+    
+    handleChghost(arr) {
+        // CHGHOST command format: :nick!user@host CHGHOST new-user new-host
+        // arr[0] = :nick!user@host
+        // arr[1] = CHGHOST
+        // arr[2] = new-user
+        // arr[3] = new-host
+        const nick = this.parseNick(arr[0]);
+        const newUser = arr[2] || '';
+        const newHost = arr[3] || '';
+        const newHostMask = newUser + "@" + newHost;
+        
+        // Update host in all channels where the nick appears and announce in each common channel
+        if (this.chatManager) {
+            const channelsWithNick = [];
+            for (const channel of this.chatManager.channels) {
+                if (channel.type !== 'channel') continue;
+                let found = false;
+                for (const nickData of channel.nicks) {
+                    let displayNick = nickData.nick;
+                    if (displayNick.length > 0 && this.chatManager.isStatusSymbol(displayNick[0])) {
+                        displayNick = displayNick.substring(1);
+                    }
+                    
+                    if (displayNick.toLowerCase() === nick.toLowerCase()) {
+                        nickData.host = newHostMask;
+                        found = true;
+                    }
+                }
+                if (found) {
+                    channelsWithNick.push(channel.page);
+                    this.chatManager.renderUserlist(channel.page);
+                }
+            }
+            
+            // Announce in all common channels
+            const stamp = this.chatManager.getTimestamp();
+            for (const channelName of channelsWithNick) {
+                const nickColor = this.chatManager.getColor(channelName, nick);
+                const msg = ` <span style=\"color: #ff0000\">==</span> <span style=\"color: ${nickColor};\">${nick}</span> has changed host to ${newUser}@${newHost}`;
+                this.chatManager.parsePages(`${stamp} ${msg}\n`, channelName);
+            }
+        }
+        
+        // Handled manually above
+        return null;
+    }
+    
     handlePrivmsg(arr, text) {
         const nick = this.parseNick(arr[0]);
+        
+        let message = arr.slice(3).join(" ").trim();
+        
+        // Remove leading : if present (IRC protocol format)
+        if (message.startsWith(':')) {
+            message = message.substring(1).trim();
+        }
+        
+        // Debug log - show full message
+        const firstChar = message.length > 0 ? message.charCodeAt(0) : -1;
+        const lastChar = message.length > 0 ? message.charCodeAt(message.length - 1) : -1;
+        console.log('PRIVMSG from', nick);
+        console.log('  Message:', message);
+        console.log('  Length:', message.length);
+        console.log('  First char code:', firstChar, 'Last char code:', lastChar);
+        console.log('  Starts with \\001?', firstChar === 1, 'Ends with \\001?', lastChar === 1);
+        
+        // Check for CTCP request BEFORE creating query window
+        // Note: The ending \001 might be lost due to split(" ") parsing
+        if (message.startsWith(String.fromCharCode(1))) {
+            console.log('✓ Detected CTCP request');
+            // Add ending \001 if missing
+            if (!message.endsWith(String.fromCharCode(1))) {
+                message = message + String.fromCharCode(1);
+                console.log('  Added missing ending \\001');
+            }
+            const ctcpContent = message.substring(1, message.length - 1);
+            
+            // ACTION is displayed differently - needs proper output
+            if (ctcpContent.startsWith("ACTION ")) {
+                this.output = (arr[2].startsWith("#") || arr[2].startsWith("&")) ? arr[2] : nick;
+                if (!this.chatManager.isPage(this.output)) {
+                    this.chatManager.addPage(this.output, "query", true);
+                }
+                return `* <span style="color: ${this.chatManager.getColor(this.output, nick)};">${this.chatManager.getStatus(this.output, nick)}${nick}</span> ${ctcpContent.substring(7)}`;
+            }
+            
+            // Other CTCP requests - display in active window (no query window)
+            const ctcpParts = ctcpContent.split(" ");
+            const ctcpCommand = ctcpParts[0];
+            const ctcpArgs = ctcpParts.slice(1).join(" ");
+            
+            // Display CTCP requests in active window
+            this.output = this.chatManager.getActiveWindow();
+            
+            return ` <span style="color: #ff0000">==</span> CTCP ${ctcpCommand} request from <span style="color: ${this.chatManager.getColor(this.output, nick)};">${nick}</span>${ctcpArgs ? ': ' + ctcpArgs : ''}`;
+        }
+        
+        // Normal message - set output and create page if needed
         this.output = (arr[2].startsWith("#") || arr[2].startsWith("&")) ? arr[2] : nick;
         
         if (!this.chatManager.isPage(this.output)) {
             this.chatManager.addPage(this.output, "query", true);
         }
         
-        const message = arr.slice(3).join(" ").trim();
-        
         // Only highlight in channels, not in private queries
         if (text.toLowerCase().includes(window.user.toLowerCase()) && (arr[2].startsWith("#") || arr[2].startsWith("&"))) {
             this.chatManager.setHighlight(true);
         }
         
-        // ACTION message
-        if (message.startsWith(String.fromCharCode(1) + "ACTION ") && message.endsWith(String.fromCharCode(1))) {
-            return `* <span style="color: ${this.chatManager.getColor(arr[2], nick)};">${this.chatManager.getStatus(arr[2], nick)}${nick}</span> ${message.substring(8, message.length - 1)}`;
-        } else {
-            return `&lt;<span style="color: ${this.chatManager.getColor(arr[2], nick)};">${this.chatManager.getStatus(arr[2], nick)}${nick}</span>&gt; ${message}`;
-        }
+        return `&lt;<span style="color: ${this.chatManager.getColor(arr[2], nick)};">${this.chatManager.getStatus(arr[2], nick)}${nick}</span>&gt; ${message}`;
     }
     
-    handleGenericNumeric(arr, code, text) {
+    handleGenericNumeric(arr, code, text, ircMsg) {
         this.output = this.chatManager.getActiveWindow();
         
-        // Parse from original text to preserve the full message
-        // Format: :server CODE nickname [params...] [:trailing message]
-        // We need to find everything after the third space (after nickname)
+        const numCode = parseInt(code);
         
-        let spaceCount = 0;
-        let startIndex = 0;
-        
-        for (let i = 0; i < text.length; i++) {
-            if (text[i] === ' ') {
-                spaceCount++;
-                if (spaceCount === 3) {
-                    startIndex = i + 1;
-                    break;
+        // For error codes (4xx, 5xx), use arr array
+        // Format: ["server", "CODE", "nickname", ...params]
+        if (numCode >= 400 && numCode <= 599) {
+            // Join everything from index 3 onwards (skip server, code, nickname)
+            if (arr.length > 3) {
+                const params = arr.slice(3);
+                
+                // Remove consecutive duplicates (e.g., "#channel #channel" -> "#channel")
+                const filtered = params.filter((item, index) => {
+                    return index === 0 || item !== params[index - 1];
+                });
+                
+                // Remove leading ':' from first param if present
+                if (filtered.length > 0 && filtered[0].startsWith(':')) {
+                    filtered[0] = filtered[0].substring(1);
                 }
+                
+                const message = filtered.join(' ');
+                return " <span style=\"color: #ff0000\">==</span> " + message;
             }
         }
         
-        if (startIndex > 0 && startIndex < text.length) {
-            let parsed = text.substring(startIndex);
-            
-            // Remove leading : from the trailing parameter if present
-            // Example: ":server 396 nick hostname :message" -> "hostname message"
-            const colonIndex = parsed.indexOf(':');
-            if (colonIndex !== -1) {
-                parsed = parsed.substring(0, colonIndex) + parsed.substring(colonIndex + 1);
+        // For other numerics
+        if (arr.length > 3) {
+            let message = arr.slice(3).join(' ');
+            // Remove leading ':' from message if present
+            if (message.startsWith(':')) {
+                message = message.substring(1);
             }
-            
-            return " <span style=\"color: #ff0000\">==</span> " + parsed.trim();
+            return " <span style=\"color: #ff0000\">==</span> " + message;
         }
         
-        // Fallback
         return " <span style=\"color: #ff0000\">==</span> " + text;
     }
     
@@ -412,14 +729,21 @@ class IRCParser {
     
     formatWhoisUser(arr) {
         const nick = arr[3];
-        const host = arr[4] + "@" + arr[5];
-        const realname = arr.slice(7).join(" ");
-        return ` <span style="color: #ff0000">==</span> <span style="font-weight: bold;">${nick}</span> [${host}]\n${this.chatManager.getTimestamp()} <span style="color: #ff0000">==</span> <p style="width: 80px; display: inline-block;">&nbsp;realname</p> : ${realname.trim()}`;
+        const user = arr[4];
+        const host = arr[5];
+        const realname = arr.slice(7).join(" ").replace(/^:/, '').trim();
+        const stamp = this.chatManager ? this.chatManager.getTimestamp() : '';
+
+        const lines = [
+            ` <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block; font-weight: bold;">whois</span> : ${nick} [${user}@${host}]`,
+            `${stamp} <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block;">realname</span> : ${realname || '(none)'} `
+        ];
+        return lines.join("\n");
     }
     
     formatWhoisChannels(arr) {
         const channels = arr.slice(4).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-        return ` <span style="color: #ff0000">==</span> <p style="width: 80px; display: inline-block;">&nbsp;channels</p> : ${channels.join(" ")}`;
+        return ` <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block;">channels</span> : ${channels.join(" ")}`;
     }
     
     isHostnameLookupMessage(message) {
@@ -430,6 +754,10 @@ class IRCParser {
     }
     
     parseNick(nick) {
+        // Remove leading : if present
+        if (nick.startsWith(':')) {
+            nick = nick.substring(1);
+        }
         return nick.includes("!") ? nick.split("!", 2)[0] : nick;
     }
     
@@ -478,6 +806,58 @@ class IRCParser {
                 // The target is our nickname, so the typing indicator should appear in the query window with the sender
                 this.chatManager.handleTypingNotification(nick, nick, typingState);
             }
+        }
+    }
+    
+    /**
+     * Handles CTCP replies (NOTICE with \001 delimiters)
+     * @param {string} nick - The sender's nickname
+     * @param {string} message - The CTCP reply message with \001 delimiters
+     * @returns {string} Formatted CTCP reply message
+     */
+    handleCtcpReply(nick, message) {
+        // Remove \001 delimiters
+        const ctcpContent = message.substring(1, message.length - 1);
+        const ctcpParts = ctcpContent.split(" ");
+        const ctcpCommand = ctcpParts[0];
+        const ctcpResponse = ctcpParts.slice(1).join(" ");
+        
+        this.output = this.chatManager.getActiveWindow();
+        
+        // Format based on CTCP command type
+        switch (ctcpCommand.toUpperCase()) {
+            case "VERSION":
+                return ` <span style="color: #00aaff">==</span> CTCP VERSION reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "TIME":
+                return ` <span style="color: #00aaff">==</span> CTCP TIME reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "PING":
+                // Calculate round-trip time if it's a timestamp
+                const timestamp = parseInt(ctcpResponse);
+                if (!isNaN(timestamp)) {
+                    const rtt = Date.now() - timestamp;
+                    return ` <span style="color: #00aaff">==</span> CTCP PING reply from <span style="font-weight: bold;">${nick}</span>: ${rtt}ms`;
+                }
+                return ` <span style="color: #00aaff">==</span> CTCP PING reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "CLIENTINFO":
+                return ` <span style="color: #00aaff">==</span> CTCP CLIENTINFO reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "FINGER":
+                return ` <span style="color: #00aaff">==</span> CTCP FINGER reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "USERINFO":
+                return ` <span style="color: #00aaff">==</span> CTCP USERINFO reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "SOURCE":
+                return ` <span style="color: #00aaff">==</span> CTCP SOURCE reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            case "ERRMSG":
+                return ` <span style="color: #ff6600">==</span> CTCP ERROR from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
+                
+            default:
+                return ` <span style="color: #00aaff">==</span> CTCP ${ctcpCommand} reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
         }
     }
     
@@ -535,14 +915,56 @@ class IRCParser {
                 break;
         }
     }
+    
+    /**
+     * Queue a WHO command to be executed with delay
+     * This prevents flooding the server with multiple WHO commands at once
+     */
+    queueWhoCommand(target) {
+        // Add to queue if not already queued
+        if (!this.whoQueue.includes(target)) {
+            this.whoQueue.push(target);
+            console.log(`WHO command queued for ${target}. Queue length: ${this.whoQueue.length}`);
+        }
+        
+        // Start processing if not already running
+        if (!this.whoTimer) {
+            this.processWhoQueue();
+        }
+    }
+    
+    /**
+     * Process the WHO command queue with delays
+     */
+    processWhoQueue() {
+        if (this.whoQueue.length === 0) {
+            this.whoTimer = null;
+            console.log('WHO queue empty, timer stopped');
+            return;
+        }
+        
+        // Get and send the next WHO command
+        const target = this.whoQueue.shift();
+        console.log(`Sending WHO command for ${target}. Remaining in queue: ${this.whoQueue.length}`);
+        window.postManager.submitTextMessage("/who " + target);
+        
+        // Schedule next WHO command if queue is not empty
+        if (this.whoQueue.length > 0) {
+            this.whoTimer = setTimeout(() => {
+                this.processWhoQueue();
+            }, this.whoDelay);
+        } else {
+            this.whoTimer = null;
+        }
+    }
 }
 
-// Initialize IRC Parser
-const ircParser = new IRCParser(chatManager);
-window.ircParser = ircParser;
+// IRC Parser will be initialized after chatManager is created
+// See chat.js for initialization
+window.IRCParser = IRCParser;
 
 // Legacy functions for compatibility
-function parse_output(text) { ircParser.parseOutput(text); }
-function get_numerics(text) { return ircParser.getNumerics(text); }
-function parse_nick(nick) { return ircParser.parseNick(nick); }
-function parse_host(nick) { return ircParser.parseHost(nick); }
+function parse_output(text) { if (window.ircParser) window.ircParser.parseOutput(text); }
+function get_numerics(text) { return window.ircParser ? window.ircParser.getNumerics(text) : null; }
+function parse_nick(nick) { return window.ircParser ? window.ircParser.parseNick(nick) : nick; }
+function parse_host(nick) { return window.ircParser ? window.ircParser.parseHost(nick) : ''; }

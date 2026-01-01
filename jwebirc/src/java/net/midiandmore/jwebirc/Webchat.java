@@ -184,30 +184,39 @@ public class Webchat {
      */
     @OnMessage
     public void onMessage(String message) {
-        var json = Json.createReader(new StringReader(message)).readObject();
-        var category = json.getString("category");
-        var text = json.getString("message");
-        var target = json.getString("target");
-        if (text.startsWith("/")) {
-            text = text.substring(1);
-        } else {
-            getParser().sendText("Message must starts with /\n", getSession(), "chat", "");
-            return;
+        try {
+            if (getParser() == null) {
+                Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Parser is null, cannot process message");
+                return;
+            }
+            
+            var json = Json.createReader(new StringReader(message)).readObject();
+            var category = json.getString("category");
+            var text = json.getString("message");
+            var target = json.getString("target");
+            if (text.startsWith("/")) {
+                text = text.substring(1);
+            } else {
+                getParser().sendText("Message must starts with /\n", getSession(), "chat", "");
+                return;
+            }
+            var args = new String[2];
+            if (text.contains(" ")) {
+                args = text.split(" ", 2);
+            } else {
+                args[0] = text;
+                args[1] = "";
+            }
+            
+            // Only convert to uppercase if not a message tag (IRCv3)
+            // Message tags start with @ and are case-sensitive
+            if (!args[0].startsWith("@")) {
+                args[0] = args[0].toUpperCase();
+            }
+            getParser().submitMessage("%s %s", args[0], args[1]);
+        } catch (Exception e) {
+            Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "Error processing message", e);
         }
-        var args = new String[2];
-        if (text.contains(" ")) {
-            args = text.split(" ", 2);
-        } else {
-            args[0] = text;
-            args[1] = "";
-        }
-        
-        // Only convert to uppercase if not a message tag (IRCv3)
-        // Message tags start with @ and are case-sensitive
-        if (!args[0].startsWith("@")) {
-            args[0] = args[0].toUpperCase();
-        }
-        getParser().submitMessage("%s %s", args[0], args[1]);
     }
 
     /**
@@ -218,9 +227,15 @@ public class Webchat {
      */
     @OnClose
     public synchronized void onClose(Session session) throws IOException {
-        getParser().logout("Page closed!");
-        setParser(null);
-        setIrcThread(null);
+        try {
+            if (getParser() != null) {
+                getParser().logout("Page closed!");
+            }
+        } catch (Exception e) {
+            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during logout", e);
+        } finally {
+            cleanupResources();
+        }
     }
 
     /**
@@ -231,7 +246,29 @@ public class Webchat {
      */
     @OnError
     public void onError(Session session, Throwable throwable) {
-        getParser().logout("Error: " + throwable.getMessage());
+        Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "WebSocket error occurred", throwable);
+        try {
+            if (getParser() != null) {
+                getParser().logout("Error: " + throwable.getMessage());
+            }
+        } catch (Exception e) {
+            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during error handling", e);
+        } finally {
+            cleanupResources();
+        }
+    }
+    
+    /**
+     * Cleanup all resources (parser, threads, sockets)
+     */
+    private void cleanupResources() {
+        try {
+            if (parser != null) {
+                parser.closeConnection();
+            }
+        } catch (Exception e) {
+            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error closing parser connection", e);
+        }
         setParser(null);
         setIrcThread(null);
     }

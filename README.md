@@ -7,6 +7,7 @@ A modern web-based IRC (Internet Relay Chat) client built with Java EE, WebSocke
 - **WebSocket-based Communication**: Real-time IRC communication using modern WebSocket technology
 - **WEBIRC/CGIIRC Support**: Supports WEBIRC and CGIIRC protocols for proper IP forwarding
 - **SASL Authentication**: Optional SASL authentication support for secure login
+- **CTCP Support**: Full CTCP (Client-To-Client Protocol) support including VERSION, TIME, PING, FINGER, USERINFO, SOURCE, and CLIENTINFO
 - **Bot Protection**: Multiple CAPTCHA options to prevent automated abuse
   - Cloudflare Turnstile
   - Google reCAPTCHA v2
@@ -179,6 +180,30 @@ Common IRC commands supported:
 - `/quit [message]` - Disconnect from the server
 - `/topic #channel new topic` - Change channel topic
 - `/me action` - Send an action message
+
+### CTCP Commands
+
+CTCP (Client-To-Client Protocol) commands for querying client information:
+
+- `/ctcp user VERSION` - Query client version information
+- `/ctcp user TIME` - Query current time at user's location
+- `/ctcp user PING` - Measure round-trip time to user
+- `/ctcp user CLIENTINFO` - Query supported CTCP commands
+- `/ctcp user FINGER` - Query user information (nickname, idle time)
+- `/ctcp user USERINFO` - Query additional user information
+- `/ctcp user SOURCE` - Query where to get the client software
+
+**Supported CTCP responses:**
+- **VERSION**: Returns "jwebirc 2.0 - Java WebSocket IRC Client"
+- **TIME**: Returns current server time
+- **PING**: Echoes back timestamp for RTT calculation
+- **CLIENTINFO**: Lists all supported CTCP commands
+- **FINGER**: Returns user information and idle time
+- **USERINFO**: Returns user's realname
+- **SOURCE**: Returns GitHub repository URL
+- **ERRMSG**: Sent for unknown CTCP commands
+
+CTCP replies are displayed in the active window with colored formatting to distinguish them from regular messages.
 
 ## Development
 

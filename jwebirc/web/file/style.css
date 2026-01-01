@@ -987,6 +987,28 @@ nv.unread {
     align-items: center;
     gap: 0.15em;
     white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.right_frame .nick-entry:hover {
+    opacity: 0.8;
+}
+
+/* Away status styling */
+.right_frame .nick-entry.away {
+    opacity: 0.5;
+}
+
+.right_frame .nick-entry.away .nick-name {
+    font-style: italic;
+}
+
+.right_frame .away-indicator {
+    font-size: 0.9em;
+    opacity: 0.7;
+    margin-right: 0.1em;
+    filter: grayscale(0.3);
 }
 
 .right_frame .status-symbol {
@@ -1047,6 +1069,69 @@ nv.unread {
 
 .right_frame div:hover {
     background-color: var(--background-hover);
+}
+
+/* ===== Nick Context Menu ===== */
+.nick-context-menu {
+    position: fixed;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    min-width: 180px;
+    padding: 4px 0;
+    z-index: 10000;
+    display: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+}
+
+.nick-context-menu.show {
+    display: block;
+    animation: menuFadeIn 0.15s ease-out;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.nick-context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: background-color 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.nick-context-menu-item:hover {
+    background-color: var(--background-hover);
+}
+
+.nick-context-menu-item:active {
+    background-color: var(--background-active);
+}
+
+.nick-context-menu-item .menu-icon {
+    width: 18px;
+    text-align: center;
+    font-size: 16px;
+    opacity: 0.8;
+}
+
+.nick-context-menu-separator {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 8px;
 }
 
 /* IRC Links */

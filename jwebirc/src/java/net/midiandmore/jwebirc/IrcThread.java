@@ -117,19 +117,35 @@ public class IrcThread implements Runnable {
             String line = null;
             p.handshake(getNick());
             while ((line = getParser().getIn().readLine()) != null) {
+                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.FINE, "IRC << {0}", line);
                 var arr = getParser().parseString(line);
                 p.parseCommands(arr, getSession());
             }
         } catch (IOException ex) {
             p.sendText("NOTICE AUTH *** (jwebirc) Connection to IRC server lost: %s".formatted(ex.getMessage()), getSession(), "chat", "");
-        }
-        if (getSession() != null && getSession().isOpen()) {
-            try {
-                getSession().close();
-            } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "IRC connection error", ex);
+        } catch (Exception ex) {
+            p.sendText("NOTICE AUTH *** (jwebirc) Unexpected error: %s".formatted(ex.getMessage()), getSession(), "chat", "");
+            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "Unexpected error in IRC thread", ex);
+        } finally {
+            // Ensure session is closed properly
+            if (getSession() != null && getSession().isOpen()) {
+                try {
+                    getSession().close();
+                } catch (IOException ex) {
+                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing session", ex);
+                }
             }
+            // Ensure parser resources are cleaned up
+            if (p != null) {
+                try {
+                    p.closeConnection();
+                } catch (Exception ex) {
+                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing parser connection", ex);
+                }
+            }
+            p.sendText("NOTICE AUTH *** (jwebirc) Connection closed.", getSession(), "chat", "");
         }
-        p.sendText("NOTICE AUTH *** (jwebirc) Connection aborted...", getSession(), "chat", "");
     }
     
     /**
