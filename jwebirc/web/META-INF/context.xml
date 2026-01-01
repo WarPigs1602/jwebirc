@@ -31,10 +31,5 @@
            suffix=".txt"
            pattern="%h %l %u %t &quot;%r&quot; %s %b %D"
            resolveHosts="false" />
-    
-    <!-- Error Report Valve -->
-    <Valve className="org.apache.catalina.valves.ErrorReportValve"
-           showReport="false"
-           showServerInfo="false" />
            
 </Context>

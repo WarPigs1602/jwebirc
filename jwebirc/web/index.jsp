@@ -29,6 +29,10 @@
     session.setAttribute("webchat_cgi", webircCgi);
     session.setAttribute("hmac_temporal", hmacTemporal);
     session.setAttribute("sasl_enabled", saslEnabled);
+    session.setAttribute("chatnapping_enabled", chatnappingEnabled);
+    session.setAttribute("chatnapping_allowed_domains", chatnappingAllowedDomains);
+    session.setAttribute("chatnapping_default_nick", chatnappingDefaultNick);
+    session.setAttribute("chatnapping_default_channel", chatnappingDefaultChannel);
     session.setAttribute("hostname", request.getRemoteHost());
     session.setAttribute("ip", request.getRemoteAddr());
     session.setAttribute("forwarded_for_header", forwardedForHeader);
@@ -524,6 +528,13 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
                 <button class="btn btn-primary btn-lg w-100" type="submit" id="submitBtn">
                     <i class="fas fa-sign-in-alt"></i> Join Chat
                 </button>
+                
+                <% if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) { %>
+                <!-- Chatnapping Link Button -->
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="generateChatnappingLink()" style="font-size: 0.85rem;">
+                    <i class="fas fa-link"></i> Generate Embed Link
+                </button>
+                <% } %>
             </div>
         </form>
         
@@ -584,6 +595,239 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         
         return true;
     });
+    
+    // =============== CHATNAPPING FEATURE ===============
+    function generateChatnappingLink() {
+        // Get current or default values
+        const nickInput = document.getElementById('nickInput');
+        const channelInput = document.getElementById('channelInput');
+        
+        const defaultNick = '<%= session.getAttribute("chatnapping_default_nick") != null ? session.getAttribute("chatnapping_default_nick") : "" %>';
+        const defaultChannel = '<%= session.getAttribute("chatnapping_default_channel") != null ? session.getAttribute("chatnapping_default_channel") : "" %>';
+        
+        const currentNick = nickInput && nickInput.value ? nickInput.value : defaultNick;
+        const currentChannel = channelInput && channelInput.value ? channelInput.value : defaultChannel;
+        
+        // Create configuration modal
+        const configModal = document.createElement('div');
+        configModal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+        
+        const configContent = document.createElement('div');
+        configContent.style.cssText = 'background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;';
+        
+        configContent.innerHTML = `
+            <h3 style="margin-top: 0; color: #990000;"><i class="fas fa-cog"></i> Configure Embed Link</h3>
+            <p style="color: #666; margin-bottom: 20px;">Customize the nickname and channel for the embed link:</p>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">
+                    <i class="fas fa-user"></i> Nickname:
+                </label>
+                <input type="text" id="embedNick" value="" 
+                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;"
+                       placeholder="Enter nickname">
+                <small style="display: block; margin-top: 5px; color: #666;">
+                    Use * for random digit (e.g., Guest* becomes Guest7)
+                </small>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">
+                    <i class="fas fa-hashtag"></i> Channel:
+                </label>
+                <input type="text" id="embedChannel" value="" 
+                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;"
+                       placeholder="Enter channel (e.g., #lobby)">
+                <small style="display: block; margin-top: 5px; color: #666;">
+                    Leave empty to skip auto-join. Multiple channels: #channel1,#channel2
+                </small>
+            </div>
+            
+            <div style="background: #f0f8ff; border-left: 4px solid #007bff; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+                <small style="color: #333;">
+                    <i class="fas fa-info-circle" style="color: #007bff;"></i> <strong>Preview:</strong><br>
+                    Users will connect with these settings when they open the embed link.
+                </small>
+            </div>
+            
+            <div style="text-align: right;">
+                <button id="btnGenerateLink" style="padding: 10px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+                    <i class="fas fa-check"></i> Generate Link
+                </button>
+                <button id="btnCancelConfig" style="padding: 10px 24px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        `;
+        
+        configModal.appendChild(configContent);
+        document.body.appendChild(configModal);
+        
+        // Set the current values after the modal is added to DOM
+        document.getElementById('embedNick').value = currentNick;
+        document.getElementById('embedChannel').value = currentChannel;
+        
+        // Handle Generate button
+        document.getElementById('btnGenerateLink').onclick = function() {
+            const nickname = document.getElementById('embedNick').value;
+            const channels = document.getElementById('embedChannel').value;
+            
+            configModal.remove();
+            showGeneratedLink(nickname, channels);
+        };
+        
+        // Handle Cancel button
+        document.getElementById('btnCancelConfig').onclick = function() {
+            configModal.remove();
+        };
+        
+        // Handle click outside
+        configModal.onclick = function(e) {
+            if (e.target === configModal) {
+                configModal.remove();
+            }
+        };
+    }
+    
+    function showGeneratedLink(nickname, channels) {
+        const baseUrl = window.location.origin + window.location.pathname;
+        
+        let url = baseUrl + '?connect=1';
+        if (nickname && nickname.trim()) {
+            url += '&name=' + encodeURIComponent(nickname);
+        }
+        if (channels && channels.trim()) {
+            url += '&channels=' + encodeURIComponent(channels);
+        }
+        
+        const embedCode = '<iframe src="' + url.replace(/"/g, '&quot;') + '" width="800" height="600" frameborder="0" style="border: 1px solid #ccc;"></iframe>';
+        
+        // Show result modal
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = 'background: white; padding: 30px; border-radius: 8px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto;';
+        
+        const title = document.createElement('h3');
+        title.style.cssText = 'margin-top: 0; color: #990000;';
+        title.innerHTML = '<i class="fas fa-link"></i> Chatnapping Link Generated';
+        
+        const description = document.createElement('p');
+        description.style.cssText = 'color: #666; margin-bottom: 20px;';
+        description.textContent = 'Share this link or embed the chat on your website:';
+        
+        // Nickname display
+        if (nickname && nickname.trim()) {
+            const nickInfo = document.createElement('div');
+            nickInfo.style.cssText = 'background: #e7f3ff; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
+            nickInfo.innerHTML = '<i class="fas fa-user"></i> <strong>Nickname:</strong> ' + nickname.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            modalContent.appendChild(nickInfo);
+        }
+        
+        // Channel display
+        if (channels && channels.trim()) {
+            const channelInfo = document.createElement('div');
+            channelInfo.style.cssText = 'background: #e7ffe7; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
+            channelInfo.innerHTML = '<i class="fas fa-hashtag"></i> <strong>Channel:</strong> ' + channels.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            modalContent.appendChild(channelInfo);
+        }
+        
+        const linkLabel = document.createElement('p');
+        linkLabel.innerHTML = '<strong>Direct Link:</strong>';
+        linkLabel.style.marginBottom = '5px';
+        
+        const linkInput = document.createElement('input');
+        linkInput.type = 'text';
+        linkInput.value = url;
+        linkInput.readOnly = true;
+        linkInput.style.cssText = 'width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-family: monospace;';
+        linkInput.onclick = function() { this.select(); };
+        
+        const embedLabel = document.createElement('p');
+        embedLabel.innerHTML = '<strong>Embed Code (iframe):</strong>';
+        embedLabel.style.marginBottom = '5px';
+        
+        const embedTextarea = document.createElement('textarea');
+        embedTextarea.value = embedCode;
+        embedTextarea.readOnly = true;
+        embedTextarea.style.cssText = 'width: 100%; height: 100px; padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px; resize: vertical;';
+        embedTextarea.onclick = function() { this.select(); };
+        
+        const tipBox = document.createElement('div');
+        tipBox.style.cssText = 'background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 4px; margin-bottom: 15px;';
+        tipBox.innerHTML = '<small style="color: #856404;"><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> Test the link before embedding it on your website to ensure it works correctly.</small>';
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'text-align: right;';
+        
+        const copyLinkButton = document.createElement('button');
+        copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+        copyLinkButton.style.cssText = 'padding: 8px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;';
+        copyLinkButton.onclick = function() {
+            navigator.clipboard.writeText(url).then(function() {
+                copyLinkButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(function() {
+                    copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                }, 2000);
+            }).catch(function() {
+                linkInput.select();
+                document.execCommand('copy');
+                copyLinkButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(function() {
+                    copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                }, 2000);
+            });
+        };
+        
+        const copyCodeButton = document.createElement('button');
+        copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
+        copyCodeButton.style.cssText = 'padding: 8px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;';
+        copyCodeButton.onclick = function() {
+            navigator.clipboard.writeText(embedCode).then(function() {
+                copyCodeButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(function() {
+                    copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
+                }, 2000);
+            }).catch(function() {
+                embedTextarea.select();
+                document.execCommand('copy');
+                copyCodeButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(function() {
+                    copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
+                }, 2000);
+            });
+        };
+        
+        const closeButton = document.createElement('button');
+        closeButton.innerHTML = '<i class="fas fa-times"></i> Close';
+        closeButton.style.cssText = 'padding: 8px 20px; background: #990000; color: white; border: none; border-radius: 4px; cursor: pointer;';
+        closeButton.onclick = function() {
+            modal.remove();
+        };
+        
+        buttonContainer.appendChild(copyLinkButton);
+        buttonContainer.appendChild(copyCodeButton);
+        buttonContainer.appendChild(closeButton);
+        
+        modalContent.appendChild(title);
+        modalContent.appendChild(description);
+        modalContent.appendChild(linkLabel);
+        modalContent.appendChild(linkInput);
+        modalContent.appendChild(embedLabel);
+        modalContent.appendChild(embedTextarea);
+        modalContent.appendChild(tipBox);
+        modalContent.appendChild(buttonContainer);
+        
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        modal.onclick = function(e) {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        };
+    }
 </script>
 
 <jsp:include page="footer.jsp"/> 

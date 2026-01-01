@@ -6,6 +6,24 @@
 --%>
 
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
+<%
+    // Set X-Frame-Options based on chatnapping configuration
+    String chatnappingEnabled = (String) session.getAttribute("chatnapping_enabled");
+    String allowedDomains = (String) session.getAttribute("chatnapping_allowed_domains");
+    
+    if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
+        if (allowedDomains != null && !allowedDomains.equals("*")) {
+            // If specific domains are configured, set Content-Security-Policy
+            response.setHeader("Content-Security-Policy", "frame-ancestors 'self' " + allowedDomains.replace(",", " "));
+        } else {
+            // Allow all domains - remove X-Frame-Options restriction
+            // Note: Content-Security-Policy frame-ancestors is more flexible
+        }
+    } else {
+        // Chatnapping disabled - prevent framing
+        response.setHeader("X-Frame-Options", "SAMEORIGIN");
+    }
+%>
 <!DOCTYPE html>
 <html lang="en">
     <head>

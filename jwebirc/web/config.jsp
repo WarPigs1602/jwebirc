@@ -52,4 +52,16 @@
     String recaptchaEnterpriseSiteKey = "your-site-key"; // Your reCAPTCHA Enterprise site key
     String recaptchaEnterpriseApiKey = "your-api-key"; // Your Google Cloud API key
     String recaptchaEnterpriseMinScore = "0.5"; // Minimum score (0.0 to 1.0)
+    
+    // =============== CHATNAPPING Configuration ===============
+    // Chatnapping allows embedding the webchat on external websites via iframe
+    String chatnappingEnabled = "true"; // Set to "false" to disable chatnapping feature
+    String chatnappingAllowedDomains = "*"; // Comma-separated list of allowed domains, or "*" for all (e.g., "example.com,test.org")
+    String chatnappingDefaultNick = "Guest*"; // Default nickname for embed links (* = random digit placeholder)
+    String chatnappingDefaultChannel = "#lobby"; // Default channel for embed links (empty = no channel)
+    
+    // =============== ERROR HANDLING Configuration ===============
+    // Error page configuration for debugging
+    String showStackTrace = "true"; // Set to "false" to hide stack traces in production
+    String errorPageStyle = "detailed"; // "detailed" = full stack trace, "simple" = user-friendly message only
 %>

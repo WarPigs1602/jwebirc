@@ -44,7 +44,12 @@
     </error-page>
     
     <error-page>
-        <exception-type>java.lang.Exception</exception-type>
+        <exception-type>org.apache.jasper.JasperException</exception-type>
+        <location>/error/exception.jsp</location>
+    </error-page>
+    
+    <error-page>
+        <exception-type>java.lang.Throwable</exception-type>
         <location>/error/exception.jsp</location>
     </error-page>
     

@@ -8,6 +8,7 @@ A modern web-based IRC (Internet Relay Chat) client built with Java EE, WebSocke
 - **WEBIRC/CGIIRC Support**: Supports WEBIRC and CGIIRC protocols for proper IP forwarding
 - **SASL Authentication**: Optional SASL authentication support for secure login
 - **CTCP Support**: Full CTCP (Client-To-Client Protocol) support including VERSION, TIME, PING, FINGER, USERINFO, SOURCE, and CLIENTINFO
+- **Chatnapping**: Embed the webchat on external websites via iframe with configurable domain restrictions
 - **Bot Protection**: Multiple CAPTCHA options to prevent automated abuse
   - Cloudflare Turnstile
   - Google reCAPTCHA v2
@@ -111,6 +112,36 @@ When running behind a reverse proxy:
 String forwardedForHeader = "X-Forwarded-For";  // Header name for forwarded IP
 String forwardedForIps = "127.0.0.1";           // Trusted proxy IPs
 ```
+
+### Chatnapping (Website Embedding)
+Enable embedding the webchat on external websites:
+```jsp
+String chatnappingEnabled = "true";                           // Enable/disable chatnapping
+String chatnappingAllowedDomains = "*";                      // Allowed domains: "*" for all, or comma-separated list
+```
+
+**Usage:**
+1. Set `chatnappingEnabled` to `"true"` in `web/config.jsp`
+2. Configure allowed domains:
+   - `"*"` - Allow embedding on any website
+   - `"example.com,test.org"` - Only allow specific domains
+3. Click "Generate Embed Link" button on the login page
+4. Copy the generated iframe code or direct link
+5. Embed on your website:
+
+```html
+<iframe src="https://your-irc-server.com/jwebirc/?connect=1&name=Guest&channels=#main" 
+        width="800" 
+        height="600" 
+        frameborder="0" 
+        style="border: 1px solid #ccc;">
+</iframe>
+```
+
+**Security Notes:**
+- For production, specify allowed domains instead of using `"*"`
+- The feature uses Content-Security-Policy `frame-ancestors` directive
+- When disabled, X-Frame-Options is set to SAMEORIGIN
 
 ### CAPTCHA Protection
 Configure bot protection in `web/config.jsp`:
