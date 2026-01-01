@@ -52,5 +52,45 @@
         
         <!-- Scripts -->
         <script src="file/jquery.js"></script>
+        <script src="file/login-options.js"></script>
     </head>
     <body>
+        <!-- Login Options Menu Button -->
+        <div id="loginOptionsContainer" style="position: fixed; top: 10px; right: 10px; z-index: 1000;">
+            <button class="nav-action-btn" id="loginOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Display Options">
+                <i class="fas fa-cog"></i>
+            </button>
+            
+            <!-- Login Options Dropdown -->
+            <div class="nav-dropdown" id="loginOptionsMenu" role="menu">
+                <div class="nav-dropdown-header">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>Display Options</span>
+                </div>
+                <div class="nav-dropdown-content">
+                    <div class="nav-dropdown-item slider-item">
+                        <div class="nav-dropdown-item-header">
+                            <i class="fas fa-text-height"></i>
+                            <span>Font Size</span>
+                            <span class="nav-slider-value" id="loginFontSizeValue">14px</span>
+                        </div>
+                        <div class="nav-slider-wrapper">
+                            <input type="range" id="loginOptFontSize" min="12" max="18" step="1" value="14" class="nav-range-slider">
+                            <div class="nav-slider-track"></div>
+                        </div>
+                    </div>
+                    <div class="nav-dropdown-divider"></div>
+                    <div class="nav-dropdown-item slider-item">
+                        <div class="nav-dropdown-item-header">
+                            <i class="fas fa-palette"></i>
+                            <span>Hue</span>
+                            <span class="nav-slider-value" id="loginHueValue">0°</span>
+                        </div>
+                        <div class="nav-slider-wrapper">
+                            <input type="range" id="loginOptHue" min="0" max="360" step="1" value="0" class="nav-range-slider hue-slider">
+                            <div class="nav-slider-track hue-track"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>

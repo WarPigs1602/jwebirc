@@ -275,7 +275,7 @@ class IRCParser {
                 const nick = arr[3];
                 const awayMsg = arr.slice(4).join(" ").replace(/^:/, '').trim();
                 if (this.chatManager) {
-                    this.chatManager.setAwayStatus(nick, true);
+                    this.chatManager.setAwayStatus(nick, true, awayMsg);
                 }
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">away</span> : ${nick}${awayMsg ? ' (' + awayMsg + ')' : ''}`;
             }
@@ -564,10 +564,11 @@ class IRCParser {
         // or: :nick!user@host AWAY (when coming back)
         const nick = this.parseNick(arr[0]);
         const isAway = arr.length > 2 && arr[2] !== '';
+        const awayMsg = isAway ? arr.slice(2).join(" ").replace(/^:/, '').trim() : '';
         
         // Update away status for this nick in all channels
         if (this.chatManager) {
-            this.chatManager.setAwayStatus(nick, isAway);
+            this.chatManager.setAwayStatus(nick, isAway, awayMsg);
         }
     }
     
@@ -675,8 +676,14 @@ class IRCParser {
             this.chatManager.addPage(this.output, "query", true);
         }
         
-        // Only highlight in channels, not in private queries
-        if (text.toLowerCase().includes(window.user.toLowerCase()) && (arr[2].startsWith("#") || arr[2].startsWith("&"))) {
+        // Highlight in channels when user is mentioned, or for private messages
+        if (arr[2].startsWith("#") || arr[2].startsWith("&")) {
+            // Channel message - highlight if user is mentioned
+            if (text.toLowerCase().includes(window.user.toLowerCase())) {
+                this.chatManager.setHighlight(true);
+            }
+        } else {
+            // Private message - always highlight
             this.chatManager.setHighlight(true);
         }
         

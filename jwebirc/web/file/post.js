@@ -682,10 +682,22 @@ class PostManager {
     }
 }
 
-// Initialize Post Manager
-const postManager = new PostManager(chatManager);
-postManager.initialize();
-window.postManager = postManager;
+// Initialize Post Manager after DOM is ready and chatManager is defined
+let postManager = null;
+function initializePostManager() {
+    if (typeof chatManager !== 'undefined' && postManager === null) {
+        postManager = new PostManager(chatManager);
+        postManager.initialize();
+        window.postManager = postManager;
+    }
+}
+
+// Ensure postManager is initialized when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePostManager);
+} else {
+    initializePostManager();
+}
 
 // Initialize IRC Parser (after irc.js has been loaded)
 if (window.IRCParser) {

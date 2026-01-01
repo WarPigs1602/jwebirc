@@ -159,13 +159,100 @@
 %>
 <jsp:include page="header-webchat.jsp"/>
 
-<div class="chat-container">
-    <!-- Navigation Bar -->
-    <div class="top_frame" id="nav_window" role="navigation" aria-label="Channel Navigation">
-        <div class="nav-header">
-            <i class="fas fa-server"></i> <span class="nav-title">Channels</span>
+    <div class="chat-container">
+    <!-- Navigation Bar - Modern Design -->
+    <nav class="top_frame" id="nav_window" role="navigation" aria-label="Channel Navigation">
+        <div class="nav-container">
+            <!-- Brand Section -->
+            <div class="nav-brand">
+                <div class="nav-brand-icon">
+                    <i class="fas fa-server"></i>
+                </div>
+                <div class="nav-brand-text">
+                    <span class="nav-brand-title">jWebIRC</span>
+                    <span class="nav-brand-subtitle">Channels</span>
+                </div>
+            </div>
+            
+            <!-- Tabs Section -->
+            <div class="nav-tabs-wrapper">
+                <button class="nav-scroll-btn nav-scroll-left" id="navScrollLeft" aria-label="Scroll left">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div class="nav-tabs" id="nav_tabs"></div>
+                <button class="nav-scroll-btn nav-scroll-right" id="navScrollRight" aria-label="Scroll right">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            
+            <!-- Actions Section -->
+            <div class="nav-actions">
+                <button class="nav-action-btn" id="navNotifications" title="Notifications" aria-label="Notifications">
+                    <i class="fas fa-bell"></i>
+                    <span class="nav-badge" id="notificationBadge" style="display: none;">0</span>
+                </button>
+                <button class="nav-action-btn" id="navOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+                
+                <!-- Options Dropdown -->
+                <div class="nav-dropdown" id="navOptionsMenu" role="menu">
+                    <div class="nav-dropdown-header">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>View Options</span>
+                    </div>
+                    <div class="nav-dropdown-content">
+                        <label class="nav-dropdown-item" for="optHideTopic">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-eye-slash"></i>
+                                <span>Hide Topic</span>
+                            </div>
+                            <input type="checkbox" id="optHideTopic" class="nav-toggle">
+                        </label>
+                        <label class="nav-dropdown-item" for="optHideNicklist">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-users"></i>
+                                <span>Hide Nicklist</span>
+                            </div>
+                            <input type="checkbox" id="optHideNicklist" class="nav-toggle">
+                        </label>
+                        <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="optNavLeft">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-align-left"></i>
+                                <span>Sidebar Mode</span>
+                            </div>
+                            <input type="checkbox" id="optNavLeft" class="nav-toggle">
+                        </label>
+                        <div class="nav-dropdown-divider"></div>
+                        <div class="nav-dropdown-item slider-item">
+                            <div class="nav-dropdown-item-header">
+                                <i class="fas fa-text-height"></i>
+                                <span>Font Size</span>
+                                <span class="nav-slider-value" id="fontSizeValue">14px</span>
+                            </div>
+                            <div class="nav-slider-wrapper">
+                                <input type="range" id="optFontSize" min="12" max="18" step="1" value="14" class="nav-range-slider">
+                                <div class="nav-slider-track"></div>
+                            </div>
+                        </div>
+                        <div class="nav-dropdown-divider"></div>
+                        <div class="nav-dropdown-item slider-item">
+                            <div class="nav-dropdown-item-header">
+                                <i class="fas fa-palette"></i>
+                                <span>Hue</span>
+                                <span class="nav-slider-value" id="hueValue">0°</span>
+                            </div>
+                            <div class="nav-slider-wrapper">
+                                <input type="range" id="optHue" min="0" max="360" step="1" value="0" class="nav-range-slider hue-slider">
+                                <div class="nav-slider-track hue-track"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
+    </nav>
     
     <!-- Topic Bar -->
     <div class="topic_frame" id="topic_window" role="complementary" aria-label="Channel Topic">
@@ -608,6 +695,20 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         const currentNick = nickInput && nickInput.value ? nickInput.value : defaultNick;
         const currentChannel = channelInput && channelInput.value ? channelInput.value : defaultChannel;
         
+        // Get UI preferences from localStorage (login options)
+        let defaultFontSize = 14;
+        let defaultHue = 0;
+        try {
+            const stored = localStorage.getItem('jwebirc_ui');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                defaultFontSize = parsed.fontSize || 14;
+                defaultHue = parsed.hue || 0;
+            }
+        } catch (e) {
+            // Use defaults if localStorage is unavailable
+        }
+        
         // Create configuration modal
         const configModal = document.createElement('div');
         configModal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;';
@@ -643,10 +744,11 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
                 </small>
             </div>
             
-            <div style="background: #f0f8ff; border-left: 4px solid #007bff; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+            <div style="background: #f0f8ff; border-left: 4px solid #007bff; padding: 12px; border-radius: 4px; margin-top: 20px; margin-bottom: 20px;">
                 <small style="color: #333;">
-                    <i class="fas fa-info-circle" style="color: #007bff;"></i> <strong>Preview:</strong><br>
-                    Users will connect with these settings when they open the embed link.
+                    <i class="fas fa-info-circle" style="color: #007bff;"></i> <strong>Display Settings:</strong><br>
+                    Font size and color theme will be taken from your current login options settings.<br>
+                    Current: <strong>` + defaultFontSize + `px</strong> font, <strong>` + defaultHue + `°</strong> hue
                 </small>
             </div>
             
@@ -673,7 +775,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             const channels = document.getElementById('embedChannel').value;
             
             configModal.remove();
-            showGeneratedLink(nickname, channels);
+            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue);
         };
         
         // Handle Cancel button
@@ -689,8 +791,12 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         };
     }
     
-    function showGeneratedLink(nickname, channels) {
+    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue) {
         const baseUrl = window.location.origin + window.location.pathname;
+        
+        // Use provided values or get defaults
+        const fontSize = overrideFontSize !== undefined ? overrideFontSize : 14;
+        const hue = overrideHue !== undefined ? overrideHue : 0;
         
         let url = baseUrl + '?connect=1';
         if (nickname && nickname.trim()) {
@@ -699,6 +805,9 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         if (channels && channels.trim()) {
             url += '&channels=' + encodeURIComponent(channels);
         }
+        // Add UI preferences to URL
+        url += '&fontSize=' + fontSize;
+        url += '&hue=' + hue;
         
         const embedCode = '<iframe src="' + url.replace(/"/g, '&quot;') + '" width="800" height="600" frameborder="0" style="border: 1px solid #ccc;"></iframe>';
         
@@ -733,6 +842,12 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             modalContent.appendChild(channelInfo);
         }
         
+        // UI Options display
+        const uiInfo = document.createElement('div');
+        uiInfo.style.cssText = 'background: #fff9e6; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
+        uiInfo.innerHTML = '<i class="fas fa-sliders-h"></i> <strong>Display Options:</strong> Font Size: ' + fontSize + 'px, Hue: ' + hue + '°';
+        modalContent.appendChild(uiInfo);
+        
         const linkLabel = document.createElement('p');
         linkLabel.innerHTML = '<strong>Direct Link:</strong>';
         linkLabel.style.marginBottom = '5px';
@@ -756,7 +871,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         
         const tipBox = document.createElement('div');
         tipBox.style.cssText = 'background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 4px; margin-bottom: 15px;';
-        tipBox.innerHTML = '<small style="color: #856404;"><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> Test the link before embedding it on your website to ensure it works correctly.</small>';
+        tipBox.innerHTML = '<small style="color: #856404;"><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> The link includes your current display settings (font size, hue). Users can change these after joining. Test the link before embedding it on your website to ensure it works correctly.</small>';
         
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = 'text-align: right;';

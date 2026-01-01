@@ -26,16 +26,19 @@ class ChatManager {
         
         // DOM elements
         this.navWindow = null;
+        this.navTabs = null;
+        this.chatContainer = null;
         this.right = null;
         this.chatWindow = null;
         this.topicWindow = null;
-        this.navElement = document.createElement("nv");
+        this.navElement = document.createElement("div");
+        this.navElement.className = "nav-tab-strip";
         this.eventBar = null;
         this.eventBarTimeout = null;
         this.typingBar = null;
         this.typingUsers = new Map(); // Map<channel, Map<user, timeout>>
         this.typingTimeout = 5000; // 5 seconds until typing indicator disappears
-        this.awayStatus = new Map(); // Map<nick, boolean> - track away status for all nicks
+        this.awayStatus = new Map(); // Map<nick, {away: boolean, reason: string}> - track away status and reason for all nicks
         this.joinedChannels = new Set(); // Set of channels to rejoin on next login
         this.capabilities = {
             requested: [],
@@ -43,6 +46,22 @@ class ChatManager {
             enabled: []
         };
         this.capNegotiationActive = false;
+
+        // UI preferences
+        this.uiPrefs = {
+            hideTopic: false,
+            hideNicklist: false,
+            navLeft: false,
+            fontSize: 14,
+            hue: 0
+        };
+        this.optionsMenu = null;
+        this.optionsToggle = null;
+        
+        // Notification system
+        this.unreadCounts = new Map(); // Map<tabName, unreadCount>
+        this.notificationBadge = null;
+        this.notificationButton = null;
         
         // Server PREFIX mapping: modes -> symbols (e.g., 'qaohv' -> '~&@%+')
         this.serverPrefixes = {
@@ -344,11 +363,29 @@ class ChatManager {
     initialize() {
         // Get DOM elements
         this.navWindow = document.getElementById("nav_window");
+        this.navTabs = document.getElementById("nav_tabs");
+        this.chatContainer = document.querySelector(".chat-container");
         this.right = document.getElementById("right");
         this.chatWindow = document.getElementById("chat_window");
         this.topicWindow = document.getElementById("topic_window");
         this.eventBar = document.getElementById("eventBar");
         this.typingBar = document.getElementById("typingBar");
+        this.optionsMenu = document.getElementById("navOptionsMenu");
+        this.optionsToggle = document.getElementById("navOptionsToggle");
+        
+        // Notification system
+        this.notificationBadge = document.getElementById("notificationBadge");
+        this.notificationButton = document.getElementById("navNotifications");
+
+        // Restore and apply UI preferences
+        this.loadUiPreferences();
+        this.bindUiControls();
+        this.applyLayoutPreferences();
+        
+        // Setup notification button
+        if (this.notificationButton) {
+            this.notificationButton.addEventListener('click', () => this.toggleNotifications());
+        }
         
         // Initialize WebSocket
         const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -471,6 +508,247 @@ class ChatManager {
         } catch (e) {
             console.warn('Could not load saved channels:', e);
         }
+    }
+
+    loadUiPreferences() {
+        try {
+            const saved = localStorage.getItem('jwebirc_ui');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                this.uiPrefs = {
+                    ...this.uiPrefs,
+                    ...parsed
+                };
+            }
+        } catch (e) {
+            console.warn('Could not load UI preferences:', e);
+        }
+        
+        // Load URL parameters (overrides saved preferences)
+        this.loadUrlParameters();
+    }
+    
+    loadUrlParameters() {
+        const params = new URLSearchParams(window.location.search);
+        
+        // Map URL parameters to uiPrefs
+        const paramMap = {
+            'hidetopic': 'hideTopic',
+            'hidenicklist': 'hideNicklist',
+            'navleft': 'navLeft',
+            'fontsize': 'fontSize',
+            'hue': 'hue'
+        };
+        
+        for (const [urlParam, prefKey] of Object.entries(paramMap)) {
+            if (params.has(urlParam)) {
+                const value = params.get(urlParam);
+                
+                // Parse boolean parameters
+                if (['hidetopic', 'hidenicklist', 'navleft'].includes(urlParam)) {
+                    this.uiPrefs[prefKey] = value === 'true' || value === '1' || value === 'yes';
+                } else if (['fontsize', 'hue'].includes(urlParam)) {
+                    // Parse numeric parameters
+                    const num = parseInt(value, 10);
+                    if (!isNaN(num)) {
+                        this.uiPrefs[prefKey] = num;
+                    }
+                }
+            }
+        }
+    }
+
+    saveUiPreferences() {
+        try {
+            localStorage.setItem('jwebirc_ui', JSON.stringify(this.uiPrefs));
+        } catch (e) {
+            console.warn('Could not save UI preferences:', e);
+        }
+    }
+
+    bindUiControls() {
+        const hideTopicToggle = document.getElementById('optHideTopic');
+        const hideNicklistToggle = document.getElementById('optHideNicklist');
+        const navLeftToggle = document.getElementById('optNavLeft');
+        const fontSizeControl = document.getElementById('optFontSize');
+        const fontSizeValue = document.getElementById('fontSizeValue');
+        const menu = this.optionsMenu;
+        const toggle = this.optionsToggle;
+
+        if (hideTopicToggle) {
+            hideTopicToggle.checked = this.uiPrefs.hideTopic;
+            hideTopicToggle.addEventListener('change', () => {
+                this.uiPrefs.hideTopic = hideTopicToggle.checked;
+                this.applyLayoutPreferences();
+            });
+        }
+
+        if (hideNicklistToggle) {
+            hideNicklistToggle.checked = this.uiPrefs.hideNicklist;
+            hideNicklistToggle.addEventListener('change', () => {
+                this.uiPrefs.hideNicklist = hideNicklistToggle.checked;
+                this.applyLayoutPreferences();
+            });
+        }
+
+        if (navLeftToggle) {
+            navLeftToggle.checked = this.uiPrefs.navLeft;
+            navLeftToggle.addEventListener('change', () => {
+                this.uiPrefs.navLeft = navLeftToggle.checked;
+                this.applyLayoutPreferences();
+            });
+        }
+
+        if (fontSizeControl) {
+            fontSizeControl.value = this.uiPrefs.fontSize;
+            fontSizeControl.addEventListener('input', () => {
+                const parsed = parseInt(fontSizeControl.value, 10);
+                this.uiPrefs.fontSize = isNaN(parsed) ? 14 : parsed;
+                this.applyLayoutPreferences();
+            });
+        }
+
+        if (fontSizeValue) {
+            fontSizeValue.textContent = `${this.uiPrefs.fontSize}px`;
+        }
+
+        const hueControl = document.getElementById('optHue');
+        const hueValue = document.getElementById('hueValue');
+
+        if (hueControl) {
+            hueControl.value = this.uiPrefs.hue;
+            hueControl.addEventListener('input', () => {
+                const parsed = parseInt(hueControl.value, 10);
+                this.uiPrefs.hue = isNaN(parsed) ? 0 : parsed;
+                if (hueValue) {
+                    hueValue.textContent = `${this.uiPrefs.hue}°`;
+                }
+                this.applyLayoutPreferences();
+            });
+            if (hueValue) {
+                hueValue.textContent = `${this.uiPrefs.hue}°`;
+            }
+        }
+
+        if (toggle && menu) {
+            const closeMenu = () => {
+                menu.classList.remove('open');
+                toggle.setAttribute('aria-expanded', 'false');
+            };
+
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const willOpen = !menu.classList.contains('open');
+                menu.classList.toggle('open', willOpen);
+                toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!menu.contains(e.target) && !toggle.contains(e.target)) {
+                    closeMenu();
+                }
+            });
+
+            // Close on Escape for accessibility
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeMenu();
+                }
+            });
+        }
+    }
+
+    applyLayoutPreferences() {
+        const container = this.chatContainer;
+        const showTopic = !this.uiPrefs.hideTopic;
+        const showNicklist = !this.uiPrefs.hideNicklist;
+        const navLeft = this.uiPrefs.navLeft;
+        const fontSize = Math.min(Math.max(this.uiPrefs.fontSize, 12), 18);
+
+        if (container) {
+            // Toggle helper classes
+            container.classList.toggle('hide-topic', !showTopic);
+            container.classList.toggle('hide-nicklist', !showNicklist);
+            container.classList.toggle('nav-left', navLeft);
+
+            // Adjust grid layout based on active view
+            if (navLeft) {
+                if (showTopic && showNicklist) {
+                    container.style.gridTemplateColumns = '200px 1fr 220px';
+                    container.style.gridTemplateRows = '48px 1fr 64px';
+                    container.style.gridTemplateAreas = '"nav topic users" "nav chat users" "nav input users"';
+                } else if (!showTopic && showNicklist) {
+                    container.style.gridTemplateColumns = '200px 1fr 220px';
+                    container.style.gridTemplateRows = '1fr 64px';
+                    container.style.gridTemplateAreas = '"nav chat users" "nav input users"';
+                } else if (showTopic && !showNicklist) {
+                    container.style.gridTemplateColumns = '200px 1fr';
+                    container.style.gridTemplateRows = '48px 1fr 64px';
+                    container.style.gridTemplateAreas = '"nav topic" "nav chat" "nav input"';
+                } else {
+                    container.style.gridTemplateColumns = '200px 1fr';
+                    container.style.gridTemplateRows = '1fr 64px';
+                    container.style.gridTemplateAreas = '"nav chat" "nav input"';
+                }
+            } else {
+                if (showTopic && showNicklist) {
+                    container.style.gridTemplateColumns = '1fr 220px';
+                    container.style.gridTemplateRows = '36px auto 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
+                } else if (!showTopic && showNicklist) {
+                    container.style.gridTemplateColumns = '1fr 220px';
+                    container.style.gridTemplateRows = '36px 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
+                } else if (showTopic && !showNicklist) {
+                    container.style.gridTemplateColumns = '1fr';
+                    container.style.gridTemplateRows = '36px auto 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
+                } else {
+                    container.style.gridTemplateColumns = '1fr';
+                    container.style.gridTemplateRows = '36px 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav" "chat" "input"';
+                }
+            }
+        }
+
+        // Toggle element visibility
+        if (this.topicWindow) {
+            // Hide topic for Status and Query windows
+            const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
+            const hideTopicForWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
+            this.topicWindow.style.display = (showTopic && !hideTopicForWindow) ? '' : 'none';
+        }
+        if (this.right) {
+            // Hide nicklist for Status and Query windows
+            const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
+            const hideNicklistForWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
+            this.right.style.display = (showNicklist && !hideNicklistForWindow) ? '' : 'none';
+        }
+
+        // Navbar orientation
+        if (this.navWindow) {
+            this.navWindow.classList.toggle('vertical', navLeft);
+        }
+        if (this.navTabs) {
+            this.navTabs.classList.toggle('vertical', navLeft);
+        }
+
+        // Apply font size to CSS variable
+        document.documentElement.style.setProperty('--font-size-base', fontSize + 'px');
+        const fontSizeValue = document.getElementById('fontSizeValue');
+        if (fontSizeValue) {
+            fontSizeValue.textContent = `${fontSize}px`;
+        }
+        const fontSizeControl = document.getElementById('optFontSize');
+        if (fontSizeControl) {
+            fontSizeControl.value = fontSize;
+        }
+
+        // Apply hue filter
+        const hue = this.uiPrefs.hue || 0;
+        document.documentElement.style.setProperty('--hue-rotate', hue + 'deg');
+
+        this.saveUiPreferences();
     }
     
     addToChannelMemory(channel) {
@@ -699,8 +977,8 @@ class ChatManager {
                 const fullNick = status + nick;
                 if (!elem.nicks.some(e => e.nick === fullNick)) {
                     // Check global away status if not explicitly provided
-                    let awayStatus = isAway || this.awayStatus.get(nick.toLowerCase()) || false;
-                    elem.nicks.push({ nick: fullNick, host, color, away: awayStatus });
+                    let awayInfo = isAway ? { away: true, reason: '' } : this.awayStatus.get(nick.toLowerCase()) || { away: false, reason: '' };
+                    elem.nicks.push({ nick: fullNick, host, color, away: awayInfo.away, awayReason: awayInfo.reason });
                 }
             }
         });
@@ -869,9 +1147,9 @@ class ChatManager {
         }
     }
     
-    setAwayStatus(nick, isAway) {
+    setAwayStatus(nick, isAway, reason = '') {
         // Store away status in global map (for WHO queries before nicks are added)
-        this.awayStatus.set(nick.toLowerCase(), isAway);
+        this.awayStatus.set(nick.toLowerCase(), { away: isAway, reason: reason || '' });
         
         // Also update in channel nick lists if they exist
         this.channels.forEach(elem => {
@@ -885,6 +1163,7 @@ class ChatManager {
                     
                     if (displayNick.toLowerCase() === nick.toLowerCase()) {
                         nickData.away = isAway;
+                        nickData.awayReason = reason || '';
                     }
                 });
                 // Only re-render if we actually updated a nick in this channel
@@ -1019,10 +1298,11 @@ class ChatManager {
                         statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusSymbol}">${emoji}</span>`;
                     }
                     
-                    // Add away indicator - only show as transparent and italic
+                    // Add away indicator - show as transparent and italic, with away reason in title
                     const awayClass = nick.away ? ' away' : '';
+                    const awayTitle = nick.away && nick.awayReason ? ` title="Away: ${nick.awayReason}"` : '';
                     
-                    doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};">${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
+                    doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};"${awayTitle}>${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
                 });
                 
                 while (this.right.firstChild) {
@@ -1286,22 +1566,25 @@ class ChatManager {
     refreshNav() {
         for (let i = 0; i < this.channels.length; i++) {
             const isActive = this.channels[i].page === this.activeWindow ? ' active' : '';
+            const isUnread = this.unreadCounts.has(this.channels[i].page) ? ' unread' : '';
             
             if (i === 0) {
-                this.navElement.innerHTML = `<nv class="${isActive}" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</nv> `;
+                this.navElement.innerHTML = `<nv class="${isActive}${isUnread}" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</nv> `;
             } else {
                 if (this.channels[i].page.startsWith("#") || this.channels[i].page.startsWith("&")) {
-                    this.navElement.innerHTML += `<nv class="${isActive}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${this.channels[i].page} Closed tab!');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${isActive}${isUnread}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${this.channels[i].page} Closed tab!');">✕</span></nv> `;
                 } else {
-                    this.navElement.innerHTML += `<nv class="${isActive}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${this.channels[i].page}');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${isActive}${isUnread}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${this.channels[i].page}');">✕</span></nv> `;
                 }
             }
         }
         
-        while (this.navWindow.firstChild) {
-            this.navWindow.removeChild(this.navWindow.firstChild);
+        if (this.navTabs) {
+            while (this.navTabs.firstChild) {
+                this.navTabs.removeChild(this.navTabs.firstChild);
+            }
+            this.navTabs.appendChild(this.navElement);
         }
-        this.navWindow.appendChild(this.navElement);
     }
     
     parsePages(text, pg) {
@@ -1327,6 +1610,15 @@ class ChatManager {
                 }
                 
                 parsed = this.parseControl(parsed.trim());
+                
+                // Update unread count for notifications
+                if (pg.toLowerCase() !== this.activeWindow.toLowerCase()) {
+                    // Add notification for query (private message) or highlight
+                    if (isQuery || this.highlight) {
+                        const currentCount = this.unreadCounts.get(pg) || 0;
+                        this.updateUnreadCount(pg, currentCount + 1);
+                    }
+                }
                 
                 if (this.highlight && !isQuery) {
                     parsed += "</span>";
@@ -1445,6 +1737,18 @@ class ChatManager {
         this.renderTopic(win); // Update topic for new channel
         this.refreshNav(); // Update navigation to show active tab
         this.updateTypingBar(win); // Update typing indicator for new channel
+        
+        // Hide topic and nicklist for Status and Query windows
+        if (this.chatContainer) {
+            const currentChannel = this.channels.find(ch => ch.page === win);
+            const isNoUserListWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
+            
+            if (isNoUserListWindow) {
+                this.chatContainer.classList.add('status-view');
+            } else {
+                this.chatContainer.classList.remove('status-view');
+            }
+        }
     }
     
     getActiveWindow() {
@@ -1505,8 +1809,22 @@ class ChatManager {
         const myStatus = this.getStatus(channel, window.user);
         const targetStatus = this.getStatus(channel, nick);
         
+        // Get away status and reason
+        const awayInfo = this.awayStatus.get(nick.toLowerCase()) || { away: false, reason: '' };
+        
         // Build menu dynamically based on permissions
         const menuItems = [];
+        
+        // Show away status if user is away
+        if (awayInfo.away) {
+            menuItems.push({
+                icon: '⏸️',
+                label: awayInfo.reason || 'Away',
+                action: 'none',
+                isInfo: true
+            });
+            menuItems.push({ separator: true });
+        }
         
         // Always available: Query, WHOIS, Version
         menuItems.push(
@@ -1596,6 +1914,11 @@ class ChatManager {
         menuItems.forEach(item => {
             if (item.separator) {
                 html += '<div class="nick-context-menu-separator"></div>';
+            } else if (item.isInfo) {
+                html += `<div class="nick-context-menu-item info-item">
+                    <span class="menu-icon">${item.icon}</span>
+                    <span>${item.label}</span>
+                </div>`;
             } else {
                 html += `<div class="nick-context-menu-item" data-action="${item.action}" data-mode="${item.mode || ''}">
                     <span class="menu-icon">${item.icon}</span>
@@ -1606,8 +1929,8 @@ class ChatManager {
         
         menu.innerHTML = html;
         
-        // Re-attach event handlers
-        menu.querySelectorAll('.nick-context-menu-item').forEach(item => {
+        // Re-attach event handlers (skip info items)
+        menu.querySelectorAll('.nick-context-menu-item:not(.info-item)').forEach(item => {
             item.addEventListener('click', (e) => {
                 const action = item.dataset.action;
                 const mode = item.dataset.mode;
@@ -1699,6 +2022,53 @@ class ChatManager {
                 break;
         }
     }
+    
+    /**
+     * Update unread count for a tab
+     * @param {string} tabName - Name of the tab
+     * @param {number} count - Unread message count
+     */
+    updateUnreadCount(tabName, count) {
+        if (count > 0) {
+            this.unreadCounts.set(tabName, count);
+        } else {
+            this.unreadCounts.delete(tabName);
+        }
+        this.updateNotificationBadge();
+        this.refreshNav();
+    }
+    
+    /**
+     * Update the notification badge display
+     */
+    updateNotificationBadge() {
+        if (!this.notificationBadge) return;
+        
+        const totalCount = Array.from(this.unreadCounts.values()).reduce((sum, count) => sum + count, 0);
+        
+        if (totalCount > 0) {
+            this.notificationBadge.textContent = totalCount;
+            this.notificationBadge.style.display = 'flex';
+        } else {
+            this.notificationBadge.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Toggle notification dropdown menu
+     */
+    toggleNotifications() {
+        // For now, we'll use console log and a simple implementation
+        console.log('Notifications:', Array.from(this.unreadCounts.entries()));
+        
+        // Switch to first unread tab
+        const firstUnread = this.unreadCounts.keys().next().value;
+        if (firstUnread) {
+            this.setWindow(firstUnread);
+            this.updateUnreadCount(firstUnread, 0);
+            this.refreshNav();
+        }
+    }
 }
 
 // Initialize ChatManager
@@ -1706,9 +2076,19 @@ const chatManager = new ChatManager();
 
 // Start initialization when DOM is ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => chatManager.initialize());
+    document.addEventListener('DOMContentLoaded', () => {
+        chatManager.initialize();
+        // Initialize PostManager after ChatManager
+        if (typeof initializePostManager === 'function') {
+            initializePostManager();
+        }
+    });
 } else {
     chatManager.initialize();
+    // Initialize PostManager after ChatManager
+    if (typeof initializePostManager === 'function') {
+        initializePostManager();
+    }
 }
 
 // Legacy function exports for compatibility
