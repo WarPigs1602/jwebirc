@@ -159,6 +159,64 @@
 %>
 <jsp:include page="header-webchat.jsp"/>
 
+    <!-- Cookie Warning Banner -->
+    <div id="cookieWarning" class="cookie-warning" role="region" aria-label="Cookie Notice" style="display: none;">
+        <div class="cookie-warning-content">
+            <div class="cookie-warning-icon">
+                <i class="fas fa-cookie"></i>
+            </div>
+            <div class="cookie-warning-text">
+                <p class="cookie-warning-title">We Use Cookies</p>
+                <p class="cookie-warning-message">
+                    This website uses cookies to store your preferences (such as font size and color tone) 
+                    and to improve your browsing experience. Cookies are stored only locally in your browser.
+                </p>
+            </div>
+            <div class="cookie-warning-actions">
+                <button id="cookieAccept" class="cookie-btn cookie-btn-accept" aria-label="Accept cookie notice">
+                    <i class="fas fa-check"></i> Accept
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cookie Warning Management
+        function initCookieWarning() {
+            const warningElement = document.getElementById('cookieWarning');
+            const acceptButton = document.getElementById('cookieAccept');
+            
+            if (!warningElement || !acceptButton) return;
+            
+            // Check if user has already acknowledged cookies
+            const cookieAcknowledged = localStorage.getItem('cookie_warning_acknowledged');
+            
+            // Only show on login page (not in chat)
+            const isChat = document.querySelector('.chat-container') !== null && 
+                          document.querySelector('.input_frame') !== null;
+            
+            if (!cookieAcknowledged && !isChat) {
+                // Delay showing to avoid blocking initial page render
+                setTimeout(() => {
+                    warningElement.style.display = '';
+                }, 500);
+            }
+            
+            // Accept button handler
+            acceptButton.addEventListener('click', () => {
+                localStorage.setItem('cookie_warning_acknowledged', 'true');
+                warningElement.style.display = 'none';
+            });
+        }
+        
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initCookieWarning);
+        } else {
+            initCookieWarning();
+        }
+    </script>
+
     <div class="chat-container">
     <!-- Navigation Bar - Modern Design -->
     <nav class="top_frame" id="nav_window" role="navigation" aria-label="Channel Navigation">

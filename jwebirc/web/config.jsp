@@ -3,65 +3,59 @@
     Created on : 17.08.2024, 15:37:18
     Author     : Andreas Pschorn
 --%>
-<%@page contentType="text/html" pageEncoding="UTF-8"%>
+<%@page contentType="text/html" pageEncoding="UTF-8" import="jakarta.servlet.ServletContext"%>
 <%!
-    String webchatSessionTimeout = "300000";
-    String sessionTimeout = "500";
-    String webchatHost = "localhost";
-    String webchatBind = "127.0.0.1";
-    String webchatPort = "6669";
-    String webchatSsl = "false";
-    String webchatServerPassword = "";
-    String webchatIdent = "webchat";
-    String webchatUser = "jwebirc";
-    String webchatPassword = "password";
-    String webchatRealname = "https://irc.midiandmore.net/";
-    String webchatName = "jWebIRC"; // Chat application name
-    String webchatTitle = "jWebIRC - IRC Web Client"; // Browser title
-    String ircNetworkName = "jWebIRC"; // IRC Network display name
-    String ircNetworkDescription = "Modern web-based IRC client"; // IRC Network description
-    String ircNetworkKeywords = "IRC, WebChat, Chat, Internet Relay Chat, jWebIRC"; // SEO keywords
-    String forwardedForHeader = "X-Forwarded-For";
-    String forwardedForIps = "127.0.0.1";
-    String webircMode = "WEBIRC";
-    String webircCgi = "CGIIRC";
-    String hmacTemporal = "1337";
-    String saslEnabled = "true"; // Enable SASL authentication option in login form
-    
-    // =============== CAPTCHA Configuration ===============
-    // CAPTCHA Type: NONE, TURNSTILE, RECAPTCHA_V2, RECAPTCHA_V3, RECAPTCHA_ENTERPRISE
-    String captchaEnabled = "false"; // Set to "true" to enable CAPTCHA
-    String captchaType = "TURNSTILE"; // Choose: TURNSTILE, RECAPTCHA_V2, RECAPTCHA_V3, RECAPTCHA_ENTERPRISE
-    
-    // Cloudflare Turnstile Configuration
-    String turnstileSiteKey = "1x00000000000000000000AA"; // Your Turnstile site key (visible)
-    String turnstileSecretKey = "1x0000000000000000000000000000000AA"; // Your Turnstile secret key (server-side)
-    
-    // Google reCAPTCHA v2 Configuration
-    String recaptchaV2SiteKey = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"; // Your reCAPTCHA v2 site key
-    String recaptchaV2SecretKey = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"; // Your reCAPTCHA v2 secret key
-    
-    // Google reCAPTCHA v3 Configuration
-    String recaptchaV3SiteKey = "6LdqmCAqAAAAAJLpfQv9hGgYmHl8xT5qT3l6v8Z7"; // Your reCAPTCHA v3 site key
-    String recaptchaV3SecretKey = "6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k"; // Your reCAPTCHA v3 secret key
-    String recaptchaV3MinScore = "0.5"; // Minimum score (0.0 to 1.0, typically 0.5)
-    
-    // Google reCAPTCHA Enterprise Configuration
-    String recaptchaEnterpriseEnabled = "false"; // Set to "true" for Enterprise
-    String recaptchaEnterpriseProjectId = "your-project-id"; // Your Google Cloud project ID
-    String recaptchaEnterpriseSiteKey = "your-site-key"; // Your reCAPTCHA Enterprise site key
-    String recaptchaEnterpriseApiKey = "your-api-key"; // Your Google Cloud API key
-    String recaptchaEnterpriseMinScore = "0.5"; // Minimum score (0.0 to 1.0)
-    
-    // =============== CHATNAPPING Configuration ===============
-    // Chatnapping allows embedding the webchat on external websites via iframe
-    String chatnappingEnabled = "true"; // Set to "false" to disable chatnapping feature
-    String chatnappingAllowedDomains = "*"; // Comma-separated list of allowed domains, or "*" for all (e.g., "example.com,test.org")
-    String chatnappingDefaultNick = "Guest*"; // Default nickname for embed links (* = random digit placeholder)
-    String chatnappingDefaultChannel = "#lobby"; // Default channel for embed links (empty = no channel)
-    
-    // =============== ERROR HANDLING Configuration ===============
-    // Error page configuration for debugging
-    String showStackTrace = "true"; // Set to "false" to hide stack traces in production
-    String errorPageStyle = "detailed"; // "detailed" = full stack trace, "simple" = user-friendly message only
+    private String param(ServletContext ctx, String name, String defaultValue) {
+        String value = ctx.getInitParameter(name);
+        return value != null ? value : defaultValue;
+    }
+%>
+<%
+    ServletContext ctx = application;
+
+    String webchatSessionTimeout = param(ctx, "jwebirc.webchatSessionTimeout", "300000");
+    String sessionTimeout = param(ctx, "jwebirc.sessionTimeout", "500");
+    String webchatHost = param(ctx, "jwebirc.webchatHost", "localhost");
+    String webchatBind = param(ctx, "jwebirc.webchatBind", "127.0.0.1");
+    String webchatPort = param(ctx, "jwebirc.webchatPort", "6669");
+    String webchatSsl = param(ctx, "jwebirc.webchatSsl", "false");
+    String webchatServerPassword = param(ctx, "jwebirc.webchatServerPassword", "");
+    String webchatIdent = param(ctx, "jwebirc.webchatIdent", "webchat");
+    String webchatUser = param(ctx, "jwebirc.webchatUser", "jwebirc");
+    String webchatPassword = param(ctx, "jwebirc.webchatPassword", "password");
+    String webchatRealname = param(ctx, "jwebirc.webchatRealname", "https://irc.midiandmore.net/");
+    String webchatName = param(ctx, "jwebirc.webchatName", "jWebIRC");
+    String webchatTitle = param(ctx, "jwebirc.webchatTitle", "jWebIRC - IRC Web Client");
+    String ircNetworkName = param(ctx, "jwebirc.ircNetworkName", "jWebIRC");
+    String ircNetworkDescription = param(ctx, "jwebirc.ircNetworkDescription", "Modern web-based IRC client");
+    String ircNetworkKeywords = param(ctx, "jwebirc.ircNetworkKeywords", "IRC, WebChat, Chat, Internet Relay Chat, jWebIRC");
+    String forwardedForHeader = param(ctx, "jwebirc.forwardedForHeader", "X-Forwarded-For");
+    String forwardedForIps = param(ctx, "jwebirc.forwardedForIps", "127.0.0.1");
+    String webircMode = param(ctx, "jwebirc.webircMode", "WEBIRC");
+    String webircCgi = param(ctx, "jwebirc.webircCgi", "CGIIRC");
+    String hmacTemporal = param(ctx, "jwebirc.hmacTemporal", "1337");
+    String saslEnabled = param(ctx, "jwebirc.saslEnabled", "true");
+
+    String captchaEnabled = param(ctx, "jwebirc.captchaEnabled", "false");
+    String captchaType = param(ctx, "jwebirc.captchaType", "TURNSTILE");
+    String turnstileSiteKey = param(ctx, "jwebirc.turnstileSiteKey", "1x00000000000000000000AA");
+    String turnstileSecretKey = param(ctx, "jwebirc.turnstileSecretKey", "1x0000000000000000000000000000000AA");
+    String recaptchaV2SiteKey = param(ctx, "jwebirc.recaptchaV2SiteKey", "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI");
+    String recaptchaV2SecretKey = param(ctx, "jwebirc.recaptchaV2SecretKey", "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe");
+    String recaptchaV3SiteKey = param(ctx, "jwebirc.recaptchaV3SiteKey", "6LdqmCAqAAAAAJLpfQv9hGgYmHl8xT5qT3l6v8Z7");
+    String recaptchaV3SecretKey = param(ctx, "jwebirc.recaptchaV3SecretKey", "6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k");
+    String recaptchaV3MinScore = param(ctx, "jwebirc.recaptchaV3MinScore", "0.5");
+    String recaptchaEnterpriseEnabled = param(ctx, "jwebirc.recaptchaEnterpriseEnabled", "false");
+    String recaptchaEnterpriseProjectId = param(ctx, "jwebirc.recaptchaEnterpriseProjectId", "your-project-id");
+    String recaptchaEnterpriseSiteKey = param(ctx, "jwebirc.recaptchaEnterpriseSiteKey", "your-site-key");
+    String recaptchaEnterpriseApiKey = param(ctx, "jwebirc.recaptchaEnterpriseApiKey", "your-api-key");
+    String recaptchaEnterpriseMinScore = param(ctx, "jwebirc.recaptchaEnterpriseMinScore", "0.5");
+
+    String chatnappingEnabled = param(ctx, "jwebirc.chatnappingEnabled", "true");
+    String chatnappingAllowedDomains = param(ctx, "jwebirc.chatnappingAllowedDomains", "*");
+    String chatnappingDefaultNick = param(ctx, "jwebirc.chatnappingDefaultNick", "Guest*");
+    String chatnappingDefaultChannel = param(ctx, "jwebirc.chatnappingDefaultChannel", "#lobby");
+
+    String showStackTrace = param(ctx, "jwebirc.showStackTrace", "true");
+    String errorPageStyle = param(ctx, "jwebirc.errorPageStyle", "detailed");
 %>

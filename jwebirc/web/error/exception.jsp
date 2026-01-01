@@ -161,6 +161,30 @@
                 margin-bottom: 1rem;
             }
         </style>
+        <script>
+            // Apply UI preferences from localStorage (Hue and Font Size)
+            // Run immediately before rendering to avoid flickering
+            (function() {
+                try {
+                    const saved = localStorage.getItem('jwebirc_ui');
+                    if (saved) {
+                        const prefs = JSON.parse(saved);
+                        // Apply hue rotation filter
+                        if (prefs.hue !== undefined && prefs.hue !== null) {
+                            const hue = parseInt(prefs.hue, 10) || 0;
+                            document.documentElement.style.setProperty('--hue-rotate', hue + 'deg');
+                        }
+                        // Apply font size
+                        if (prefs.fontSize !== undefined && prefs.fontSize !== null) {
+                            const fontSize = Math.min(Math.max(parseInt(prefs.fontSize, 10) || 14, 12), 18);
+                            document.documentElement.style.setProperty('--font-size-base', fontSize + 'px');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error applying UI preferences:', e);
+                }
+            })();
+        </script>
     </head>
     <body>
         <div class="error-container">

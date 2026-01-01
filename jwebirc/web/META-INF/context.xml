@@ -3,6 +3,50 @@
     
     <!-- Session Manager Configuration -->
     <Manager pathname="" />
+
+       <!-- Application Configuration (migrated from config.jsp) -->
+       <Parameter name="jwebirc.webchatSessionTimeout" value="300000" override="false" />
+       <Parameter name="jwebirc.sessionTimeout" value="500" override="false" />
+       <Parameter name="jwebirc.webchatHost" value="localhost" override="false" />
+       <Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false" />
+       <Parameter name="jwebirc.webchatPort" value="6669" override="false" />
+       <Parameter name="jwebirc.webchatSsl" value="false" override="false" />
+       <Parameter name="jwebirc.webchatServerPassword" value="" override="false" />
+       <Parameter name="jwebirc.webchatIdent" value="webchat" override="false" />
+       <Parameter name="jwebirc.webchatUser" value="jwebirc" override="false" />
+       <Parameter name="jwebirc.webchatPassword" value="password" override="false" />
+       <Parameter name="jwebirc.webchatRealname" value="https://irc.midiandmore.net/" override="false" />
+       <Parameter name="jwebirc.webchatName" value="jWebIRC" override="false" />
+       <Parameter name="jwebirc.webchatTitle" value="jWebIRC - IRC Web Client" override="false" />
+       <Parameter name="jwebirc.ircNetworkName" value="jWebIRC" override="false" />
+       <Parameter name="jwebirc.ircNetworkDescription" value="Modern web-based IRC client" override="false" />
+       <Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat, jWebIRC" override="false" />
+       <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
+       <Parameter name="jwebirc.forwardedForIps" value="127.0.0.1" override="false" />
+       <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false" />
+       <Parameter name="jwebirc.webircCgi" value="CGIIRC" override="false" />
+       <Parameter name="jwebirc.hmacTemporal" value="1337" override="false" />
+       <Parameter name="jwebirc.saslEnabled" value="true" override="false" />
+       <Parameter name="jwebirc.captchaEnabled" value="false" override="false" />
+       <Parameter name="jwebirc.captchaType" value="TURNSTILE" override="false" />
+       <Parameter name="jwebirc.turnstileSiteKey" value="1x00000000000000000000AA" override="false" />
+       <Parameter name="jwebirc.turnstileSecretKey" value="1x0000000000000000000000000000000AA" override="false" />
+       <Parameter name="jwebirc.recaptchaV2SiteKey" value="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" override="false" />
+       <Parameter name="jwebirc.recaptchaV2SecretKey" value="6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe" override="false" />
+       <Parameter name="jwebirc.recaptchaV3SiteKey" value="6LdqmCAqAAAAAJLpfQv9hGgYmHl8xT5qT3l6v8Z7" override="false" />
+       <Parameter name="jwebirc.recaptchaV3SecretKey" value="6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k" override="false" />
+       <Parameter name="jwebirc.recaptchaV3MinScore" value="0.5" override="false" />
+       <Parameter name="jwebirc.recaptchaEnterpriseEnabled" value="false" override="false" />
+       <Parameter name="jwebirc.recaptchaEnterpriseProjectId" value="your-project-id" override="false" />
+       <Parameter name="jwebirc.recaptchaEnterpriseSiteKey" value="your-site-key" override="false" />
+       <Parameter name="jwebirc.recaptchaEnterpriseApiKey" value="your-api-key" override="false" />
+       <Parameter name="jwebirc.recaptchaEnterpriseMinScore" value="0.5" override="false" />
+       <Parameter name="jwebirc.chatnappingEnabled" value="true" override="false" />
+       <Parameter name="jwebirc.chatnappingAllowedDomains" value="*" override="false" />
+       <Parameter name="jwebirc.chatnappingDefaultNick" value="Guest*" override="false" />
+       <Parameter name="jwebirc.chatnappingDefaultChannel" value="#lobby" override="false" />
+       <Parameter name="jwebirc.showStackTrace" value="true" override="false" />
+       <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false" />
     
     <!-- Resource Configuration -->
     <!-- Uncomment and configure for database connection pooling
