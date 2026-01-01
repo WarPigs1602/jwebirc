@@ -2,6 +2,10 @@
 
 A modern web-based IRC (Internet Relay Chat) client built with Java EE, WebSockets, and Bootstrap. This application provides a user-friendly interface for connecting to IRC servers directly from your web browser.
 
+## Example web-based IRC
+
+You can see under https://chat.midiandmore.net/?channels=dev an example of the web-based IRC... 
+
 ## Features
 
 - **WebSocket-based Communication**: Real-time IRC communication using modern WebSocket technology
