@@ -408,29 +408,65 @@ public class IrcParser {
     }
 
     /**
-     * Parsses a string to array
+     * IRC Message holder class to avoid array allocations
+     */
+    protected static class IrcMessage {
+        public final String prefix;      // Everything before " :"
+        public final String trailing;    // Everything after " :"
+        public final String command;     // The IRC command (extracted from prefix)
+        
+        public IrcMessage(String prefix, String trailing, String command) {
+            this.prefix = prefix;
+            this.trailing = trailing;
+            this.command = command;
+        }
+    }
+    
+    /**
+     * Parses IRC message without array splitting
      *
      * @param text The text to parse
-     * @return Array
+     * @return IrcMessage object
      */
-    protected String[] parseString(String text) {
+    protected IrcMessage parseString(String text) {
+        // Remove leading colon if present
         if (text.startsWith(":")) {
             text = text.substring(1);
         }
-        if (text.contains(" :")) {
-            return text.split(" \\:", 2);
+        
+        // Find the separator " :"
+        int separatorIndex = text.indexOf(" :");
+        String prefix;
+        String trailing;
+        
+        if (separatorIndex >= 0) {
+            prefix = text.substring(0, separatorIndex);
+            trailing = text.substring(separatorIndex + 2); // Skip " :"
+        } else {
+            prefix = text;
+            trailing = "";
         }
-        var arr = new String[2];
-        arr[0] = text;
-        arr[1] = "";
-        return arr;
+        
+        // Extract command from prefix (second token after first space)
+        String command = "";
+        int firstSpace = prefix.indexOf(' ');
+        if (firstSpace >= 0 && firstSpace + 1 < prefix.length()) {
+            int secondSpace = prefix.indexOf(' ', firstSpace + 1);
+            if (secondSpace >= 0) {
+                command = prefix.substring(firstSpace + 1, secondSpace);
+            } else {
+                command = prefix.substring(firstSpace + 1);
+            }
+        }
+        
+        return new IrcMessage(prefix, trailing, command);
     }
 
     protected void handshake(String nick) throws IOException {
         // Save nick for later use
         this.pendingNick = nick;
         
-        // IRC RFC requires: PASS (optional), then CAP (if using SASL), then NICK, then USER
+        // IRC RFC requires: PASS (optional), then CAP, then NICK, then USER
         
         // 1. Send PASS first if server password is set (but NOT in cgiirc mode)
         if (!getServerPassword().isBlank() && !(getMode() != null && getMode().equalsIgnoreCase("cgiirc"))) {
@@ -438,18 +474,12 @@ public class IrcParser {
             doSleep();
         }
         
-        // 2. If SASL is enabled, start capability negotiation
-        if (isUseSasl()) {
-            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Starting CAP negotiation for SASL...");
-            capNegotiating = true;
-            submitMessage("CAP LS 302");
-            doSleep();
-            // Don't send NICK/USER yet, wait for CAP END
-            return;
-        }
-        
-        // 3. If no SASL, send NICK/USER immediately
-        completeLogin();
+        // 2. Always start capability negotiation (for IRCv3 features and optionally SASL)
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Starting CAP negotiation...");
+        capNegotiating = true;
+        submitMessage("CAP LS 302");
+        doSleep();
+        // Don't send NICK/USER yet, wait for CAP END
     }
     
     private void completeLogin() throws IOException {
@@ -506,59 +536,73 @@ public class IrcParser {
         doSleep();
     }
 
-    protected void parseCommands(String[] arr, Session session) {
-        // arr[0] contains everything before " :", arr[1] contains everything after " :"
-        // Split arr[0] by spaces to get individual command parts
-        String[] parts = arr[0].trim().split("\\s+");
+    protected void parseCommands(String line, Session session) {
+        // Parse only to check for special commands that need backend handling
+        IrcMessage msg = parseString(line);
+        String command = msg.command;
         
         // Handle CAP responses - format: server CAP * LS/ACK ...
-        if (parts.length >= 3 && parts[1].equals("CAP")) {
-            handleCap(parts, arr[1], session, arr[0]);
-            // Don't forward CAP messages to client (handled internally)
+        if ("CAP".equals(command)) {
+            handleCap(msg.prefix, msg.trailing, session);
+            // Forward CAP messages to client so it can track enabled capabilities
+            sendText(line + "\n", session, "chat", "");
             return;
         }
         
         // Handle AUTHENTICATE responses - format: :server AUTHENTICATE +
-        // Format: :server AUTHENTICATE + (parts[0]=:server, parts[1]=AUTHENTICATE, parts[2]=+)
-        if (parts.length >= 2 && parts[1].equals("AUTHENTICATE")) {
-            handleAuthenticate(parts, session);
+        if ("AUTHENTICATE".equals(command)) {
+            handleAuthenticate(msg.prefix, session);
             return;
         }
         
         // Handle numeric 903 (SASL success) and 904/905 (SASL failure)
-        if (parts.length >= 2 && (parts[1].equals("903") || parts[1].equals("904") || parts[1].equals("905"))) {
-            handleSaslEnd(parts, arr[1], session);
+        if ("903".equals(command) || "904".equals(command) || "905".equals(command)) {
+            handleSaslEnd(command, msg.trailing, session);
             // Don't return here - forward SASL messages to client
         }
         
         // Handle CTCP requests - format: :nick!user@host PRIVMSG target :\001COMMAND args\001
-        // Note: The ending \001 might not be present due to parsing
-        if (parts.length >= 3 && parts[1].equals("PRIVMSG") && arr[1].startsWith("\u0001")) {
+        if ("PRIVMSG".equals(command) && msg.trailing.startsWith("\u0001")) {
             // Answer the CTCP request
-            handleCtcpRequest(parts, arr[1], session);
-            // Forward to client for display (will be shown as incoming CTCP request)
-            sendText(":" + arr[0] + " :" + arr[1] + "\n", session, "chat", "");
+            handleCtcpRequest(msg.prefix, msg.trailing, session);
+            // Forward original line to client for display
+            sendText(line + "\n", session, "chat", "");
             return;
         }
         
         // Handle CTCP replies - format: :nick!user@host NOTICE target :\001COMMAND response\001
-        // Note: The ending \001 might not be present due to parsing
-        if (parts.length >= 3 && parts[1].equals("NOTICE") && arr[1].startsWith("\u0001")) {
-            // Forward CTCP reply to client for display in active window
-            sendText(":" + arr[0] + " :" + arr[1] + "\n", session, "chat", "active");
+        if ("NOTICE".equals(command) && msg.trailing.startsWith("\u0001")) {
+            // Forward original line to client for display in active window
+            sendText(line + "\n", session, "chat", "active");
             return;
         }
         
-        // Forward all other IRC messages to client
-        sendText(arr[0] + " " + arr[1] + "\n", session, "chat", "");
+        // Forward original IRC line unmodified to client
+        sendText(line + "\n", session, "chat", "");
     }
     
     private static final String DESIRED_CAPS = "message-tags";
 
-    private void handleCap(String[] parts, String trailing, Session session, String originalMessage) {
+    private void handleCap(String prefix, String trailing, Session session) {
         // CAP * LS :multi-prefix sasl...
-        // Format: :server CAP * LS :caps (parts[0]=:server, parts[1]=CAP, parts[2]=*, parts[3]=LS)
-        if (parts.length >= 4 && parts[3].equals("LS")) {
+        // Format: server CAP * LS
+        // Extract the subcommand (LS, ACK, NAK)
+        int capPos = prefix.indexOf("CAP");
+        if (capPos < 0) return;
+        
+        int afterCap = capPos + 3; // Position after "CAP"
+        String afterCapStr = prefix.substring(afterCap).trim();
+        
+        // Skip the asterisk if present
+        if (afterCapStr.startsWith("*")) {
+            afterCapStr = afterCapStr.substring(1).trim();
+        }
+        
+        // Extract subcommand (first token)
+        int spacePos = afterCapStr.indexOf(' ');
+        String subCommand = spacePos >= 0 ? afterCapStr.substring(0, spacePos) : afterCapStr;
+        
+        if ("LS".equals(subCommand)) {
             String capsString = trailing.trim();
             Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP LS received: {0}", capsString);
 
@@ -624,13 +668,13 @@ public class IrcParser {
             }
         }
         // CAP * ACK :sasl ...
-        // Format: :server CAP * ACK :sasl multi-prefix ...
-        else if (parts.length >= 4 && parts[3].equals("ACK")) {
+        // Format: server CAP * ACK :sasl multi-prefix ...
+        else if ("ACK".equals(subCommand)) {
             String ackedCaps = trailing.trim();
             Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP ACK received: {0}", ackedCaps);
             
             // Forward CAP ACK to client for capability tracking
-            sendText(":" + originalMessage + " " + trailing + "\n", session, "chat", "");
+            sendText(":" + prefix + " :" + trailing + "\n", session, "chat", "");
             
             // Parse ACKed capabilities
             java.util.Set<String> ackedCapSet = new java.util.HashSet<>();
@@ -671,7 +715,7 @@ public class IrcParser {
             }
         }
         // CAP * NAK :sasl ...
-        else if (parts.length >= 4 && parts[3].equals("NAK")) {
+        else if ("NAK".equals(subCommand)) {
             String nakedCaps = trailing.trim();
             Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "CAP NAK received: {0}", nakedCaps);
             
@@ -695,9 +739,15 @@ public class IrcParser {
         }
     }
     
-    private void handleAuthenticate(String[] parts, Session session) {
-        // Format: :server AUTHENTICATE + (parts[0]=:server, parts[1]=AUTHENTICATE, parts[2]=+)
-        if (parts.length > 2 && parts[2].equals("+")) {
+    private void handleAuthenticate(String prefix, Session session) {
+        // Format: server AUTHENTICATE +
+        // Extract the parameter after AUTHENTICATE
+        int authPos = prefix.indexOf("AUTHENTICATE");
+        if (authPos < 0) return;
+        
+        String afterAuth = prefix.substring(authPos + 12).trim(); // 12 = length of "AUTHENTICATE"
+        
+        if ("+".equals(afterAuth)) {
             try {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending credentials...");
                 // Send SASL PLAIN authentication: base64(username\0username\0password)
@@ -719,8 +769,7 @@ public class IrcParser {
         }
     }
     
-    private void handleSaslEnd(String[] parts, String trailing, Session session) {
-        String numeric = parts[1];
+    private void handleSaslEnd(String numeric, String trailing, Session session) {
         if (numeric.equals("903")) {
             // SASL authentication successful
             Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL authentication successful (903)");
@@ -748,11 +797,11 @@ public class IrcParser {
     
     /**
      * Handles CTCP (Client-To-Client Protocol) requests
-     * @param parts The command parts
+     * @param prefix The command prefix containing sender and target
      * @param trailing The CTCP command with \001 delimiters
      * @param session The WebSocket session
      */
-    private void handleCtcpRequest(String[] parts, String trailing, Session session) {
+    private void handleCtcpRequest(String prefix, String trailing, Session session) {
         // Add ending \001 if missing (can happen due to parsing)
         if (!trailing.endsWith("\u0001")) {
             trailing = trailing + "\u0001";
@@ -760,19 +809,44 @@ public class IrcParser {
         
         // Remove \001 delimiters
         String ctcpContent = trailing.substring(1, trailing.length() - 1);
-        String[] ctcpParts = ctcpContent.split(" ", 2);
-        String ctcpCommand = ctcpParts[0].toUpperCase();
-        String ctcpArgs = ctcpParts.length > 1 ? ctcpParts[1] : "";
         
-        // Extract sender nick from parts[0] (nick!user@host or :nick!user@host)
-        String sender = parts[0];
-        if (sender.startsWith(":")) {
-            sender = sender.substring(1);
+        // Extract CTCP command and args without splitting
+        int spacePos = ctcpContent.indexOf(' ');
+        String ctcpCommand;
+        String ctcpArgs;
+        if (spacePos >= 0) {
+            ctcpCommand = ctcpContent.substring(0, spacePos).toUpperCase();
+            ctcpArgs = ctcpContent.substring(spacePos + 1);
+        } else {
+            ctcpCommand = ctcpContent.toUpperCase();
+            ctcpArgs = "";
         }
-        String senderNick = sender.contains("!") ? sender.split("!")[0] : sender;
         
-        // Extract target from parts[2]
-        String target = parts[2];
+        // Extract sender and target from prefix
+        // Format: sender PRIVMSG target
+        String sender = "";
+        String target = "";
+        
+        // Find sender (everything before first space)
+        int firstSpace = prefix.indexOf(' ');
+        if (firstSpace >= 0) {
+            sender = prefix.substring(0, firstSpace);
+            if (sender.startsWith(":")) {
+                sender = sender.substring(1);
+            }
+            
+            // Find target (skip "PRIVMSG" and get next token)
+            int privmsgPos = prefix.indexOf("PRIVMSG");
+            if (privmsgPos >= 0) {
+                String afterPrivmsg = prefix.substring(privmsgPos + 7).trim(); // 7 = length of "PRIVMSG"
+                int targetSpace = afterPrivmsg.indexOf(' ');
+                target = targetSpace >= 0 ? afterPrivmsg.substring(0, targetSpace) : afterPrivmsg;
+            }
+        }
+        
+        // Extract sender nick (everything before '!' or the whole sender)
+        int exclPos = sender.indexOf('!');
+        String senderNick = exclPos >= 0 ? sender.substring(0, exclPos) : sender;
         
         System.out.println("=== CTCP Request Debug ===");
         System.out.println("  Command: " + ctcpCommand);

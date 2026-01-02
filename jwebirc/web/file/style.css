@@ -1244,7 +1244,7 @@ nv.unread::after {
 .topic_frame a:link,
 .topic_frame a:visited {
     color: inherit;
-    text-decoration: underline;
+    text-decoration: none;
     cursor: pointer;
 }
 
@@ -1252,7 +1252,7 @@ nv.unread::after {
 .topic_frame a:active {
     color: inherit;
     opacity: 0.8;
-    text-decoration: underline;
+    text-decoration: none;
 }
 
 .topic-wrapper {
@@ -1263,6 +1263,23 @@ nv.unread::after {
     margin: 0;
     box-sizing: border-box;
     white-space: nowrap;
+}
+
+/* Topic components - normal text unless control codes are used */
+.topic-prefix {
+    font-weight: normal;
+    color: #d0d0d0;
+}
+
+.topic-content {
+    font-weight: normal;
+    color: #d0d0d0;
+}
+
+.topic-empty {
+    font-weight: normal;
+    color: #a0a0a0;
+    font-style: italic;
 }
 
 /* ===== Chat Window ===== */
@@ -1276,12 +1293,12 @@ nv.unread::after {
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
-    white-space: pre-wrap;
+    white-space: normal;
     word-wrap: break-word;
     word-break: break-word;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.9rem;
-    line-height: 0;
+    line-height: 1.4;
     color: var(--text-primary);
     transition: box-shadow var(--transition-speed) ease;
     backdrop-filter: blur(10px);

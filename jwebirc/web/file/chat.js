@@ -72,8 +72,8 @@ class ChatManager {
     
     /**
      * Requests IRC capabilities
-     * Note: Server initiates CAP LS 302 if SASL is enabled
-     * Client only responds to CAP messages from server
+     * Note: Backend initiates CAP LS 302 during connection
+     * Client tracks requested capabilities and responds to server's CAP messages
      */
     requestCapabilities() {
         this.capNegotiationActive = true;
@@ -85,7 +85,7 @@ class ChatManager {
         ];
         
         this.capabilities.requested = [...desiredCaps];
-        // Server will send CAP LS 302, we respond to it
+        console.log('[CAP] Client ready to handle capabilities:', desiredCaps);
     }
     
     /**
@@ -932,7 +932,10 @@ class ChatManager {
             openTags.pop();
         }
         
-        return result.join('').trim();
+        // Return result and trim trailing whitespace/newlines
+        const output = result.join('');
+        // Remove trailing whitespace including newlines before closing tags
+        return output.replace(/\s+(<\/span>)/g, '$1').trim();
     }
     
     findNextControlCode(text, start) {
@@ -949,10 +952,247 @@ class ChatManager {
         return nearest;
     }
     
+    /**
+     * Extrahiert den aktuellen Control Code State aus einem Text
+     * @param {string} text - Der Text, aus dem der State extrahiert werden soll
+     * @param {object} previousState - Der vorherige State, der aktualisiert werden soll
+     * @returns {object} State-Objekt mit aktuellen Formatierungen
+     */
+    extractControlCodeState(text, previousState = null) {
+        const state = previousState ? { ...previousState } : {
+            bold: false,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            monospace: false,
+            reverse: false,
+            color: null,
+            bgcolor: null
+        };
+        
+        let pos = 0;
+        while (pos < text.length) {
+            const char = text.charCodeAt(pos);
+            
+            switch (char) {
+                case 0x02: // Bold
+                    state.bold = !state.bold;
+                    pos++;
+                    break;
+                    
+                case 0x1D: // Italic
+                    state.italic = !state.italic;
+                    pos++;
+                    break;
+                    
+                case 0x1F: // Underline
+                    state.underline = !state.underline;
+                    pos++;
+                    break;
+                    
+                case 0x1E: // Strikethrough
+                    state.strikethrough = !state.strikethrough;
+                    pos++;
+                    break;
+                    
+                case 0x11: // Monospace
+                    state.monospace = !state.monospace;
+                    pos++;
+                    break;
+                    
+                case 0x16: // Reverse
+                    state.reverse = !state.reverse;
+                    pos++;
+                    break;
+                    
+                case 0x0F: // Reset all formatting
+                    state.bold = false;
+                    state.italic = false;
+                    state.underline = false;
+                    state.strikethrough = false;
+                    state.monospace = false;
+                    state.reverse = false;
+                    state.color = null;
+                    state.bgcolor = null;
+                    pos++;
+                    break;
+                    
+                case 0x03: // Color
+                    pos++;
+                    let colorStr = '';
+                    while (pos < text.length && text[pos] >= '0' && text[pos] <= '9' && colorStr.length < 2) {
+                        colorStr += text[pos];
+                        pos++;
+                    }
+                    
+                    if (colorStr.length > 0) {
+                        const colorIndex = parseInt(colorStr);
+                        if (colorIndex >= 0 && colorIndex < this.colors.length) {
+                            state.color = this.colors[colorIndex];
+                        }
+                        
+                        if (pos < text.length && text[pos] === ',') {
+                            pos++;
+                            let bgColorStr = '';
+                            while (pos < text.length && text[pos] >= '0' && text[pos] <= '9' && bgColorStr.length < 2) {
+                                bgColorStr += text[pos];
+                                pos++;
+                            }
+                            if (bgColorStr.length > 0) {
+                                const bgColorIndex = parseInt(bgColorStr);
+                                if (bgColorIndex >= 0 && bgColorIndex < this.colors.length) {
+                                    state.bgcolor = this.colors[bgColorIndex];
+                                }
+                            }
+                        }
+                    } else {
+                        state.color = null;
+                        state.bgcolor = null;
+                    }
+                    break;
+                    
+                default:
+                    pos++;
+                    break;
+            }
+        }
+        
+        return state;
+    }
+    
+    /**
+     * Wendet einen Control Code State auf einen Text an
+     * @param {string} text - Der Text, auf den der State angewendet werden soll
+     * @param {object} state - Der anzuwendende State
+     * @returns {string} Text mit vorangestellten Control Codes
+     */
+    applyControlCodeState(text, state) {
+        let prefix = '';
+        
+        // Bold
+        if (state.bold) {
+            prefix += String.fromCharCode(0x02);
+        }
+        
+        // Italic
+        if (state.italic) {
+            prefix += String.fromCharCode(0x1D);
+        }
+        
+        // Underline
+        if (state.underline) {
+            prefix += String.fromCharCode(0x1F);
+        }
+        
+        // Strikethrough
+        if (state.strikethrough) {
+            prefix += String.fromCharCode(0x1E);
+        }
+        
+        // Monospace
+        if (state.monospace) {
+            prefix += String.fromCharCode(0x11);
+        }
+        
+        // Reverse
+        if (state.reverse) {
+            prefix += String.fromCharCode(0x16);
+        }
+        
+        // Color
+        if (state.color !== null) {
+            const colorIndex = this.colors.indexOf(state.color);
+            if (colorIndex >= 0) {
+                prefix += String.fromCharCode(0x03) + colorIndex.toString().padStart(2, '0');
+                
+                if (state.bgcolor !== null) {
+                    const bgColorIndex = this.colors.indexOf(state.bgcolor);
+                    if (bgColorIndex >= 0) {
+                        prefix += ',' + bgColorIndex.toString().padStart(2, '0');
+                    }
+                }
+            }
+        }
+        
+        return prefix + text;
+    }
+    
     escapeHtml(text) {
         // Don't escape HTML - allow existing HTML tags to pass through
         // This preserves link formatting and other HTML from parsePages
         return text;
+    }
+    
+    /**
+     * Checks if HTML string contains visible text (not just tags)
+     * @param {string} html - HTML string to check
+     * @returns {boolean} True if visible text exists
+     */
+    hasVisibleText(html) {
+        // Remove all HTML tags and check if anything remains
+        const stripped = html.replace(/<[^>]*>/g, '');
+        // Also remove common HTML entities
+        const cleaned = stripped.replace(/&nbsp;|&lt;|&gt;|&amp;/gi, ' ');
+        return cleaned.trim().length > 0;
+    }
+    
+    /**
+     * Converts URLs in already HTML-formatted text to clickable links
+     * Preserves all surrounding HTML formatting (spans with styles)
+     * @param {string} html - HTML text with potential URLs
+     * @param {boolean} isTopicContext - If true, applies topic-specific link styling
+     * @returns {string} HTML with URLs converted to links
+     */
+    parseUrls(html, isTopicContext = false) {
+        // Match URLs that are NOT already inside <a> tags
+        // This regex looks for http:// or https:// URLs
+        const urlRegex = /(https?:\/\/[^\s<]+)/g;
+        
+        // Split by existing <a> tags to avoid double-wrapping
+        const parts = html.split(/(<a\s[^>]*>.*?<\/a>)/gi);
+        
+        return parts.map(part => {
+            // If this part is already a link, don't process it
+            if (part.match(/^<a\s/i)) {
+                return part;
+            }
+            
+            // Replace URLs with links in this part
+            return part.replace(urlRegex, (match, url, offset) => {
+                try {
+                    // Clean up URL
+                    let cleanUrl = match;
+                    cleanUrl = cleanUrl.replace(/&lt;[^&]*&gt;/gi, '');
+                    cleanUrl = cleanUrl.replace(/%3C[^%]*%3E/gi, '');
+                    cleanUrl = cleanUrl.replace(/<[^>]*>/gi, '');
+                    cleanUrl = cleanUrl.trim();
+                    
+                    const urlObj = new URL(cleanUrl);
+                    
+                    // Check if the link is inside a span with text-decoration: underline
+                    const beforeMatch = part.substring(0, offset);
+                    const hasUnderline = /text-decoration:\s*underline/i.test(beforeMatch);
+                    
+                    // Build link style
+                    let linkStyle = '';
+                    if (!hasUnderline) {
+                        // Remove default underline if no explicit underline control code
+                        linkStyle = 'text-decoration: none;';
+                    }
+                    
+                    if (isTopicContext) {
+                        // In topic: inherit color, no default color override
+                        linkStyle += ' color: inherit;';
+                    }
+                    
+                    const styleAttr = linkStyle ? ` style="${linkStyle}"` : '';
+                    return `<a href="${urlObj.href}" target="_blank"${styleAttr}>${match}</a>`;
+                } catch (err) {
+                    // If URL parsing fails, return as-is
+                    return match;
+                }
+            });
+        }).join('');
     }
     
     addNick(channel, nick, host, color, isAway = false) {
@@ -1264,12 +1504,40 @@ class ChatManager {
         });
     }
     
-    parseUrl(url) {
+    parseUrl(url, originalText = null, inheritedState = null) {
         try {
-            const link = new URL(url);
-            return `<a href="${link.href}" target="_blank">${link.href}</a>`;
+            // Clean up the URL by removing HTML entities and encoded tags at the end
+            // These can appear when IRC servers include formatting in their messages
+            let cleanUrl = url;
+            
+            // Remove &lt;...&gt; (HTML entity encoded tags)
+            cleanUrl = cleanUrl.replace(/&lt;[^&]*&gt;/gi, '');
+            
+            // Remove %3C...%3E (URL encoded tags) - must be done before creating URL object
+            cleanUrl = cleanUrl.replace(/%3C[^%]*%3E/gi, '');
+            
+            // Remove any trailing HTML-like tags
+            cleanUrl = cleanUrl.replace(/<[^>]*>/gi, '');
+            
+            // Trim whitespace
+            cleanUrl = cleanUrl.trim();
+            
+            const link = new URL(cleanUrl);
+            
+            // Use original text with IRC formatting if provided, otherwise use cleaned URL
+            let displayText = originalText !== null ? originalText : link.href;
+            
+            // Always apply inherited state if provided - control codes should always affect following text
+            if (inheritedState) {
+                displayText = this.applyControlCodeState(displayText, inheritedState);
+            }
+            
+            displayText = this.parseControl(displayText);
+            return `<a href="${link.href}" target="_blank">${displayText}</a>`;
         } catch (err) {
-            return url;
+            // If URL parsing fails, try to clean and return as plain text
+            let cleaned = url.replace(/(&lt;[^&]*&gt;|%3C[^%]*%3E|<[^>]*>)/gi, '').trim();
+            return cleaned || url;
         }
     }
     
@@ -1406,11 +1674,28 @@ class ChatManager {
         
         // Channel completion
         if (prefix.startsWith("#") || prefix.startsWith("&")) {
+            const currentChannel = this.activeWindow;
+            let currentChannelMatch = null;
+            const otherMatches = [];
+            
             for (const elem of this.channels) {
                 if (elem.page.toLowerCase().startsWith(prefixLower)) {
-                    completions.push(elem.page);
+                    // Prioritize current channel
+                    if (elem.page === currentChannel) {
+                        currentChannelMatch = elem.page;
+                    } else {
+                        otherMatches.push(elem.page);
+                    }
                 }
             }
+            
+            // Current channel first, then others alphabetically
+            if (currentChannelMatch) {
+                completions.push(currentChannelMatch);
+            }
+            completions.push(...otherMatches.sort(
+                (a, b) => a.toLowerCase().localeCompare(b.toLowerCase())
+            ));
         } else if (this.isChannel(this.activeWindow)) {
             // Nick completion in current channel - optimized with direct access
             const activeWindowLower = this.activeWindow.toLowerCase();
@@ -1493,25 +1778,20 @@ class ChatManager {
         this.channels.forEach(elem => {
             if (elem.page.toLowerCase() === channel.toLowerCase() && channel.toLowerCase() === this.activeWindow.toLowerCase()) {
                 let text = elem.topic;
-                let parsed = "";
+                let topicContent = "";
                 
-                const arr = text.includes(" ") ? text.split(" ") : [text];
-                for (const part of arr) {
-                    if (part.startsWith("http://") || part.startsWith("https://")) {
-                        parsed += this.parseUrl(part);
-                        if (part.endsWith("\n")) parsed += "\n";
-                    } else {
-                        parsed += part;
-                    }
-                    if (arr.length > 1) parsed += " ";
+                if (text && text.trim().length > 0) {
+                    // Parse control codes first, then convert URLs to links (with topic context)
+                    let parsed = this.parseControl(text);
+                    parsed = this.parseUrls(parsed, true);
+                    topicContent = `<span class="topic-prefix">${channel}:&nbsp;</span><span class="topic-content">${parsed.trim()}</span>`;
+                } else {
+                    topicContent = `<span class="topic-prefix">${channel}:&nbsp;</span><span class="topic-empty">(No topic set)</span>`;
                 }
                 
-                const topic = this.parseControl(parsed.trim());
                 const wrapper = document.createElement("div");
                 wrapper.className = "topic-wrapper";
-                wrapper.innerHTML = topic && topic.length !== 0 
-                    ? channel + ":&nbsp;" + topic 
-                    : channel + ":&nbsp;(No topic set)";
+                wrapper.innerHTML = topicContent;
                 
                 while (this.topicWindow.firstChild) {
                     this.topicWindow.removeChild(this.topicWindow.firstChild);
@@ -1596,20 +1876,14 @@ class ChatManager {
                     text = `<span style="color: #ff6b6b; font-weight: 600;">${text}`;
                 }
                 
-                const arr = text.includes(" ") ? text.split(" ") : [text];
-                let parsed = "";
+                // Parse control codes first, then convert URLs to links
+                let parsed = this.parseControl(text);
+                parsed = this.parseUrls(parsed);
                 
-                for (const part of arr) {
-                    if (part.startsWith("http://") || part.startsWith("https://")) {
-                        parsed += this.parseUrl(part);
-                        if (part.endsWith("\n")) parsed += "\n";
-                    } else {
-                        parsed += part;
-                    }
-                    if (arr.length > 1) parsed += " ";
+                // Filter empty output (only control codes, no visible text)
+                if (!this.hasVisibleText(parsed)) {
+                    return;
                 }
-                
-                parsed = this.parseControl(parsed.trim());
                 
                 // Update unread count for notifications
                 if (pg.toLowerCase() !== this.activeWindow.toLowerCase()) {
@@ -1628,7 +1902,8 @@ class ChatManager {
                     this.highlight = false;
                 }
                 
-                elem.elem.innerHTML += parsed.trim() + "\n";
+                // Add line break
+                elem.elem.innerHTML += parsed.trimEnd() + "<br>";
                 return;
             }
         }
@@ -1640,28 +1915,19 @@ class ChatManager {
         }
         
         for (const elem of this.channels) {
-            const arr = text.includes(" ") ? text.split(" ") : [text];
-            let parsed = "";
-            
-            for (const part of arr) {
-                if (part.startsWith("http://") || part.startsWith("https://")) {
-                    const cleanPart = part.endsWith("\n") ? part.substring(0, part.length - 1) : part;
-                    parsed += this.parseUrl(cleanPart);
-                    if (part.endsWith("\n")) parsed += "\n";
-                } else {
-                    parsed += part;
-                }
-                if (arr.length > 1) parsed += " ";
-            }
-            
-            parsed = this.parseControl(parsed.trim());
+            // Parse control codes first, then convert URLs to links
+            let parsed = this.parseControl(text);
+            parsed = this.parseUrls(parsed);
             
             if (this.highlight) {
                 parsed += "</span>";
                 this.highlight = false;
             }
             
-            elem.elem.innerHTML += parsed.trim() + "\n";
+            // Only add to innerHTML if there's actual visible content
+            if (this.hasVisibleText(parsed)) {
+                elem.elem.innerHTML += parsed.trimEnd() + "<br>";
+            }
         }
     }
     

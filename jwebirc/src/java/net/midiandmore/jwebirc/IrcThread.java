@@ -118,8 +118,7 @@ public class IrcThread implements Runnable {
             p.handshake(getNick());
             while ((line = getParser().getIn().readLine()) != null) {
                 java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.FINE, "IRC << {0}", line);
-                var arr = getParser().parseString(line);
-                p.parseCommands(arr, getSession());
+                p.parseCommands(line, getSession());
             }
         } catch (IOException ex) {
             p.sendText("NOTICE AUTH *** (jwebirc) Connection to IRC server lost: %s".formatted(ex.getMessage()), getSession(), "chat", "");

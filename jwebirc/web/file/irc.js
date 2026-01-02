@@ -96,40 +96,43 @@ class IRCParser {
     }
     
     getNumerics(text) {
-        const arr = text.split(" ");
         const regex = /^[\d]+$/;
         
         // Parse IRC message properly
         const ircMsg = this.parseIrcMessage(text);
+        const { prefix, command, params } = ircMsg;
         
         // CAP handling (IRCv3 Capabilities)
-        if (arr[0].startsWith(':') && arr[1] === 'CAP') {
-            this.handleCap(arr);
+        if (command === 'CAP') {
+            console.log('[IRC] CAP message received:', text);
+            console.log('[IRC] Parsed CAP ircMsg:', ircMsg);
+            this.handleCap(ircMsg);
             return null;
         }
         
         // TAGMSG handling (IRCv3 message tags)
-        if (arr[0].startsWith(':') && arr[1] === 'TAGMSG') {
+        if (command === 'TAGMSG') {
             // TAGMSG is handled in parseOutput before getNumerics is called
-            // But we should still process it here if tags are present
             return null;
         }
         
         // PING handling
-        if (arr[0].toLowerCase() === "ping") {
-            if (window.postManager) window.postManager.submitTextMessage("/pong " + arr[1]);
+        if (command.toLowerCase() === "ping") {
+            if (window.postManager && params[0]) {
+                window.postManager.submitTextMessage("/pong " + params[0]);
+            }
             return null;
         }
         
         // ERROR handling
-        if (arr[0].toLowerCase() === "error") {
+        if (command.toLowerCase() === "error") {
             this.output = this.chatManager.getActiveWindow();
-            return this.formatError(arr.slice(1).join(" "));
+            return this.formatError(params.join(" "));
         }
         
         // NOTICE AUTH handling
-        if (arr[0].toLowerCase() === "notice" && arr[1].toLowerCase() === "auth") {
-            const parsed = arr.slice(2).join(" ");
+        if (command.toLowerCase() === "notice" && params[0] && params[0].toLowerCase() === "auth") {
+            const parsed = params.slice(1).join(" ");
             this.output = "Status";
             
             if (this.isHostnameLookupMessage(parsed.trim())) {
@@ -140,41 +143,51 @@ class IRCParser {
         }
         
         // Numeric replies
-        if (arr[1] && arr[1].match(regex)) {
-            return this.handleNumericReply(arr, text, ircMsg);
+        if (command && command.match(regex)) {
+            return this.handleNumericReply(ircMsg, text);
         }
 
         // Command handling
-        return this.handleCommand(arr, text);
+        return this.handleCommand(ircMsg, text);
     }
 
-    handleNumericReply(arr, text, ircMsg) {
-        const code = arr[1];
+    handleNumericReply(ircMsg, text) {
+        const { prefix, command: code, params } = ircMsg;
         let parsed = "";
 
         switch (code) {
             case "005": // Server features (ISUPPORT)
                 // Parse PREFIX parameter
-                for (let i = 3; i < arr.length; i++) {
-                    if (arr[i].startsWith('PREFIX=')) {
-                        this.chatManager.parseServerPrefix(arr[i]);
+                for (const param of params) {
+                    if (param.startsWith('PREFIX=')) {
+                        this.chatManager.parseServerPrefix(param);
                     }
                 }
-                return this.handleGenericNumeric(arr, code, text, ircMsg);
+                return this.handleGenericNumeric(ircMsg, code, text);
                 
             case "353": // Names list
-                const channel = arr[4];
-                for (let i = 5; i < arr.length; i++) {
-                    this.chatManager.addNick(channel, arr[i], "", this.chatManager.getRandomColor());
+                // Format: :server 353 yournick = #channel :nick1 @nick2 +nick3
+                // params: [yournick, =/@/*, #channel, "nick1 @nick2 +nick3"]
+                const channel = params[2];
+                const nickList = params[3] || '';
+                
+                // Split the nick list by spaces and add each nick
+                const nicks = nickList.trim().split(/\s+/);
+                for (const nick of nicks) {
+                    if (nick.length > 0) {
+                        this.chatManager.addNick(channel, nick, "", this.chatManager.getRandomColor());
+                    }
                 }
                 return null;
                 
             case "332": // Topic
-                this.chatManager.setTopic(arr[3], text.substring(text.indexOf(arr[3]) + arr[3].length + 1));
+                // params: [nick, channel, topic]
+                this.chatManager.setTopic(params[1], params[2] || '');
                 return null;
                 
             case "333": // Topic info
-                this.chatManager.updateTopic(arr[3], arr[4], arr[5]);
+                // params: [nick, channel, setter, timestamp]
+                this.chatManager.updateTopic(params[1], params[2], params[3]);
                 return null;
                 
             case "366": // End of names
@@ -182,40 +195,40 @@ class IRCParser {
                 return null;
                 
             case "352": // WHO reply
-                // :server 352 client-nick channel username host server nick flags :hopcount realname
-                const whoNick = arr[7];
-                const whoFlags = arr[8] || '';
-                this.chatManager.setHost(arr[3], whoNick, arr[4] + "@" + arr[5]);
+                // params: [nick, channel, username, host, server, nick, flags, hopcount realname]
+                const whoNick = params[5];
+                const whoFlags = params[6] || '';
+                this.chatManager.setHost(params[1], whoNick, params[2] + "@" + params[3]);
                 const isAway = whoFlags.includes('G');
                 this.chatManager.setAwayStatus(whoNick, isAway);
                 return null;
                 
             case "311": // WHOIS user
                 this.output = this.chatManager.getActiveWindow();
-                return this.formatWhoisUser(arr);
+                return this.formatWhoisUser(ircMsg);
                 
             case "319": // WHOIS channels
                 this.output = this.chatManager.getActiveWindow();
-                return this.formatWhoisChannels(arr);
+                return this.formatWhoisChannels(ircMsg);
 
             case "312": { // WHOIS server
                 this.output = this.chatManager.getActiveWindow();
-                const server = arr[4];
-                const info = arr.slice(5).join(" ").replace(/^:/, '').trim();
+                const server = params[2];
+                const info = params[3] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">server</span> : ${server}${info ? ' (' + info + ')' : ''}`;
             }
 
             case "313": { // WHOIS operator
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                const info = params[2] || '';
                 const suffix = info ? ` (${info})` : '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${arr[3]}${suffix}`;
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${params[1]}${suffix}`;
             }
 
             case "317": { // WHOIS idle / signon
                 this.output = this.chatManager.getActiveWindow();
-                const idleSeconds = parseInt(arr[4] || '0', 10);
-                const signonTs = parseInt(arr[5] || '0', 10) * 1000;
+                const idleSeconds = parseInt(params[2] || '0', 10);
+                const signonTs = parseInt(params[3] || '0', 10) * 1000;
                 const idleText = isNaN(idleSeconds) ? '-' : `${idleSeconds}s`;
                 const signonText = signonTs > 0 ? new Date(signonTs).toLocaleString() : '-';
                 const timestamp = this.chatManager ? this.chatManager.getTimestamp() : '';
@@ -224,56 +237,53 @@ class IRCParser {
 
             case "330": { // WHOIS logged in as (authname)
                 this.output = this.chatManager.getActiveWindow();
-                const authAs = arr[4];
-                const info = arr.slice(5).join(" ").replace(/^:/, '').trim();
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">auth</span> : ${arr[3]} is logged in as ${authAs}${info ? ' (' + info + ')' : ''}`;
+                const authAs = params[2];
+                const info = params[3] || '';
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">auth</span> : ${params[1]} is logged in as ${authAs}${info ? ' (' + info + ')' : ''}`;
             }
 
             case "307": { // WHOIS registered nick (often 307)
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">registered</span> : ${arr[3]}${info ? ' (' + info + ')' : ''}`;
+                const info = params[2] || '';
+                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">registered</span> : ${params[1]}${info ? ' (' + info + ')' : ''}`;
             }
 
             case "320": { // WHOIS additional info (identified, etc.)
                 this.output = this.chatManager.getActiveWindow();
-                // Format: :server 320 nick target :info message
-                const nick = arr[3];
-                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                const nick = params[1];
+                const info = params[2] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">info</span> : ${nick} ${info}`;
             }
 
             case "343": { // WHOIS oper type (RPL_WHOISOPERNAME)
                 this.output = this.chatManager.getActiveWindow();
-                // Format: :server 343 nick target :is opered as opertype
-                const nick = arr[3];
-                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                const nick = params[1];
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${nick}`;
             }
 
             case "327": { // WHOIS real host/vhost
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                const info = params[1] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">vhost</span> : ${info}`;
             }
 
             case "275": // Certificate fingerprint
             case "276": { // Client certificate
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                const info = params[1] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">certificate</span> : ${info}`;
             }
 
             case "318": { // End of WHOIS
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                const info = params[1] || '';
                 return ` <span style=\"color: #ff0000\">==</span> ${info}`;
             }
 
             case "301": { // WHOIS away
                 this.output = this.chatManager.getActiveWindow();
-                const nick = arr[3];
-                const awayMsg = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                const nick = params[1];
+                const awayMsg = params[2] || '';
                 if (this.chatManager) {
                     this.chatManager.setAwayStatus(nick, true, awayMsg);
                 }
@@ -282,26 +292,37 @@ class IRCParser {
 
             case "338": { // WHOIS actual host/IP
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(4).join(" ").replace(/^:/, '').trim();
+                const info = params[2] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">actual host</span> : ${info}`;
             }
 
             case "378": { // WHOIS connecting from
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                const info = params[1] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">connecting</span> : ${info}`;
             }
 
             case "379": { // WHOIS modes
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                const info = params[1] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">modes</span> : ${info}`;
             }
 
             case "671": { // WHOIS secure connection (SSL/TLS)
                 this.output = this.chatManager.getActiveWindow();
-                const info = arr.slice(3).join(" ").replace(/^:/, '').trim();
+                const info = params[1] || '';
                 return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">secure</span> : ${info}`;
+            }
+            
+            case "710": { // KNOCK - User has knocked on channel
+                // Format: :server 710 yournick #channel knocker :has knocked on channel
+                // params: [yournick, #channel, knocker, has knocked on channel]
+                // Display as: knocker has knocked on channel #channel
+                const channel = params[1] || '';
+                const knocker = params[2] || '';
+                const message = params[3] || 'has knocked on channel';
+                this.output = "Status";
+                return ` <span style=\"color: #ff0000\">==</span> ${knocker} ${message} ${channel}`;
             }
                 
             case "001": // Welcome
@@ -310,80 +331,79 @@ class IRCParser {
                 
             case "375": // MOTD start
                 this.output = "Status";
-                parsed = arr.slice(3).join(" ");
+                parsed = params[1] || '';
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
             case "372": // MOTD line - preserve formatting
                 this.output = "Status";
-                // Get the full MOTD line after the nickname
-                const motdLine = text.substring(text.indexOf(arr[3]));
+                // MOTD line is in the last param (trailing)
+                const motdLine = params[params.length - 1] || '';
                 const cleanedMotd = motdLine.replace(/^:\s*-?\s*/, '');
                 return " <span style=\"color: #00aaff\">==</span> <span style=\"font-family: monospace; white-space: pre;\">" + cleanedMotd + "</span>";
                 
             case "376": // MOTD end
                 this.output = "Status";
-                parsed = arr.slice(3).join(" ");
+                parsed = params[1] || '';
                 this.autoJoinAfterLogin();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
             case "422": // No MOTD
                 this.output = "Status";
-                parsed = arr.slice(3).join(" ");
+                parsed = params[1] || '';
                 this.autoJoinAfterLogin();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
             default:
-                return this.handleGenericNumeric(arr, code, text, ircMsg);
+                return this.handleGenericNumeric(ircMsg, code, text);
         }
     }
     
-    handleCommand(arr, text) {
-        const command = arr[1].toLowerCase();
+    handleCommand(ircMsg, text) {
+        const { prefix, command, params } = ircMsg;
+        const cmd = command.toLowerCase();
 
-        switch (command) {
+        switch (cmd) {
             case "notice":
-                return this.handleNotice(arr);
+                return this.handleNotice(ircMsg);
             case "mode":
-                return this.handleMode(arr);
+                return this.handleMode(ircMsg);
             case "topic":
-                return this.handleTopic(arr);
+                return this.handleTopic(ircMsg);
             case "quit":
-                this.handleQuit(arr);
+                this.handleQuit(ircMsg);
                 return null;
             case "kill":
                 return null;
             case "nick":
-                this.handleNick(arr);
+                this.handleNick(ircMsg);
                 return null;
             case "invite":
-                this.handleInvite(arr);
+                this.handleInvite(ircMsg);
                 return null;
             case "join":
-                return this.handleJoin(arr);
+                return this.handleJoin(ircMsg);
             case "part":
-                return this.handlePart(arr);
+                return this.handlePart(ircMsg);
             case "kick":
-                return this.handleKick(arr);
+                return this.handleKick(ircMsg);
             case "away":
-                this.handleAway(arr);
+                this.handleAway(ircMsg);
                 return null;
             case "chghost":
-                return this.handleChghost(arr);
+                return this.handleChghost(ircMsg);
+            case "knock":
+                return this.handleKnock(ircMsg);
             case "privmsg":
-                return this.handlePrivmsg(arr, text);
+                return this.handlePrivmsg(ircMsg, text);
             default:
                 return text;
         }
     }
 
-    handleNotice(arr) {
-        const nick = this.parseNick(arr[0]);
-        let message = arr.slice(3).join(" ");
-
-        // Remove leading : if present (IRC protocol format)
-        if (message.startsWith(':')) {
-            message = message.substring(1);
-        }
+    handleNotice(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        let message = params[1] || ''; // Target is params[0], message is params[1]
 
         // Debug log - show full message
         const firstChar = message.length > 0 ? message.charCodeAt(0) : -1;
@@ -395,7 +415,6 @@ class IRCParser {
         console.log('  Starts with \\001?', firstChar === 1, 'Ends with \\001?', lastChar === 1);
 
         // Check for CTCP reply (NOTICE with \001 delimiters)
-        // Note: The ending \001 might be lost due to split(" ") parsing
         if (message.startsWith(String.fromCharCode(1))) {
             console.log('✓ Detected CTCP reply - calling handleCtcpReply');
             // Add ending \001 if missing
@@ -407,7 +426,7 @@ class IRCParser {
         }
 
         // Server notices should go to Status window, not create new query windows
-        if (nick.includes('.') || nick === 'Server' || arr[0] === nick) {
+        if (nick.includes('.') || nick === 'Server' || prefix === nick) {
             this.output = "Status";
         } else {
             this.output = nick;
@@ -437,62 +456,96 @@ class IRCParser {
         }
     }
     
-    handleMode(arr) {
-        const nick = this.parseNick(arr[0]);
-        const message = arr.slice(3).join(" ");
+    handleMode(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const target = params[0];
+        const message = params.slice(1).join(" ");
         
-        if (arr[2] === nick) {
+        if (target === nick) {
             this.output = "Status";
             return " <span style=\"color: #ff0000\">==</span> Usermode change: " + message.trim();
         } else {
-            this.output = arr[2];
-            const status = this.chatManager.getStatus(arr[2], nick);
-            const color = this.chatManager.getColor(arr[2], nick);
-            this.chatManager.setMode(arr[2], message.trim());
+            this.output = target;
+            const status = this.chatManager.getStatus(target, nick);
+            const color = this.chatManager.getColor(target, nick);
+            this.chatManager.setMode(target, message.trim());
             return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> sets mode: ${message.trim()}`;
         }
     }
     
-    handleTopic(arr) {
-        const nick = this.parseNick(arr[0]);
-        const message = arr.slice(3).join(" ");
-        const color = this.chatManager.getColor(arr[2], nick);
-        const status = this.chatManager.getStatus(arr[2], nick);
+    handleTopic(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const channel = params[0];
+        const message = params[1] || '';
+        const color = this.chatManager.getColor(channel, nick);
+        const status = this.chatManager.getStatus(channel, nick);
         
-        this.output = arr[2];
+        this.output = channel;
         this.chatManager.setTopic(this.output, message);
+        // Return raw message - parsePages will handle control codes and URLs
         return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> sets topic: ${message.trim()}`;
     }
     
-    handleQuit(arr) {
-        const nick = this.parseNick(arr[0]);
-        const reason = arr.slice(2).join(" ");
+    handleQuit(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const reason = params[0] || '';
         this.chatManager.quit(nick, reason.trim());
     }
     
-    handleNick(arr) {
-        const oldnick = this.parseNick(arr[0]);
-        this.chatManager.changeNick(oldnick, arr[2]);
+    handleNick(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const oldnick = this.parseNick(prefix);
+        const newnick = params[0];
+        this.chatManager.changeNick(oldnick, newnick);
     }
     
-    handleInvite(arr) {
-        const nick = this.parseNick(arr[0]);
+    handleInvite(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const invitedNick = params[0];
+        const channel = params[1];
         this.output = this.chatManager.getActiveWindow();
         
-        if (window.user.toLowerCase() === arr[2].toLowerCase()) {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style="color: #ff0000">==</span> ${nick} has you invited to: ${arr[3]}\n`);
+        if (window.user.toLowerCase() === invitedNick.toLowerCase()) {
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style="color: #ff0000">==</span> ${nick} has you invited to: ${channel}\n`);
         } else {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style="color: #ff0000">==</span> You have ${arr[2]} invited to: ${arr[3]}\n`);
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style="color: #ff0000">==</span> You have ${invitedNick} invited to: ${channel}\n`);
         }
     }
     
-    handleJoin(arr) {
-        const nick = this.parseNick(arr[0]);
-        const host = this.parseHost(arr[0]);
+    handleKnock(ircMsg) {
+        // KNOCK command format: :nick!user@host KNOCK #channel :message
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const channel = params[0];
+        const message = params[1] || '';
+        
+        // Set output to the channel being knocked on
+        this.output = channel;
+        
+        // Create channel page if it doesn't exist (for channels we're not in)
+        if (!this.chatManager.isPage(channel)) {
+            this.chatManager.addPage(channel, 'channel', false);
+        }
+        
+        // Trigger notification/highlight
+        this.chatManager.setHighlight(true);
+        
+        const messageText = message ? ` (${message})` : '';
+        return ` <span style="color: #ff0000">==</span> ${nick} has knocked on ${channel}${messageText}`;
+    }
+    
+    handleJoin(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const host = this.parseHost(prefix);
+        const channel = params[0];
         const color = this.chatManager.getRandomColor();
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
-            const channel = arr[2];
             if (this.chatManager.isPage(channel)) {
                 this.chatManager.delPage(channel);
             }
@@ -508,63 +561,71 @@ class IRCParser {
                 this.queueWhoCommand(channel);
             }
         } else {
-            this.output = arr[2];
-            this.chatManager.addNick(arr[2], nick, host, color);
+            this.output = channel;
+            this.chatManager.addNick(channel, nick, host, color);
         }
         
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${nick}</span> [${host}] has joined ${arr[2]}`;
-    }
-    handlePart(arr) {
-        const nick = this.parseNick(arr[0]);
-        const color = this.chatManager.getColor(arr[2], nick);
-        const status = this.chatManager.getStatus(arr[2], nick);
-        const reason = arr.slice(3).join(" ");
-        const host = this.parseHost(arr[0]);
-        
-        if (window.user.toLowerCase() === nick.toLowerCase()) {
-            this.chatManager.delPage(arr[2]);
-            // Remove channel from memory when leaving
-            this.chatManager.removeFromChannelMemory(arr[2]);
-            this.output = this.chatManager.getActiveWindow();
-            // Refresh the active window display after closing the channel
-            this.chatManager.addWindow();
-        } else {
-            this.output = arr[2];
-        }
-        
-        this.chatManager.delNick(arr[2], nick);
-        const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> [${host}] has left ${arr[2]}${reasonText}`;
-    }
-    handleKick(arr) {
-        const nick = this.parseNick(arr[0]);
-        const color = this.chatManager.getColor(arr[2], arr[3]);
-        const status = this.chatManager.getStatus(arr[2], arr[3]);
-        const reason = arr.slice(4).join(" ");
-        const host = this.parseHost(arr[0]);
-        
-        // If our user was kicked, remove from channel memory
-        if (window.user.toLowerCase() === arr[3].toLowerCase()) {
-            this.chatManager.delPage(arr[2]);
-            this.chatManager.removeFromChannelMemory(arr[2]);
-            this.output = this.chatManager.getActiveWindow();
-            // Refresh the active window display after closing the channel
-            this.chatManager.addWindow();
-        } else {
-            this.output = arr[2];
-        }
-        this.chatManager.delNick(arr[2], arr[3]);
-        
-        const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${this.chatManager.getColor(arr[2], nick)};">${this.chatManager.getStatus(arr[2], nick)}${nick}</span> [${host}] has kicked <span style="color: ${color};">${status}${arr[3]}</span>${reasonText}`;
+        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${nick}</span> [${host}] has joined ${channel}`;
     }
     
-    handleAway(arr) {
+    handlePart(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const channel = params[0];
+        const reason = params[1] || '';
+        const color = this.chatManager.getColor(channel, nick);
+        const status = this.chatManager.getStatus(channel, nick);
+        const host = this.parseHost(prefix);
+        
+        if (window.user.toLowerCase() === nick.toLowerCase()) {
+            this.chatManager.delPage(channel);
+            // Remove channel from memory when leaving
+            this.chatManager.removeFromChannelMemory(channel);
+            this.output = this.chatManager.getActiveWindow();
+            // Refresh the active window display after closing the channel
+            this.chatManager.addWindow();
+        } else {
+            this.output = channel;
+        }
+        
+        this.chatManager.delNick(channel, nick);
+        const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
+        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> [${host}] has left ${channel}${reasonText}`;
+    }
+    
+    handleKick(ircMsg) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const channel = params[0];
+        const kickedNick = params[1];
+        const reason = params[2] || '';
+        const color = this.chatManager.getColor(channel, kickedNick);
+        const status = this.chatManager.getStatus(channel, kickedNick);
+        const host = this.parseHost(prefix);
+        
+        // If our user was kicked, remove from channel memory
+        if (window.user.toLowerCase() === kickedNick.toLowerCase()) {
+            this.chatManager.delPage(channel);
+            this.chatManager.removeFromChannelMemory(channel);
+            this.output = this.chatManager.getActiveWindow();
+            // Refresh the active window display after closing the channel
+            this.chatManager.addWindow();
+        } else {
+            this.output = channel;
+        }
+        this.chatManager.delNick(channel, kickedNick);
+        
+        const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
+        return ` <span style="color: #ff0000">==</span> <span style="color: ${this.chatManager.getColor(channel, nick)};">${this.chatManager.getStatus(channel, nick)}${nick}</span> [${host}] has kicked <span style="color: ${color};">${status}${kickedNick}</span>${reasonText}`;
+    }
+    
+    handleAway(ircMsg) {
         // AWAY command format: :nick!user@host AWAY :away message
         // or: :nick!user@host AWAY (when coming back)
-        const nick = this.parseNick(arr[0]);
-        const isAway = arr.length > 2 && arr[2] !== '';
-        const awayMsg = isAway ? arr.slice(2).join(" ").replace(/^:/, '').trim() : '';
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const isAway = params.length > 0 && params[0] !== '';
+        const awayMsg = isAway ? params[0] : '';
         
         // Update away status for this nick in all channels
         if (this.chatManager) {
@@ -572,15 +633,12 @@ class IRCParser {
         }
     }
     
-    handleChghost(arr) {
+    handleChghost(ircMsg) {
         // CHGHOST command format: :nick!user@host CHGHOST new-user new-host
-        // arr[0] = :nick!user@host
-        // arr[1] = CHGHOST
-        // arr[2] = new-user
-        // arr[3] = new-host
-        const nick = this.parseNick(arr[0]);
-        const newUser = arr[2] || '';
-        const newHost = arr[3] || '';
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const newUser = params[0] || '';
+        const newHost = params[1] || '';
         const newHostMask = newUser + "@" + newHost;
         
         // Update host in all channels where the nick appears and announce in each common channel
@@ -619,15 +677,11 @@ class IRCParser {
         return null;
     }
     
-    handlePrivmsg(arr, text) {
-        const nick = this.parseNick(arr[0]);
-        
-        let message = arr.slice(3).join(" ").trim();
-        
-        // Remove leading : if present (IRC protocol format)
-        if (message.startsWith(':')) {
-            message = message.substring(1).trim();
-        }
+    handlePrivmsg(ircMsg, text) {
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const target = params[0];
+        let message = params[1] || '';
         
         // Debug log - show full message
         const firstChar = message.length > 0 ? message.charCodeAt(0) : -1;
@@ -639,7 +693,6 @@ class IRCParser {
         console.log('  Starts with \\001?', firstChar === 1, 'Ends with \\001?', lastChar === 1);
         
         // Check for CTCP request BEFORE creating query window
-        // Note: The ending \001 might be lost due to split(" ") parsing
         if (message.startsWith(String.fromCharCode(1))) {
             console.log('✓ Detected CTCP request');
             // Add ending \001 if missing
@@ -651,7 +704,7 @@ class IRCParser {
             
             // ACTION is displayed differently - needs proper output
             if (ctcpContent.startsWith("ACTION ")) {
-                this.output = (arr[2].startsWith("#") || arr[2].startsWith("&")) ? arr[2] : nick;
+                this.output = (target.startsWith("#") || target.startsWith("&")) ? target : nick;
                 if (!this.chatManager.isPage(this.output)) {
                     this.chatManager.addPage(this.output, "query", true);
                 }
@@ -659,9 +712,9 @@ class IRCParser {
             }
             
             // Other CTCP requests - display in active window (no query window)
-            const ctcpParts = ctcpContent.split(" ");
-            const ctcpCommand = ctcpParts[0];
-            const ctcpArgs = ctcpParts.slice(1).join(" ");
+            const spaceIdx = ctcpContent.indexOf(' ');
+            const ctcpCommand = spaceIdx >= 0 ? ctcpContent.substring(0, spaceIdx) : ctcpContent;
+            const ctcpArgs = spaceIdx >= 0 ? ctcpContent.substring(spaceIdx + 1) : '';
             
             // Display CTCP requests in active window
             this.output = this.chatManager.getActiveWindow();
@@ -670,14 +723,14 @@ class IRCParser {
         }
         
         // Normal message - set output and create page if needed
-        this.output = (arr[2].startsWith("#") || arr[2].startsWith("&")) ? arr[2] : nick;
+        this.output = (target.startsWith("#") || target.startsWith("&")) ? target : nick;
         
         if (!this.chatManager.isPage(this.output)) {
             this.chatManager.addPage(this.output, "query", true);
         }
         
         // Highlight in channels when user is mentioned, or for private messages
-        if (arr[2].startsWith("#") || arr[2].startsWith("&")) {
+        if (target.startsWith("#") || target.startsWith("&")) {
             // Channel message - highlight if user is mentioned
             if (text.toLowerCase().includes(window.user.toLowerCase())) {
                 this.chatManager.setHighlight(true);
@@ -687,30 +740,26 @@ class IRCParser {
             this.chatManager.setHighlight(true);
         }
         
-        return `&lt;<span style="color: ${this.chatManager.getColor(arr[2], nick)};">${this.chatManager.getStatus(arr[2], nick)}${nick}</span>&gt; ${message}`;
+        return `&lt;<span style="color: ${this.chatManager.getColor(target, nick)};">${this.chatManager.getStatus(target, nick)}${nick}</span>&gt; ${message}`;
     }
     
-    handleGenericNumeric(arr, code, text, ircMsg) {
-        this.output = this.chatManager.getActiveWindow();
+    handleGenericNumeric(ircMsg, code, text) {
+        const { params } = ircMsg;
+        this.output = "Status";
         
         const numCode = parseInt(code);
         
-        // For error codes (4xx, 5xx), use arr array
-        // Format: ["server", "CODE", "nickname", ...params]
+        // For error codes (4xx, 5xx), use params
+        // Format: params[0] = nickname, params[1+] = message parts
         if (numCode >= 400 && numCode <= 599) {
-            // Join everything from index 3 onwards (skip server, code, nickname)
-            if (arr.length > 3) {
-                const params = arr.slice(3);
+            // Join everything from index 1 onwards (skip nickname)
+            if (params.length > 1) {
+                const messageParams = params.slice(1);
                 
                 // Remove consecutive duplicates (e.g., "#channel #channel" -> "#channel")
-                const filtered = params.filter((item, index) => {
-                    return index === 0 || item !== params[index - 1];
+                const filtered = messageParams.filter((item, index) => {
+                    return index === 0 || item !== messageParams[index - 1];
                 });
-                
-                // Remove leading ':' from first param if present
-                if (filtered.length > 0 && filtered[0].startsWith(':')) {
-                    filtered[0] = filtered[0].substring(1);
-                }
                 
                 const message = filtered.join(' ');
                 return " <span style=\"color: #ff0000\">==</span> " + message;
@@ -718,12 +767,8 @@ class IRCParser {
         }
         
         // For other numerics
-        if (arr.length > 3) {
-            let message = arr.slice(3).join(' ');
-            // Remove leading ':' from message if present
-            if (message.startsWith(':')) {
-                message = message.substring(1);
-            }
+        if (params.length > 1) {
+            const message = params.slice(1).join(' ');
             return " <span style=\"color: #ff0000\">==</span> " + message;
         }
         
@@ -734,11 +779,13 @@ class IRCParser {
         return `<span style="color: #ff0000"> <span style="color: #ff0000">==</span> Error: ${message.trim()}</span>`;
     }
     
-    formatWhoisUser(arr) {
-        const nick = arr[3];
-        const user = arr[4];
-        const host = arr[5];
-        const realname = arr.slice(7).join(" ").replace(/^:/, '').trim();
+    formatWhoisUser(ircMsg) {
+        const { params } = ircMsg;
+        // params: [nick, target-nick, username, host, *, realname]
+        const nick = params[1];
+        const user = params[2];
+        const host = params[3];
+        const realname = params[5] || '';
         const stamp = this.chatManager ? this.chatManager.getTimestamp() : '';
 
         const lines = [
@@ -748,8 +795,10 @@ class IRCParser {
         return lines.join("\n");
     }
     
-    formatWhoisChannels(arr) {
-        const channels = arr.slice(4).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    formatWhoisChannels(ircMsg) {
+        const { params } = ircMsg;
+        // params: [nick, target-nick, channels...]
+        const channels = params.slice(2).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
         return ` <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block;">channels</span> : ${channels.join(" ")}`;
     }
     
@@ -870,33 +919,37 @@ class IRCParser {
     
     /**
      * Processes CAP (Capability) responses
-     * @param {Array} arr - Array with CAP message
+     * @param {Object} ircMsg - Parsed IRC message
      */
-    handleCap(arr) {
-        // Expected format: :server CAP <target> <subcommand> :cap1 cap2
-        if (arr.length < 4) return;
+    handleCap(ircMsg) {
+        const { params } = ircMsg;
+        // Expected format: :server CAP nick LS :cap1 cap2 cap3
+        // params = [nick, 'LS', 'cap1 cap2 cap3']
+        // or: :server CAP * LS :cap1 cap2 cap3
+        // params = ['*', 'LS', 'cap1 cap2 cap3']
         
-        // Support both formats:
-        // :server CAP <target> LS :cap1 cap2
-        // :server CAP LS :cap1 cap2 (no explicit target)
-        let target = arr[2];
-        let subcommand = arr[3];
-        let capsString = arr.slice(4).join(' ');
+        console.log('[IRC] handleCap called with params:', params);
         
-        const maybeSub = arr[2].toUpperCase();
-        if (['LS', 'ACK', 'NAK', 'LIST', 'NEW', 'DEL'].includes(maybeSub)) {
-            // No target present; shift indices left
-            target = '*';
-            subcommand = arr[2];
-            capsString = arr.slice(3).join(' ');
+        if (params.length < 2) {
+            console.log('[IRC] handleCap: Not enough params, returning');
+            return;
         }
-        // Remove leading colon from entire string
-        const cleanCaps = capsString.startsWith(':') ? capsString.substring(1) : capsString;
-        // Split, remove empty parts, leading ':' per cap and continuation marker '*'
-        const caps = cleanCaps
+        
+        // First param is target (nick or '*')
+        const target = params[0];
+        const subcommand = params[1].toUpperCase();
+        
+        // Capabilities are in the last parameter (trailing), possibly with '*' continuation marker
+        const capsString = params.length > 2 ? params[params.length - 1] : '';
+        
+        console.log('[IRC] handleCap: target=%s, subcommand=%s, capsString=%s', target, subcommand, capsString);
+        
+        // Split by space and filter out empty strings and continuation marker
+        const caps = capsString
             .split(' ')
-            .map(cap => cap.startsWith(':') ? cap.substring(1) : cap)
             .filter(cap => cap.length > 0 && cap !== '*');
+        
+        console.log('[IRC] handleCap: parsed caps:', caps);
         
         switch (subcommand) {
             case 'LS':

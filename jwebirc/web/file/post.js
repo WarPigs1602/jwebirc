@@ -16,11 +16,14 @@ class PostManager {
         this.typingTimeout = 4000; // 4 seconds between typing notifications
         
         // Tab completion state
-        this.tabCompletionPrefix = '';
-        this.tabCompletionMatches = [];
-        this.tabCompletionIndex = -1;
-        this.tabCompletionWordStart = -1;
-        this.lastTabTime = 0;
+        this.tabState = {
+            active: false,
+            prefix: '',
+            matches: [],
+            currentIndex: 0,
+            wordStart: 0,
+            lastTabTime: 0
+        };
     }
     
     initialize() {
@@ -567,68 +570,79 @@ class PostManager {
     }
     
     tab() {
-        const msg = this.messageInput.value;
-        const cursorPos = this.messageInput.selectionStart;
+        const text = this.messageInput.value;
+        let cursorPos = this.messageInput.selectionStart;
         const now = Date.now();
         
-        // Get the word being completed from cursor position - optimized
+        // Special case: If cursor is right after ": " (from previous tab completion)
+        // move cursor back before the ": " to enable cycling
+        if (cursorPos >= 2 && text.substring(cursorPos - 2, cursorPos) === ': ') {
+            cursorPos -= 2;
+        }
+        
+        // Find start of current word
         let wordStart = cursorPos;
-        while (wordStart > 0 && msg[wordStart - 1] !== ' ') {
+        while (wordStart > 0 && text[wordStart - 1] !== ' ') {
             wordStart--;
         }
-        const currentWord = msg.substring(wordStart, cursorPos);
         
-        // Check if this is a continuation of the previous tab completion
-        // Must have same position AND same prefix that was originally used for completion
-        const isContinuation = (now - this.lastTabTime) < 500 && // Within 500ms
-                              this.tabCompletionWordStart === wordStart &&
-                              this.tabCompletionPrefix === currentWord &&
-                              this.tabCompletionMatches.length > 0;
+        // Extract current word and check for suffix
+        const currentWord = text.substring(wordStart, cursorPos);
+        const hasSuffix = text.substring(cursorPos, cursorPos + 2) === ': ';
         
-        if (isContinuation) {
-            // Continue cycling through existing matches
-            this.tabCompletionIndex = (this.tabCompletionIndex + 1) % this.tabCompletionMatches.length;
+        // Determine if this is a continuation (cycling) or new completion
+        const timeDiff = now - this.tabState.lastTabTime;
+        const isSamePosition = this.tabState.wordStart === wordStart;
+        const isRecent = timeDiff < 2000; // 2 seconds window for cycling
+        
+        if (this.tabState.active && isSamePosition && isRecent) {
+            // Cycle to next match
+            this.tabState.currentIndex = (this.tabState.currentIndex + 1) % this.tabState.matches.length;
         } else {
-            // Start new completion - reset state and fetch new matches
-            this.tabCompletionWordStart = wordStart;
-            this.tabCompletionPrefix = currentWord;
-            this.tabCompletionMatches = this.chatManager.getTabCompletions(currentWord);
+            // Start new completion
+            this.tabState.prefix = currentWord;
+            this.tabState.matches = this.chatManager.getTabCompletions(currentWord);
+            this.tabState.wordStart = wordStart;
+            this.tabState.currentIndex = 0;
+            this.tabState.active = true;
             
-            // Early return if no matches
-            if (this.tabCompletionMatches.length === 0) {
-                this.lastTabTime = now;
+            if (this.tabState.matches.length === 0) {
+                this.tabState.active = false;
+                this.tabState.lastTabTime = now;
                 return;
             }
-            
-            // Start from first match on new completion
-            this.tabCompletionIndex = 0;
         }
         
-        // Ensure we have valid matches and index before accessing
-        if (this.tabCompletionMatches.length === 0 || this.tabCompletionIndex < 0) {
-            this.lastTabTime = now;
-            return;
-        }
+        // Get completion
+        const completion = this.tabState.matches[this.tabState.currentIndex];
         
-        const completion = this.tabCompletionMatches[this.tabCompletionIndex];
+        // Build replacement
+        const isLineStart = wordStart === 0;
+        const replacement = isLineStart ? completion + ': ' : completion;
         
-        // Replace the word with the completion
-        const isStartOfLine = wordStart === 0;
-        const completedWord = isStartOfLine ? completion + ": " : completion;
-        const newValue = msg.substring(0, wordStart) + completedWord + msg.substring(cursorPos);
+        // Determine end position (include suffix if present)
+        const endPos = hasSuffix ? cursorPos + 2 : cursorPos;
         
-        this.messageInput.value = newValue;
-        const newCursorPos = wordStart + completedWord.length;
+        // Replace text
+        const newText = text.substring(0, wordStart) + replacement + text.substring(endPos);
+        this.messageInput.value = newText;
+        
+        // Position cursor right after the completion (before ": " if at line start)
+        const newCursorPos = wordStart + (isLineStart ? completion.length : replacement.length);
         this.messageInput.setSelectionRange(newCursorPos, newCursorPos);
-        this.lastTabTime = now;
+        
+        this.tabState.lastTabTime = now;
     }
     
     resetTabCompletion() {
-        this.tabCompletionPrefix = '';
-        this.tabCompletionMatches = [];
-        this.tabCompletionIndex = -1;
-        this.tabCompletionWordStart = -1;
-        this.lastTabTime = 0;
+        this.tabState = {
+            active: false,
+            prefix: '',
+            matches: [],
+            currentIndex: 0,
+            wordStart: 0,
+            lastTabTime: 0
+        };
     }
     
     escapeHtml(text) {
