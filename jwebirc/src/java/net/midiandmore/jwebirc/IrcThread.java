@@ -121,12 +121,35 @@ public class IrcThread implements Runnable {
                 p.parseCommands(line, getSession());
             }
         } catch (IOException ex) {
-            p.sendText("NOTICE AUTH *** (jwebirc) Connection to IRC server lost: %s".formatted(ex.getMessage()), getSession(), "chat", "");
-            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "IRC connection error", ex);
+            // Log the exception details for better debugging
+            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "IRC connection error: " + ex.getClass().getName(), ex);
+            try {
+                if (getSession() != null && getSession().isOpen()) {
+                    p.sendText("NOTICE AUTH *** (jwebirc) Connection to IRC server lost: %s".formatted(ex.getMessage()), getSession(), "chat", "");
+                }
+            } catch (Exception sendEx) {
+                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Failed to send error message to client", sendEx);
+            }
         } catch (Exception ex) {
-            p.sendText("NOTICE AUTH *** (jwebirc) Unexpected error: %s".formatted(ex.getMessage()), getSession(), "chat", "");
             java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "Unexpected error in IRC thread", ex);
+            try {
+                if (getSession() != null && getSession().isOpen()) {
+                    String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
+                    p.sendText("NOTICE AUTH *** (jwebirc) Unexpected error: %s".formatted(errorMsg), getSession(), "chat", "");
+                }
+            } catch (Exception sendEx) {
+                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Failed to send exception message to client", sendEx);
+            }
         } finally {
+            // Ensure parser resources are cleaned up BEFORE closing session
+            if (p != null) {
+                try {
+                    p.closeConnection();
+                } catch (Exception ex) {
+                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing parser connection", ex);
+                }
+            }
+            
             // Ensure session is closed properly
             if (getSession() != null && getSession().isOpen()) {
                 try {
@@ -135,15 +158,15 @@ public class IrcThread implements Runnable {
                     java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing session", ex);
                 }
             }
-            // Ensure parser resources are cleaned up
-            if (p != null) {
+            
+            // Send final message only if session is still open
+            if (getSession() != null && getSession().isOpen() && p != null) {
                 try {
-                    p.closeConnection();
+                    p.sendText("NOTICE AUTH *** (jwebirc) Connection closed.", getSession(), "chat", "");
                 } catch (Exception ex) {
-                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing parser connection", ex);
+                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error sending final message", ex);
                 }
             }
-            p.sendText("NOTICE AUTH *** (jwebirc) Connection closed.", getSession(), "chat", "");
         }
     }
     

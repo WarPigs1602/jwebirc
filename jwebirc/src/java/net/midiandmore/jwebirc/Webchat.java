@@ -105,7 +105,15 @@ public class Webchat {
             }
             hostname = parseIpv6(hostname);
         }
-        getSession().setMaxIdleTimeout(sessionTimeout);
+        // Set idle timeout (in milliseconds)
+        // If sessionTimeout is too low, increase it to prevent disconnections
+        long timeoutMillis = (long) sessionTimeout;
+        if (timeoutMillis < 300000) { // Less than 5 minutes
+            timeoutMillis = 300000; // Set to 5 minutes minimum
+            Logger.getLogger(Webchat.class.getName()).log(Level.INFO, 
+                "Session timeout adjusted from " + sessionTimeout + "ms to " + timeoutMillis + "ms");
+        }
+        getSession().setMaxIdleTimeout(timeoutMillis);
         
         // Create IRC parser with proper error handling
         try {
@@ -178,6 +186,17 @@ public class Webchat {
     }
 
     /**
+     * Handle Pong messages (response to Ping)
+     *
+     * @param pongMessage The pong message
+     * @param session The session
+     */
+    @OnMessage
+    public void onPong(PongMessage pongMessage, Session session) {
+        Logger.getLogger(Webchat.class.getName()).log(Level.FINE, "Pong received from session: " + session.getId());
+    }
+    
+    /**
      * Parses a mesage
      *
      * @param message The message
@@ -228,11 +247,13 @@ public class Webchat {
     @OnClose
     public synchronized void onClose(Session session) throws IOException {
         try {
-            if (getParser() != null) {
-                getParser().logout("Page closed!");
+            if (parser != null) {
+                try {
+                    parser.logout("Page closed!");
+                } catch (Exception e) {
+                    Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during logout", e);
+                }
             }
-        } catch (Exception e) {
-            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during logout", e);
         } finally {
             cleanupResources();
         }
@@ -245,32 +266,38 @@ public class Webchat {
      * @param throwable The throwable
      */
     @OnError
-    public void onError(Session session, Throwable throwable) {
+    public synchronized void onError(Session session, Throwable throwable) {
         Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "WebSocket error occurred", throwable);
         try {
-            if (getParser() != null) {
-                getParser().logout("Error: " + throwable.getMessage());
+            if (parser != null) {
+                try {
+                    parser.logout("Error: " + (throwable != null ? throwable.getMessage() : "Unknown error"));
+                } catch (Exception e) {
+                    Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during error handling logout", e);
+                }
             }
-        } catch (Exception e) {
-            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during error handling", e);
         } finally {
             cleanupResources();
         }
     }
     
     /**
-     * Cleanup all resources (parser, threads, sockets)
+     * Cleanup all resources (parser, threads, sockets) - thread-safe
      */
-    private void cleanupResources() {
+    private synchronized void cleanupResources() {
         try {
             if (parser != null) {
-                parser.closeConnection();
+                try {
+                    parser.closeConnection();
+                } catch (Exception e) {
+                    Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error closing parser connection", e);
+                }
             }
-        } catch (Exception e) {
-            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error closing parser connection", e);
+        } finally {
+            // Set to null only after closing
+            parser = null;
+            ircThread = null;
         }
-        setParser(null);
-        setIrcThread(null);
     }
 
     /**

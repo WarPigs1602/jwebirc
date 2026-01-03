@@ -104,8 +104,6 @@ class IRCParser {
         
         // CAP handling (IRCv3 Capabilities)
         if (command === 'CAP') {
-            console.log('[IRC] CAP message received:', text);
-            console.log('[IRC] Parsed CAP ircMsg:', ircMsg);
             this.handleCap(ircMsg);
             return null;
         }
@@ -126,7 +124,6 @@ class IRCParser {
         
         // ERROR handling
         if (command.toLowerCase() === "error") {
-            console.log('[IRC] ERROR received - hiding loading screen');
             this.hideLoadingScreen();
             this.output = this.chatManager.getActiveWindow();
             return this.formatError(params.join(" "));
@@ -156,8 +153,6 @@ class IRCParser {
     handleNumericReply(ircMsg, text) {
         const { prefix, command: code, params } = ircMsg;
         let parsed = "";
-
-        console.log('[IRC] handleNumericReply called with code:', code);
 
         switch (code) {
             case "005": // Server features (ISUPPORT)
@@ -348,7 +343,6 @@ class IRCParser {
             case "376": // MOTD end
                 this.output = "Status";
                 parsed = params[1] || '';
-                console.log('[IRC] MOTD end (376) detected - calling hideLoadingScreen');
                 this.autoJoinAfterLogin();
                 this.hideLoadingScreen();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
@@ -356,7 +350,6 @@ class IRCParser {
             case "422": // No MOTD
                 this.output = "Status";
                 parsed = params[1] || '';
-                console.log('[IRC] No MOTD (422) detected - calling hideLoadingScreen');
                 this.autoJoinAfterLogin();
                 this.hideLoadingScreen();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
@@ -448,22 +441,11 @@ class IRCParser {
         const nick = this.parseNick(prefix);
         let message = params[1] || ''; // Target is params[0], message is params[1]
 
-        // Debug log - show full message
-        const firstChar = message.length > 0 ? message.charCodeAt(0) : -1;
-        const lastChar = message.length > 0 ? message.charCodeAt(message.length - 1) : -1;
-        console.log('NOTICE from', nick);
-        console.log('  Message:', message);
-        console.log('  Length:', message.length);
-        console.log('  First char code:', firstChar, 'Last char code:', lastChar);
-        console.log('  Starts with \\001?', firstChar === 1, 'Ends with \\001?', lastChar === 1);
-
         // Check for CTCP reply (NOTICE with \001 delimiters)
         if (message.startsWith(String.fromCharCode(1))) {
-            console.log('✓ Detected CTCP reply - calling handleCtcpReply');
             // Add ending \001 if missing
             if (!message.endsWith(String.fromCharCode(1))) {
                 message = message + String.fromCharCode(1);
-                console.log('  Added missing ending \\001');
             }
             return this.handleCtcpReply(nick, message);
         }
@@ -731,22 +713,11 @@ class IRCParser {
         const target = params[0];
         let message = params[1] || '';
         
-        // Debug log - show full message
-        const firstChar = message.length > 0 ? message.charCodeAt(0) : -1;
-        const lastChar = message.length > 0 ? message.charCodeAt(message.length - 1) : -1;
-        console.log('PRIVMSG from', nick);
-        console.log('  Message:', message);
-        console.log('  Length:', message.length);
-        console.log('  First char code:', firstChar, 'Last char code:', lastChar);
-        console.log('  Starts with \\001?', firstChar === 1, 'Ends with \\001?', lastChar === 1);
-        
         // Check for CTCP request BEFORE creating query window
         if (message.startsWith(String.fromCharCode(1))) {
-            console.log('✓ Detected CTCP request');
             // Add ending \001 if missing
             if (!message.endsWith(String.fromCharCode(1))) {
                 message = message + String.fromCharCode(1);
-                console.log('  Added missing ending \\001');
             }
             const ctcpContent = message.substring(1, message.length - 1);
             
@@ -978,10 +949,7 @@ class IRCParser {
         // or: :server CAP * LS :cap1 cap2 cap3
         // params = ['*', 'LS', 'cap1 cap2 cap3']
         
-        console.log('[IRC] handleCap called with params:', params);
-        
         if (params.length < 2) {
-            console.log('[IRC] handleCap: Not enough params, returning');
             return;
         }
         
@@ -992,14 +960,10 @@ class IRCParser {
         // Capabilities are in the last parameter (trailing), possibly with '*' continuation marker
         const capsString = params.length > 2 ? params[params.length - 1] : '';
         
-        console.log('[IRC] handleCap: target=%s, subcommand=%s, capsString=%s', target, subcommand, capsString);
-        
         // Split by space and filter out empty strings and continuation marker
         const caps = capsString
             .split(' ')
             .filter(cap => cap.length > 0 && cap !== '*');
-        
-        console.log('[IRC] handleCap: parsed caps:', caps);
         
         switch (subcommand) {
             case 'LS':
@@ -1034,7 +998,6 @@ class IRCParser {
         // Add to queue if not already queued
         if (!this.whoQueue.includes(target)) {
             this.whoQueue.push(target);
-            console.log(`WHO command queued for ${target}. Queue length: ${this.whoQueue.length}`);
         }
         
         // Start processing if not already running
@@ -1049,13 +1012,11 @@ class IRCParser {
     processWhoQueue() {
         if (this.whoQueue.length === 0) {
             this.whoTimer = null;
-            console.log('WHO queue empty, timer stopped');
             return;
         }
         
         // Get and send the next WHO command
         const target = this.whoQueue.shift();
-        console.log(`Sending WHO command for ${target}. Remaining in queue: ${this.whoQueue.length}`);
         window.postManager.submitTextMessage("/who " + target);
         
         // Schedule next WHO command if queue is not empty
@@ -1072,18 +1033,11 @@ class IRCParser {
      * Hide the loading screen
      */
     hideLoadingScreen() {
-        console.log('hideLoadingScreen called');
         const loadingScreen = document.getElementById('loadingScreen');
-        console.log('loadingScreen element:', loadingScreen);
         if (loadingScreen) {
             if (!loadingScreen.classList.contains('hidden')) {
                 loadingScreen.classList.add('hidden');
-                console.log('Loading screen hidden');
-            } else {
-                console.log('Loading screen already hidden');
             }
-        } else {
-            console.log('Loading screen element not found');
         }
     }
 }

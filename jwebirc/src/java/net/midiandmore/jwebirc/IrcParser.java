@@ -188,14 +188,14 @@ public class IrcParser {
     }
 
     /**
-     * @return the serverPasssword
+     * @return the serverPassword
      */
     public String getServerPassword() {
         return serverPassword;
     }
 
     /**
-     * @param serverPasssword the serverPasssword to set
+     * @param serverPassword the serverPassword to set
      */
     public void setServerPassword(String serverPassword) {
         this.serverPassword = serverPassword;
@@ -1021,36 +1021,40 @@ public class IrcParser {
     
     /**
      * Close the IRC connection and cleanup resources
+     * This method is synchronized to prevent multiple threads from cleaning up simultaneously
      */
-    public void closeConnection() {
-        // Close output stream
+    public synchronized void closeConnection() {
+        // Close output stream first (stop sending)
         if (out != null) {
             try {
                 out.close();
             } catch (Exception e) {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Error closing output stream", e);
+            } finally {
+                out = null;
             }
-            out = null;
         }
         
-        // Close input stream
+        // Close input stream (stop receiving)
         if (in != null) {
             try {
                 in.close();
             } catch (Exception e) {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Error closing input stream", e);
+            } finally {
+                in = null;
             }
-            in = null;
         }
         
-        // Close socket
+        // Close socket last
         if (socket != null && !socket.isClosed()) {
             try {
                 socket.close();
             } catch (IOException ex) {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error closing socket", ex);
+            } finally {
+                socket = null;
             }
-            socket = null;
         }
     }
 

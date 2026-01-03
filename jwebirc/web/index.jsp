@@ -431,13 +431,6 @@
     });
 </script>
 <script src="file/notifications.js"></script>
-<script>
-    // Debug: Check if NotificationManager is loaded
-    console.log('[Debug] NotificationManager available:', typeof NotificationManager !== 'undefined');
-    if (typeof NotificationManager === 'undefined') {
-        console.error('[Debug] NotificationManager not loaded! Check notifications.js');
-    }
-</script>
 <script src="file/chat.js"></script>
 <script src="file/irc.js"></script> 
 <script src="file/post.js"></script> 

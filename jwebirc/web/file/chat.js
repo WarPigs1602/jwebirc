@@ -23,6 +23,8 @@ class ChatManager {
         this.socket = null;
         this.login = true;
         this.highlight = false;
+        this.keepAliveInterval = null; // Keep-alive timer
+        this.keepAliveTimeout = 240000; // Send keep-alive every 4 minutes (240 seconds)
         
         // DOM elements
         this.navWindow = null;
@@ -88,7 +90,6 @@ class ChatManager {
         ];
         
         this.capabilities.requested = [...desiredCaps];
-        console.log('[CAP] Client ready to handle capabilities:', desiredCaps);
     }
     
     /**
@@ -96,17 +97,14 @@ class ChatManager {
      * @param {Array} caps - Array of available capabilities
      */
     handleCapLS(caps) {
-        console.log('[CAP] Server capabilities:', caps);
         this.capabilities.available = caps;
         
         // Request only desired capabilities that are actually available
         const toRequest = this.capabilities.requested.filter(cap => caps.includes(cap));
-        console.log('[CAP] Requested caps that are available:', toRequest);
         
         // Also request SASL if it's available (backend may require it)
         if (caps.includes('sasl') && !toRequest.includes('sasl')) {
             toRequest.unshift('sasl');
-            console.log('[CAP] Added SASL to request');
         }
         
         if (toRequest.length > 0) {
@@ -114,12 +112,10 @@ class ChatManager {
             if (window.postManager) {
                 // Send with / prefix as required by server
                 const reqCommand = '/CAP REQ :' + toRequest.join(' ');
-                console.log('[CAP] Sending:', reqCommand);
                 window.postManager.sendRawMessage(reqCommand);
             }
         } else {
             // No capabilities available, end negotiation
-            console.log('[CAP] No desired capabilities available, ending negotiation');
             this.endCapNegotiation();
         }
     }
@@ -129,14 +125,12 @@ class ChatManager {
      * @param {Array} caps - Array of activated capabilities
      */
     handleCapACK(caps) {
-        console.log('[CAP] ACK received for:', caps);
         // Replace capabilities list (not push, to avoid duplicates)
         this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
         
         // Don't show message here - will be shown when negotiation ends
         
         // End CAP negotiation
-        console.log('[CAP] Ending negotiation after ACK');
         this.endCapNegotiation();
     }
     
@@ -145,12 +139,10 @@ class ChatManager {
      * @param {Array} caps - Array of rejected capabilities
      */
     handleCapNAK(caps) {
-        console.log('[CAP] NAK received for:', caps);
         this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Capabilities rejected: " + caps.join(', ') + "\n");
         this.addWindow();
         
         // End CAP negotiation even on rejection
-        console.log('[CAP] Ending negotiation after NAK');
         this.endCapNegotiation();
     }
     
@@ -158,24 +150,17 @@ class ChatManager {
      * Ends CAP negotiation
      */
     endCapNegotiation() {
-        console.log('[CAP] endCapNegotiation called, active:', this.capNegotiationActive);
         if (this.capNegotiationActive) {
             if (window.postManager) {
-                console.log('[CAP] Sending CAP END');
                 window.postManager.sendRawMessage('/CAP END');
             }
             this.capNegotiationActive = false;
             
             // Show all enabled capabilities once at the end
             if (this.capabilities.enabled.length > 0) {
-                console.log('[CAP] Enabled capabilities:', this.capabilities.enabled);
                 this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> Capabilities enabled: " + this.capabilities.enabled.join(', ') + "\n");
                 this.addWindow();
-            } else {
-                console.log('[CAP] No capabilities were enabled');
             }
-        } else {
-            console.log('[CAP] Negotiation already ended, skipping');
         }
     }
     
@@ -405,9 +390,10 @@ class ChatManager {
     
     setupWebSocket() {
         this.socket.onopen = (event) => {
-            console.log('[WebSocket] Connection opened');
             // Request IRCv3 capabilities
             this.requestCapabilities();
+            // Start keep-alive mechanism
+            this.startKeepAlive();
         };
         
         this.socket.onerror = (errorEvent) => {
@@ -419,11 +405,16 @@ class ChatManager {
         };
         
         this.socket.onclose = (closeEvent) => {
-            console.log('[WebSocket] Connection closed. Code:', closeEvent.code, 'Reason:', closeEvent.reason);
+            // Stop keep-alive
+            this.stopKeepAlive();
             
             // Hide loading screen on disconnect
             if (window.ircParser && window.ircParser.hideLoadingScreen) {
-                window.ircParser.hideLoadingScreen();
+                try {
+                    window.ircParser.hideLoadingScreen();
+                } catch (e) {
+                    console.warn('[WebSocket] Error hiding loading screen:', e);
+                }
             }
             
             let closeMsg = "Connection to server closed";
@@ -458,14 +449,18 @@ class ChatManager {
                 const msg = JSON.parse(messageEvent.data);
                 const { message, category, target } = msg;
                 
-                console.log('[WebSocket] Received:', { category, message: message?.substring(0, 100) });
-                
                 if (category === "error") {
                     console.error('[WebSocket] Server error:', message);
                     this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: " + message + "\n");
                     this.addWindow();
                 } else if (category === "chat") {
                     if (message !== "Ping? Pong!") {
+                        // Filter out PING/PONG messages (keep-alive) - process silently
+                        if (this.isKeepAliveMessage(message)) {
+                            this.handleKeepAliveMessage(message);
+                            return; // Don't display to user
+                        }
+                        
                         if (window.ircParser) {
                             // If target is "active", force output to active window
                             if (target === "active") {
@@ -492,6 +487,93 @@ class ChatManager {
                 this.addWindow();
             }
         };
+    }
+    
+    /**
+     * Start keep-alive mechanism to prevent WebSocket idle timeout
+     */
+    startKeepAlive() {
+        // Clear any existing interval
+        this.stopKeepAlive();
+        
+        // Send a ping message every 4 minutes to keep connection alive
+        this.keepAliveInterval = setInterval(() => {
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                try {
+                    // Send a PING command to the IRC server through WebSocket
+                    if (window.postManager) {
+                        window.postManager.sendRawMessage('/PING :keepalive');
+                    }
+                } catch (e) {
+                    console.error('[WebSocket] Error sending keep-alive:', e);
+                }
+            }
+        }, this.keepAliveTimeout);
+    }
+    
+    /**
+     * Stop keep-alive mechanism
+     */
+    stopKeepAlive() {
+        if (this.keepAliveInterval) {
+            clearInterval(this.keepAliveInterval);
+            this.keepAliveInterval = null;
+        }
+    }
+    
+    /**
+     * Check if a message is a PING or PONG keep-alive message
+     * @param {string} message - The IRC message
+     * @returns {boolean} True if it's a keep-alive message
+     */
+    isKeepAliveMessage(message) {
+        const trimmed = (message || '').trim();
+        if (!trimmed) {
+            return false;
+        }
+
+        // Strip IRCv3 message tags (start with @)
+        const withoutTags = trimmed.startsWith('@') ? trimmed.slice(trimmed.indexOf(' ') + 1) : trimmed;
+
+        // Check for PING/PONG commands at start (with optional prefix)
+        if (/^(:\S+\s+)?PING\s+/i.test(withoutTags)) {
+            return true;
+        }
+        if (/^(:\S+\s+)?PONG\s+/i.test(withoutTags)) {
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Handle keep-alive messages (PING/PONG) silently
+     * Responds to PING with PONG in the same format as received
+     * @param {string} message - The IRC message
+     */
+    handleKeepAliveMessage(message) {
+        const trimmed = message.trim();
+        // Ignore IRCv3 message tags if present (start with @)
+        const withoutTags = trimmed.startsWith('@') ? trimmed.slice(trimmed.indexOf(' ') + 1) : trimmed;
+
+        // PING handling - capture everything after the PING command and echo it back in PONG
+        const pingMatch = withoutTags.match(/^(:\S+\s+)?PING\s+(.+)$/i);
+        if (pingMatch) {
+            const payload = pingMatch[2].trim();
+            if (window.postManager) {
+                try {
+                    // Echo payload as-is to honor IRC PING/PONG rules (preserve colon/trailing)
+                    window.postManager.sendRawMessage('/PONG ' + payload);
+                } catch (e) {
+                    console.error('[IRC Keep-Alive] Error sending PONG:', e);
+                }
+            }
+            return;
+        }
+
+        // PONG handling - informational only
+        const pongMatch = withoutTags.match(/^(:\S+\s+)?PONG\s+(.+)$/i);
+        if (pongMatch) {
+        }
     }
     
     initializePages() {
@@ -2495,7 +2577,6 @@ class ChatManager {
                 if (channel.startsWith('#') || channel.startsWith('&')) {
                     const reason = prompt(`Kick reason for ${nick}:`, 'Kicked');
                     if (reason !== null) {
-                        console.log(`[handleNickAction] Sending command: /kick ${channel} ${nick} ${reason}`);
                         window.postManager.submitTextMessage(`/kick ${channel} ${nick} ${reason}`);
                     }
                 }
@@ -2555,9 +2636,6 @@ class ChatManager {
      * Toggle notification dropdown menu
      */
     toggleNotifications() {
-        // For now, we'll use console log and a simple implementation
-        console.log('Notifications:', Array.from(this.unreadCounts.entries()));
-        
         // Switch to first unread tab
         const firstUnread = this.unreadCounts.keys().next().value;
         if (firstUnread) {

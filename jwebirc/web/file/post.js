@@ -721,7 +721,6 @@ function initializeIRCParser() {
     if (window.IRCParser && window.chatManager) {
         const ircParser = new window.IRCParser(window.chatManager);
         window.ircParser = ircParser;
-        console.log('[IRC Parser] Initialized successfully');
     } else if (ircParserInitAttempts < maxIRCParserAttempts) {
         // Retry after a short delay if chatManager isn't ready yet
         ircParserInitAttempts++;
