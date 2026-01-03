@@ -73,10 +73,12 @@
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: linear-gradient(135deg, var(--primary-dark) 0%, #4a0000 100%);
+                background: var(--background-main);
                 display: flex;
+                flex-direction: column;
                 align-items: center;
                 justify-content: center;
+                gap: 20px;
                 z-index: 9999;
                 transition: opacity 0.5s ease;
             }
@@ -86,6 +88,13 @@
                 pointer-events: none;
             }
             
+            .loading-content {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 20px;
+            }
+            
             .loading-spinner {
                 width: 50px;
                 height: 50px;
@@ -93,6 +102,13 @@
                 border-top-color: var(--primary-color);
                 border-radius: 50%;
                 animation: spin 1s linear infinite;
+            }
+            
+            .loading-text {
+                color: var(--text-primary);
+                font-size: 16px;
+                font-weight: 500;
+                text-align: center;
             }
             
             @keyframes spin {
@@ -115,5 +131,17 @@
     </head>
     <body>
         <div class="loading-screen" id="loadingScreen">
-            <div class="loading-spinner"></div>
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <div class="loading-text" id="loadingText">Connecting to IRC...</div>
+            </div>
         </div>
+        <script>
+            // Update loading text with nickname when available
+            if (typeof window.user !== 'undefined' && window.user) {
+                const loadingText = document.getElementById('loadingText');
+                if (loadingText) {
+                    loadingText.textContent = 'Connecting to IRC as ' + window.user + '...';
+                }
+            }
+        </script>

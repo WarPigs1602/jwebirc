@@ -155,6 +155,8 @@ class IRCParser {
         const { prefix, command: code, params } = ircMsg;
         let parsed = "";
 
+        console.log('[IRC] handleNumericReply called with code:', code);
+
         switch (code) {
             case "005": // Server features (ISUPPORT)
                 // Parse PREFIX parameter
@@ -344,14 +346,53 @@ class IRCParser {
             case "376": // MOTD end
                 this.output = "Status";
                 parsed = params[1] || '';
+                console.log('[IRC] MOTD end (376) detected - calling hideLoadingScreen');
                 this.autoJoinAfterLogin();
+                this.hideLoadingScreen();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
             case "422": // No MOTD
                 this.output = "Status";
                 parsed = params[1] || '';
+                console.log('[IRC] No MOTD (422) detected - calling hideLoadingScreen');
                 this.autoJoinAfterLogin();
+                this.hideLoadingScreen();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
+                
+            case "433": // Nickname already in use
+                {
+                    this.output = "Status";
+                    const currentNick = params[1] || window.user;
+                    const message = params[2] || 'Nickname is already in use';
+                    
+                    // Generate alternative nickname by appending underscore or number
+                    let newNick = currentNick;
+                    if (newNick.endsWith('_')) {
+                        // If already has underscore, try adding a number
+                        const match = newNick.match(/^(.+?)_*(\d*)$/);
+                        if (match) {
+                            const base = match[1];
+                            const num = match[2] ? parseInt(match[2]) + 1 : 1;
+                            newNick = base + '_' + num;
+                        }
+                    } else {
+                        // Add underscore
+                        newNick = currentNick + '_';
+                    }
+                    
+                    // Ensure nick doesn't exceed 15 characters
+                    if (newNick.length > 15) {
+                        newNick = newNick.substring(0, 15);
+                    }
+                    
+                    // Update user and send new NICK command
+                    window.user = newNick;
+                    if (window.postManager) {
+                        window.postManager.submitTextMessage('/nick ' + newNick);
+                    }
+                    
+                    return ` <span style=\"color: #ff0000\">==</span> ${message} - Trying: ${newNick}`;
+                }
                 
             default:
                 return this.handleGenericNumeric(ircMsg, code, text);
@@ -533,6 +574,11 @@ class IRCParser {
         
         // Trigger notification/highlight
         this.chatManager.setHighlight(true);
+        
+        // Trigger browser notification for knock
+        if (this.chatManager.notificationManager) {
+            this.chatManager.notificationManager.notifyKnock(channel, nick, message);
+        }
         
         const messageText = message ? ` (${message})` : '';
         return ` <span style="color: #ff0000">==</span> ${nick} has knocked on ${channel}${messageText}`;
@@ -749,9 +795,11 @@ class IRCParser {
         
         const numCode = parseInt(code);
         
-        // For error codes (4xx, 5xx), use params
+        // For error codes (4xx, 5xx), hide loading screen and use params
         // Format: params[0] = nickname, params[1+] = message parts
         if (numCode >= 400 && numCode <= 599) {
+            this.hideLoadingScreen();
+            
             // Join everything from index 1 onwards (skip nickname)
             if (params.length > 1) {
                 const messageParams = params.slice(1);
@@ -1015,6 +1063,25 @@ class IRCParser {
             }, this.whoDelay);
         } else {
             this.whoTimer = null;
+        }
+    }
+    
+    /**
+     * Hide the loading screen
+     */
+    hideLoadingScreen() {
+        console.log('hideLoadingScreen called');
+        const loadingScreen = document.getElementById('loadingScreen');
+        console.log('loadingScreen element:', loadingScreen);
+        if (loadingScreen) {
+            if (!loadingScreen.classList.contains('hidden')) {
+                loadingScreen.classList.add('hidden');
+                console.log('Loading screen hidden');
+            } else {
+                console.log('Loading screen already hidden');
+            }
+        } else {
+            console.log('Loading screen element not found');
         }
     }
 }

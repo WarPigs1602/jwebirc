@@ -6,15 +6,14 @@
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
         <script>
-            // Remove loading screen after WebSocket connection
-            window.addEventListener('load', function() {
-                setTimeout(function() {
-                    const loadingScreen = document.getElementById('loadingScreen');
-                    if (loadingScreen) {
-                        loadingScreen.classList.add('hidden');
-                    }
-                }, 800);
-            });
+            // Update loading text with nickname when window.user is set
+            if (typeof window.user !== 'undefined' && window.user) {
+                const loadingText = document.getElementById('loadingText');
+                if (loadingText) {
+                    loadingText.textContent = 'Connecting to IRC as ' + window.user + '...';
+                }
+            }
+            // Loading screen will be hidden by IRC parser when MOTD is received or on error
         </script>
     </body>
 </html>

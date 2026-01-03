@@ -103,6 +103,21 @@
                         <input type="checkbox" id="loginOptNavLeft" class="nav-toggle">
                     </label>
                     <div class="nav-dropdown-divider"></div>
+                    <label class="nav-dropdown-item" for="loginOptNotifications">
+                        <div class="nav-dropdown-item-left">
+                            <i class="fas fa-bell"></i>
+                            <span>Browser Notifications</span>
+                        </div>
+                        <input type="checkbox" id="loginOptNotifications" class="nav-toggle" checked>
+                    </label>
+                    <label class="nav-dropdown-item" for="loginOptNotificationSound">
+                        <div class="nav-dropdown-item-left">
+                            <i class="fas fa-volume-up"></i>
+                            <span>Notification Sound</span>
+                        </div>
+                        <input type="checkbox" id="loginOptNotificationSound" class="nav-toggle" checked>
+                    </label>
+                    <div class="nav-dropdown-divider"></div>
                     <div class="nav-dropdown-item slider-item">
                         <div class="nav-dropdown-item-header">
                             <i class="fas fa-palette"></i>

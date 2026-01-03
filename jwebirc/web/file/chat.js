@@ -63,6 +63,9 @@ class ChatManager {
         this.notificationBadge = null;
         this.notificationButton = null;
         
+        // Browser notification manager
+        this.notificationManager = null;
+        
         // Server PREFIX mapping: modes -> symbols (e.g., 'qaohv' -> '~&@%+')
         this.serverPrefixes = {
             modes: 'ov',
@@ -376,6 +379,9 @@ class ChatManager {
         // Notification system
         this.notificationBadge = document.getElementById("notificationBadge");
         this.notificationButton = document.getElementById("navNotifications");
+        
+        // Initialize browser notification manager
+        this.notificationManager = new NotificationManager(this);
 
         // Restore and apply UI preferences
         this.loadUiPreferences();
@@ -446,6 +452,8 @@ class ChatManager {
                 const msg = JSON.parse(messageEvent.data);
                 const { message, category, target } = msg;
                 
+                console.log('[WebSocket] Received:', { category, message: message?.substring(0, 100) });
+                
                 if (category === "error") {
                     console.error('[WebSocket] Server error:', message);
                     this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: " + message + "\n");
@@ -461,6 +469,9 @@ class ChatManager {
                                 }
                             }
                             window.ircParser.parseOutput(message);
+                        } else {
+                            console.warn('[WebSocket] IRC Parser not initialized, displaying raw message');
+                            this.parsePage(this.getTimestamp() + " " + message + "\n");
                         }
                         this.addWindow();
                     }
@@ -470,7 +481,7 @@ class ChatManager {
                     this.addWindow();
                 }
             } catch (error) {
-                console.error('[WebSocket] Error parsing message:', error);
+                console.error('[WebSocket] Error parsing message:', error, messageEvent.data);
                 this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error parsing server message: " + error.message + "\n");
                 this.addWindow();
             }
@@ -526,6 +537,8 @@ class ChatManager {
         
         // Load URL parameters (overrides saved preferences)
         this.loadUrlParameters();
+        
+        return this.uiPrefs;
     }
     
     loadUrlParameters() {
@@ -654,6 +667,64 @@ class ChatManager {
                 if (e.key === 'Escape') {
                     closeMenu();
                 }
+            });
+        }
+        
+        // Browser notification controls
+        const notificationToggle = document.getElementById('optNotifications');
+        const notificationSoundToggle = document.getElementById('optNotificationSound');
+        
+        if (notificationToggle && this.notificationManager) {
+            // Load saved notification preferences from login page
+            const savedPrefs = this.loadUiPreferences() || {};
+            
+            notificationToggle.addEventListener('change', async () => {
+                if (notificationToggle.checked) {
+                    const enabled = await this.notificationManager.enable();
+                    if (!enabled) {
+                        notificationToggle.checked = false;
+                        this.showEventBar('Browser notifications were denied', 'error');
+                    } else {
+                        this.showEventBar('Browser notifications enabled', 'success');
+                        this.saveUiPreference('notificationsEnabled', true);
+                    }
+                } else {
+                    this.notificationManager.disable();
+                    this.showEventBar('Browser notifications disabled', 'info');
+                    this.saveUiPreference('notificationsEnabled', false);
+                }
+            });
+            
+            // Apply saved preference or default (non-blocking)
+            const notificationsEnabled = savedPrefs.notificationsEnabled !== false; // default true
+            if (notificationsEnabled) {
+                // Automatically enable notifications on first load
+                if (this.notificationManager.getPermission() === 'granted') {
+                    notificationToggle.checked = true;
+                    this.notificationManager.enabled = true;
+                } else if (this.notificationManager.getPermission() === 'default') {
+                    // Request permission automatically (non-blocking)
+                    this.notificationManager.enable().then(enabled => {
+                        notificationToggle.checked = enabled;
+                    });
+                }
+            } else {
+                notificationToggle.checked = false;
+                this.notificationManager.enabled = false;
+            }
+        }
+        
+        if (notificationSoundToggle && this.notificationManager) {
+            // Load saved sound preference from login page
+            const savedPrefs = this.loadUiPreferences() || {};
+            const soundEnabled = savedPrefs.notificationSound !== false; // default true
+            
+            this.notificationManager.soundEnabled = soundEnabled;
+            notificationSoundToggle.checked = soundEnabled;
+            
+            notificationSoundToggle.addEventListener('change', () => {
+                this.notificationManager.toggleSound(notificationSoundToggle.checked);
+                this.saveUiPreference('notificationSound', notificationSoundToggle.checked);
             });
         }
     }
@@ -1891,6 +1962,25 @@ class ChatManager {
                     if (isQuery || this.highlight) {
                         const currentCount = this.unreadCounts.get(pg) || 0;
                         this.updateUnreadCount(pg, currentCount + 1);
+                        
+                        // Trigger browser notification
+                        if (this.notificationManager) {
+                            // Extract clean text from parsed HTML for notification
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = parsed;
+                            const cleanText = tempDiv.textContent || tempDiv.innerText || '';
+                            
+                            if (isQuery) {
+                                // Private message notification
+                                this.notificationManager.notifyPrivateMessage(pg, cleanText);
+                            } else if (this.highlight) {
+                                // Highlight/mention notification
+                                // Try to extract nick from message if possible
+                                const nickMatch = cleanText.match(/<([^>]+)>/);
+                                const nick = nickMatch ? nickMatch[1] : 'Jemand';
+                                this.notificationManager.notifyHighlight(pg, nick, cleanText);
+                            }
+                        }
                     }
                 }
                 
@@ -2337,8 +2427,9 @@ class ChatManager {
     }
 }
 
-// Initialize ChatManager
+// Initialize ChatManager and make it globally available
 const chatManager = new ChatManager();
+window.chatManager = chatManager;
 
 // Start initialization when DOM is ready
 if (document.readyState === 'loading') {

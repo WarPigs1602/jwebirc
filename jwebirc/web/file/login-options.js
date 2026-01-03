@@ -13,7 +13,9 @@ class LoginOptionsManager {
             hue: 0,
             hideTopic: false,
             hideNicklist: false,
-            navLeft: false
+            navLeft: false,
+            notificationsEnabled: true,
+            notificationSound: true
         };
         this.optionsMenu = null;
         this.optionsToggle = null;
@@ -74,6 +76,12 @@ class LoginOptionsManager {
                 if (parsed.navLeft !== undefined) {
                     this.uiPrefs.navLeft = parsed.navLeft;
                 }
+                if (parsed.notificationsEnabled !== undefined) {
+                    this.uiPrefs.notificationsEnabled = parsed.notificationsEnabled;
+                }
+                if (parsed.notificationSound !== undefined) {
+                    this.uiPrefs.notificationSound = parsed.notificationSound;
+                }
             }
         } catch (e) {
             console.warn('Could not load login preferences:', e);
@@ -119,6 +127,14 @@ class LoginOptionsManager {
         
         if (params.has('navLeft')) {
             this.uiPrefs.navLeft = params.get('navLeft') === 'true';
+        }
+        
+        if (params.has('notificationsEnabled')) {
+            this.uiPrefs.notificationsEnabled = params.get('notificationsEnabled') === 'true';
+        }
+        
+        if (params.has('notificationSound')) {
+            this.uiPrefs.notificationSound = params.get('notificationSound') === 'true';
         }
     }
     
@@ -190,6 +206,24 @@ class LoginOptionsManager {
                 this.savePreferences();
             });
         }
+        
+        // Browser Notifications toggle
+        const notificationsControl = document.getElementById('loginOptNotifications');
+        if (notificationsControl) {
+            notificationsControl.addEventListener('change', (e) => {
+                this.uiPrefs.notificationsEnabled = e.target.checked;
+                this.savePreferences();
+            });
+        }
+        
+        // Notification Sound toggle
+        const notificationSoundControl = document.getElementById('loginOptNotificationSound');
+        if (notificationSoundControl) {
+            notificationSoundControl.addEventListener('change', (e) => {
+                this.uiPrefs.notificationSound = e.target.checked;
+                this.savePreferences();
+            });
+        }
     }
     
     /**
@@ -214,18 +248,13 @@ class LoginOptionsManager {
     
     /**
      * Apply hue to login page
-     * Rotates the primary color hue
+     * Rotates the primary color hue by adjusting CSS custom properties
      */
     applyHue() {
         const root = document.documentElement;
-        const hueRotate = `hsl(${this.uiPrefs.hue}, 100%, 50%)`;
-        root.style.setProperty('--login-hue-rotate', this.uiPrefs.hue);
         
-        // Apply filter to specific elements if needed
-        const loginContainer = document.querySelector('.login-container');
-        if (loginContainer) {
-            loginContainer.style.filter = `hue-rotate(${this.uiPrefs.hue}deg)`;
-        }
+        // Apply hue-rotate filter to entire page (same as chat)
+        root.style.setProperty('--hue-rotate', `${this.uiPrefs.hue}deg`);
     }
     
     /**
@@ -238,15 +267,23 @@ class LoginOptionsManager {
         const hideTopicControl = document.getElementById('loginOptHideTopic');
         const hideNicklistControl = document.getElementById('loginOptHideNicklist');
         const navLeftControl = document.getElementById('loginOptNavLeft');
+        const notificationsControl = document.getElementById('loginOptNotifications');
+        const notificationSoundControl = document.getElementById('loginOptNotificationSound');
         
         if (fontSizeControl) {
             fontSizeControl.value = this.uiPrefs.fontSize;
-            document.getElementById('loginFontSizeValue').textContent = `${this.uiPrefs.fontSize}px`;
+            const fontSizeValue = document.getElementById('loginFontSizeValue');
+            if (fontSizeValue) {
+                fontSizeValue.textContent = `${this.uiPrefs.fontSize}px`;
+            }
         }
         
         if (hueControl) {
             hueControl.value = this.uiPrefs.hue;
-            document.getElementById('loginHueValue').textContent = `${this.uiPrefs.hue}°`;
+            const hueValue = document.getElementById('loginHueValue');
+            if (hueValue) {
+                hueValue.textContent = `${this.uiPrefs.hue}°`;
+            }
         }
         
         if (hideTopicControl) {
@@ -259,6 +296,14 @@ class LoginOptionsManager {
         
         if (navLeftControl) {
             navLeftControl.checked = this.uiPrefs.navLeft;
+        }
+        
+        if (notificationsControl) {
+            notificationsControl.checked = this.uiPrefs.notificationsEnabled;
+        }
+        
+        if (notificationSoundControl) {
+            notificationSoundControl.checked = this.uiPrefs.notificationSound;
         }
         
         // Apply styles
@@ -280,7 +325,9 @@ class LoginOptionsManager {
                 hue: this.uiPrefs.hue,
                 hideTopic: this.uiPrefs.hideTopic,
                 hideNicklist: this.uiPrefs.hideNicklist,
-                navLeft: this.uiPrefs.navLeft
+                navLeft: this.uiPrefs.navLeft,
+                notificationsEnabled: this.uiPrefs.notificationsEnabled,
+                notificationSound: this.uiPrefs.notificationSound
             };
             
             // Merge with existing chat preferences
@@ -293,7 +340,9 @@ class LoginOptionsManager {
                         hue: this.uiPrefs.hue,
                         hideTopic: this.uiPrefs.hideTopic,
                         hideNicklist: this.uiPrefs.hideNicklist,
-                        navLeft: this.uiPrefs.navLeft
+                        navLeft: this.uiPrefs.navLeft,
+                        notificationsEnabled: this.uiPrefs.notificationsEnabled,
+                        notificationSound: this.uiPrefs.notificationSound
                     };
                 } catch (e) {
                     // If parse fails, just use our values

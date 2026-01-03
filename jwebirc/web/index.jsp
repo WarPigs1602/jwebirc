@@ -283,6 +283,21 @@
                             <input type="checkbox" id="optNavLeft" class="nav-toggle">
                         </label>
                         <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="optNotifications">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-bell"></i>
+                                <span>Browser Notifications</span>
+                            </div>
+                            <input type="checkbox" id="optNotifications" class="nav-toggle" checked>
+                        </label>
+                        <label class="nav-dropdown-item" for="optNotificationSound">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-volume-up"></i>
+                                <span>Notification Sound</span>
+                            </div>
+                            <input type="checkbox" id="optNotificationSound" class="nav-toggle" checked>
+                        </label>
+                        <div class="nav-dropdown-divider"></div>
                         <div class="nav-dropdown-item slider-item">
                             <div class="nav-dropdown-item-header">
                                 <i class="fas fa-text-height"></i>
@@ -390,15 +405,8 @@
     window.user = "<% out.print(paramNick); %>";
     window.chan = "<% out.print(paramChannel); %>";
     
-    // Hide loading screen when page is ready
+    // Loading screen will be hidden by IRC connection logic
     window.addEventListener('load', function() {
-        setTimeout(function() {
-            const loadingScreen = document.getElementById('loadingScreen');
-            if (loadingScreen) {
-                loadingScreen.classList.add('hidden');
-            }
-        }, 500);
-        
         // Setup format help button
         const formatHelpBtn = document.getElementById('formatHelpBtn');
         const formatHelp = document.getElementById('formatHelp');
@@ -421,6 +429,14 @@
             });
         }
     });
+</script>
+<script src="file/notifications.js"></script>
+<script>
+    // Debug: Check if NotificationManager is loaded
+    console.log('[Debug] NotificationManager available:', typeof NotificationManager !== 'undefined');
+    if (typeof NotificationManager === 'undefined') {
+        console.error('[Debug] NotificationManager not loaded! Check notifications.js');
+    }
 </script>
 <script src="file/chat.js"></script>
 <script src="file/irc.js"></script> 
@@ -759,6 +775,8 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         let defaultHideTopic = false;
         let defaultHideNicklist = false;
         let defaultNavLeft = false;
+        let defaultNotifications = true;
+        let defaultNotificationSound = true;
         try {
             const stored = localStorage.getItem('jwebirc_ui');
             if (stored) {
@@ -768,59 +786,64 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
                 defaultHideTopic = parsed.hideTopic || false;
                 defaultHideNicklist = parsed.hideNicklist || false;
                 defaultNavLeft = parsed.navLeft || false;
+                defaultNotifications = parsed.notificationsEnabled !== false;
+                defaultNotificationSound = parsed.notificationSound !== false;
             }
         } catch (e) {
             // Use defaults if localStorage is unavailable
         }
+        
+        // Get current primary color from CSS variables
+        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#5865f2';
         
         // Create configuration modal
         const configModal = document.createElement('div');
         configModal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;';
         
         const configContent = document.createElement('div');
-        configContent.style.cssText = 'background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;';
+        configContent.style.cssText = 'background: #2d2d3d; color: #ffffff; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5);';
         
         configContent.innerHTML = `
-            <h3 style="margin-top: 0; color: #990000;"><i class="fas fa-cog"></i> Configure Embed Link</h3>
-            <p style="color: #666; margin-bottom: 20px;">Customize the nickname and channel for the embed link:</p>
+            <h3 style="margin-top: 0; color: ` + primaryColor + `;"><i class="fas fa-cog"></i> Configure Embed Link</h3>
+            <p style="color: #d0d0d0; margin-bottom: 20px;">Customize the nickname and channel for the embed link:</p>
             
             <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #ffffff;">
                     <i class="fas fa-user"></i> Nickname:
                 </label>
                 <input type="text" id="embedNick" value="" 
-                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;"
+                       style="width: 100%; padding: 10px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 14px;"
                        placeholder="Enter nickname">
-                <small style="display: block; margin-top: 5px; color: #666;">
+                <small style="display: block; margin-top: 5px; color: #a0a0a0;">
                     Use * for random digit (e.g., Guest* becomes Guest7)
                 </small>
             </div>
             
             <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #333;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #ffffff;">
                     <i class="fas fa-hashtag"></i> Channel:
                 </label>
                 <input type="text" id="embedChannel" value="" 
-                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;"
+                       style="width: 100%; padding: 10px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 14px;"
                        placeholder="Enter channel (e.g., #lobby)">
-                <small style="display: block; margin-top: 5px; color: #666;">
+                <small style="display: block; margin-top: 5px; color: #a0a0a0;">
                     Leave empty to skip auto-join. Multiple channels: #channel1,#channel2
                 </small>
             </div>
             
-            <div style="background: #f0f8ff; border-left: 4px solid #007bff; padding: 12px; border-radius: 4px; margin-top: 20px; margin-bottom: 20px;">
-                <small style="color: #333;">
-                    <i class="fas fa-info-circle" style="color: #007bff;"></i> <strong>Display Settings:</strong><br>
+            <div style="background: rgba(88, 101, 242, 0.1); border-left: 4px solid ` + primaryColor + `; padding: 12px; border-radius: 4px; margin-top: 20px; margin-bottom: 20px;">
+                <small style="color: #d0d0d0;">
+                    <i class="fas fa-info-circle" style="color: ` + primaryColor + `;"></i> <strong>Display Settings:</strong><br>
                     Font size and color theme will be taken from your current login options settings.<br>
                     Current: <strong>` + defaultFontSize + `px</strong> font, <strong>` + defaultHue + `°</strong> hue
                 </small>
             </div>
             
             <div style="text-align: right;">
-                <button id="btnGenerateLink" style="padding: 10px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+                <button id="btnGenerateLink" style="padding: 10px 24px; background: ` + primaryColor + `; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px; transition: background 0.2s;">
                     <i class="fas fa-check"></i> Generate Link
                 </button>
-                <button id="btnCancelConfig" style="padding: 10px 24px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                <button id="btnCancelConfig" style="padding: 10px 24px; background: #555565; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
                     <i class="fas fa-times"></i> Cancel
                 </button>
             </div>
@@ -839,7 +862,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             const channels = document.getElementById('embedChannel').value;
             
             configModal.remove();
-            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultNavLeft);
+            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultNavLeft, defaultNotifications, defaultNotificationSound);
         };
         
         // Handle Cancel button
@@ -855,7 +878,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         };
     }
     
-    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft) {
+    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft, overrideNotifications, overrideNotificationSound) {
         const baseUrl = window.location.origin + window.location.pathname;
         
         // Use provided values or get defaults
@@ -864,6 +887,8 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         const hideTopic = overrideHideTopic !== undefined ? overrideHideTopic : false;
         const hideNicklist = overrideHideNicklist !== undefined ? overrideHideNicklist : false;
         const navLeft = overrideNavLeft !== undefined ? overrideNavLeft : false;
+        const notifications = overrideNotifications !== false;
+        const notificationSound = overrideNotificationSound !== false;
         
         let url = baseUrl + '?connect=1';
         if (nickname && nickname.trim()) {
@@ -884,28 +909,38 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         if (navLeft) {
             url += '&navLeft=true';
         }
+        // Add notification preferences
+        if (!notifications) {
+            url += '&notificationsEnabled=false';
+        }
+        if (!notificationSound) {
+            url += '&notificationSound=false';
+        }
         
-        const embedCode = '<iframe src="' + url.replace(/"/g, '&quot;') + '" width="800" height="600" frameborder="0" style="border: 1px solid #ccc;"></iframe>';
+        const embedCode = '<iframe src="' + url.replace(/"/g, '&quot;') + '" width="800" height="600" frameborder="0" style="border: 1px solid #555;"></iframe>';
+        
+        // Get primary color for theming
+        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#5865f2';
         
         // Show result modal
         const modal = document.createElement('div');
         modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;';
         
         const modalContent = document.createElement('div');
-        modalContent.style.cssText = 'background: white; padding: 30px; border-radius: 8px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto;';
+        modalContent.style.cssText = 'background: #2d2d3d; color: #ffffff; padding: 30px; border-radius: 8px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5);';
         
         const title = document.createElement('h3');
-        title.style.cssText = 'margin-top: 0; color: #990000;';
+        title.style.cssText = 'margin-top: 0; color: ' + primaryColor + ';';
         title.innerHTML = '<i class="fas fa-link"></i> Chatnapping Link Generated';
         
         const description = document.createElement('p');
-        description.style.cssText = 'color: #666; margin-bottom: 20px;';
+        description.style.cssText = 'color: #d0d0d0; margin-bottom: 20px;';
         description.textContent = 'Share this link or embed the chat on your website:';
         
         // Nickname display
         if (nickname && nickname.trim()) {
             const nickInfo = document.createElement('div');
-            nickInfo.style.cssText = 'background: #e7f3ff; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
+            nickInfo.style.cssText = 'background: rgba(88, 101, 242, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';
             nickInfo.innerHTML = '<i class="fas fa-user"></i> <strong>Nickname:</strong> ' + nickname.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             modalContent.appendChild(nickInfo);
         }
@@ -913,7 +948,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         // Channel display
         if (channels && channels.trim()) {
             const channelInfo = document.createElement('div');
-            channelInfo.style.cssText = 'background: #e7ffe7; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
+            channelInfo.style.cssText = 'background: rgba(0, 184, 148, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';
             channelInfo.innerHTML = '<i class="fas fa-hashtag"></i> <strong>Channel:</strong> ' + channels.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             modalContent.appendChild(channelInfo);
         }
@@ -924,41 +959,47 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         if (hideTopic) uiDisplay += ', Hide Topic: ✓';
         if (hideNicklist) uiDisplay += ', Hide Nicklist: ✓';
         if (navLeft) uiDisplay += ', Sidebar Mode: ✓';
-        uiInfo.style.cssText = 'background: #fff9e6; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;';
+        if (notifications) uiDisplay += ', Notifications: ✓';
+        if (notificationSound) uiDisplay += ', Sound: ✓';
+        uiInfo.style.cssText = 'background: rgba(243, 156, 18, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';
         uiInfo.innerHTML = '<i class="fas fa-sliders-h"></i> <strong>Display Options:</strong> ' + uiDisplay;
         modalContent.appendChild(uiInfo);
         
         const linkLabel = document.createElement('p');
         linkLabel.innerHTML = '<strong>Direct Link:</strong>';
         linkLabel.style.marginBottom = '5px';
+        linkLabel.style.color = '#ffffff';
         
         const linkInput = document.createElement('input');
         linkInput.type = 'text';
         linkInput.value = url;
         linkInput.readOnly = true;
-        linkInput.style.cssText = 'width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-family: monospace;';
+        linkInput.style.cssText = 'width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 13px; font-family: monospace;';
         linkInput.onclick = function() { this.select(); };
         
         const embedLabel = document.createElement('p');
         embedLabel.innerHTML = '<strong>Embed Code (iframe):</strong>';
         embedLabel.style.marginBottom = '5px';
+        embedLabel.style.color = '#ffffff';
         
         const embedTextarea = document.createElement('textarea');
         embedTextarea.value = embedCode;
         embedTextarea.readOnly = true;
-        embedTextarea.style.cssText = 'width: 100%; height: 100px; padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px; resize: vertical;';
+        embedTextarea.style.cssText = 'width: 100%; height: 100px; padding: 8px; margin-bottom: 15px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-family: monospace; font-size: 12px; resize: vertical;';
         embedTextarea.onclick = function() { this.select(); };
         
         const tipBox = document.createElement('div');
-        tipBox.style.cssText = 'background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 4px; margin-bottom: 15px;';
-        tipBox.innerHTML = '<small style="color: #856404;"><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> The link includes your current display settings (font size, hue). Users can change these after joining. Test the link before embedding it on your website to ensure it works correctly.</small>';
+        tipBox.style.cssText = 'background: rgba(243, 156, 18, 0.2); border-left: 4px solid #f39c12; padding: 12px; border-radius: 4px; margin-bottom: 15px;';
+        tipBox.innerHTML = '<small style="color: #d0d0d0;"><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> The link includes your current display settings (font size, hue). Users can change these after joining. Test the link before embedding it on your website to ensure it works correctly.</small>';
         
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = 'text-align: right;';
         
         const copyLinkButton = document.createElement('button');
         copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
-        copyLinkButton.style.cssText = 'padding: 8px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;';
+        copyLinkButton.style.cssText = 'padding: 8px 20px; background: ' + primaryColor + '; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; transition: opacity 0.2s;';
+        copyLinkButton.onmouseover = function() { this.style.opacity = '0.8'; };
+        copyLinkButton.onmouseout = function() { this.style.opacity = '1'; };
         copyLinkButton.onclick = function() {
             navigator.clipboard.writeText(url).then(function() {
                 copyLinkButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
@@ -977,7 +1018,9 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         
         const copyCodeButton = document.createElement('button');
         copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
-        copyCodeButton.style.cssText = 'padding: 8px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;';
+        copyCodeButton.style.cssText = 'padding: 8px 20px; background: #00b894; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; transition: opacity 0.2s;';
+        copyCodeButton.onmouseover = function() { this.style.opacity = '0.8'; };
+        copyCodeButton.onmouseout = function() { this.style.opacity = '1'; };
         copyCodeButton.onclick = function() {
             navigator.clipboard.writeText(embedCode).then(function() {
                 copyCodeButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
@@ -996,7 +1039,9 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
         
         const closeButton = document.createElement('button');
         closeButton.innerHTML = '<i class="fas fa-times"></i> Close';
-        closeButton.style.cssText = 'padding: 8px 20px; background: #990000; color: white; border: none; border-radius: 4px; cursor: pointer;';
+        closeButton.style.cssText = 'padding: 8px 20px; background: #555565; color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s;';
+        closeButton.onmouseover = function() { this.style.opacity = '0.8'; };
+        closeButton.onmouseout = function() { this.style.opacity = '1'; };
         closeButton.onclick = function() {
             modal.remove();
         };

@@ -541,6 +541,14 @@ public class IrcParser {
         IrcMessage msg = parseString(line);
         String command = msg.command;
         
+        // Handle 433 (Nickname already in use) - auto-retry with alternative
+        if ("433".equals(command)) {
+            handleNicknameInUse(msg, session);
+            // Forward to client for display
+            sendText(line + "\n", session, "chat", "");
+            return;
+        }
+        
         // Handle CAP responses - format: server CAP * LS/ACK ...
         if ("CAP".equals(command)) {
             handleCap(msg.prefix, msg.trailing, session);
@@ -736,6 +744,51 @@ public class IrcParser {
             } catch (IOException e) {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after CAP NAK", e);
             }
+        }
+    }
+    
+    private void handleNicknameInUse(IrcMessage msg, Session session) {
+        // Format: :server 433 * nickname :Nickname is already in use
+        // msg.params[1] contains the attempted nickname
+        String attemptedNick = msg.params.length > 1 ? msg.params[1] : pendingNick;
+        
+        if (attemptedNick == null || attemptedNick.isEmpty()) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "433 received but no nickname to retry");
+            return;
+        }
+        
+        // Generate alternative nickname
+        String newNick = attemptedNick;
+        if (newNick.endsWith("_")) {
+            // If already has underscore, try adding a number
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("^(.+?)_*(\\d*)$");
+            java.util.regex.Matcher matcher = pattern.matcher(newNick);
+            if (matcher.matches()) {
+                String base = matcher.group(1);
+                String numStr = matcher.group(2);
+                int num = numStr.isEmpty() ? 1 : Integer.parseInt(numStr) + 1;
+                newNick = base + "_" + num;
+            }
+        } else {
+            // Add underscore
+            newNick = attemptedNick + "_";
+        }
+        
+        // Ensure nick doesn't exceed 15 characters
+        if (newNick.length() > 15) {
+            newNick = newNick.substring(0, 15);
+        }
+        
+        // Update pending nick and retry
+        pendingNick = newNick;
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, 
+            "Nickname {0} already in use, retrying with {1}", new Object[]{attemptedNick, newNick});
+        
+        try {
+            submitMessage("NICK %s", newNick);
+            doSleep();
+        } catch (Exception e) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error sending alternative NICK", e);
         }
     }
     

@@ -713,13 +713,26 @@ if (document.readyState === 'loading') {
     initializePostManager();
 }
 
-// Initialize IRC Parser (after irc.js has been loaded)
-if (window.IRCParser) {
-    const ircParser = new window.IRCParser(chatManager);
-    window.ircParser = ircParser;
-} else {
-    console.warn('[IRC Parser] IRCParser class not found - IRC message parsing will not work');
+// Initialize IRC Parser (after chatManager is ready)
+let ircParserInitAttempts = 0;
+const maxIRCParserAttempts = 50; // Max 5 seconds (50 * 100ms)
+
+function initializeIRCParser() {
+    if (window.IRCParser && window.chatManager) {
+        const ircParser = new window.IRCParser(window.chatManager);
+        window.ircParser = ircParser;
+        console.log('[IRC Parser] Initialized successfully');
+    } else if (ircParserInitAttempts < maxIRCParserAttempts) {
+        // Retry after a short delay if chatManager isn't ready yet
+        ircParserInitAttempts++;
+        setTimeout(initializeIRCParser, 100);
+    } else {
+        console.warn('[IRC Parser] Failed to initialize after', maxIRCParserAttempts, 'attempts - IRCParser or chatManager not found');
+    }
 }
+
+// Start initialization attempt
+initializeIRCParser();
 
 // Legacy functions for compatibility
 let message = document.getElementById("message");
