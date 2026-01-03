@@ -126,6 +126,8 @@ class IRCParser {
         
         // ERROR handling
         if (command.toLowerCase() === "error") {
+            console.log('[IRC] ERROR received - hiding loading screen');
+            this.hideLoadingScreen();
             this.output = this.chatManager.getActiveWindow();
             return this.formatError(params.join(" "));
         }
@@ -611,7 +613,7 @@ class IRCParser {
             this.chatManager.addNick(channel, nick, host, color);
         }
         
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${nick}</span> [${host}] has joined ${channel}`;
+        return ` <span style="color: #ff0000">==</span> <span class="message-nick" data-nick="${nick}" style="color: ${color};">${nick}</span> [${host}] has joined ${channel}`;
     }
     
     handlePart(ircMsg) {
@@ -754,7 +756,7 @@ class IRCParser {
                 if (!this.chatManager.isPage(this.output)) {
                     this.chatManager.addPage(this.output, "query", true);
                 }
-                return `* <span style="color: ${this.chatManager.getColor(this.output, nick)};">${this.chatManager.getStatus(this.output, nick)}${nick}</span> ${ctcpContent.substring(7)}`;
+                return `* <span class="message-nick" data-nick="${nick}" style="color: ${this.chatManager.getColor(this.output, nick)};">${this.chatManager.getStatus(this.output, nick)}${nick}</span> ${ctcpContent.substring(7)}`;
             }
             
             // Other CTCP requests - display in active window (no query window)
@@ -786,7 +788,7 @@ class IRCParser {
             this.chatManager.setHighlight(true);
         }
         
-        return `&lt;<span style="color: ${this.chatManager.getColor(target, nick)};">${this.chatManager.getStatus(target, nick)}${nick}</span>&gt; ${message}`;
+        return `&lt;<span class="message-nick" data-nick="${nick}" style="color: ${this.chatManager.getColor(target, nick)};">${this.chatManager.getStatus(target, nick)}${nick}</span>&gt; ${message}`;
     }
     
     handleGenericNumeric(ircMsg, code, text) {

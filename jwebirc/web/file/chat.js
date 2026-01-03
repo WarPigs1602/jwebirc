@@ -420,6 +420,12 @@ class ChatManager {
         
         this.socket.onclose = (closeEvent) => {
             console.log('[WebSocket] Connection closed. Code:', closeEvent.code, 'Reason:', closeEvent.reason);
+            
+            // Hide loading screen on disconnect
+            if (window.ircParser && window.ircParser.hideLoadingScreen) {
+                window.ircParser.hideLoadingScreen();
+            }
+            
             let closeMsg = "Connection to server closed";
             if (closeEvent.code) {
                 closeMsg += " (Code: " + closeEvent.code + ")";
@@ -1214,7 +1220,7 @@ class ChatManager {
      * @param {boolean} isTopicContext - If true, applies topic-specific link styling
      * @returns {string} HTML with URLs converted to links
      */
-    parseUrls(html, isTopicContext = false) {
+    parseUrls(html, isTopicContext = false, currentChannel = null) {
         // Match URLs that are NOT already inside <a> tags
         // This regex looks for http:// or https:// URLs
         const urlRegex = /(https?:\/\/[^\s<]+)/g;
@@ -1222,7 +1228,7 @@ class ChatManager {
         // Split by existing <a> tags to avoid double-wrapping
         const parts = html.split(/(<a\s[^>]*>.*?<\/a>)/gi);
         
-        return parts.map(part => {
+        const withUrls = parts.map(part => {
             // If this part is already a link, don't process it
             if (part.match(/^<a\s/i)) {
                 return part;
@@ -1264,6 +1270,115 @@ class ChatManager {
                 }
             });
         }).join('');
+
+        // Also convert channel and nick references into interactive links
+        return this.parseChannelsAndNicks(withUrls, currentChannel);
+    }
+
+    parseChannelsAndNicks(html, currentChannel = null) {
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const channelRegex = /([\s>]|^)([#&][A-Za-z0-9_\-\[\]\\`{|}^]{1,50})([.,:;!?)]?)/g;
+        const nickRegex = /([\s>]|^)([A-Za-z0-9_\-\[\]\\`{|}^]{1,30})([.,:;!?)]?)/g;
+        
+        const wrapTextNode = (node) => {
+            const text = node.textContent;
+            if (!text) return;
+            let changed = false;
+            const underlined = this.isUnderlined(node.parentNode);
+            const linkStyle = underlined ? '' : ' style="text-decoration: none;"';
+            let replaced = text.replace(channelRegex, (full, prefix, channel, trailing) => {
+                // Only wrap valid channel names
+                if (!this.isChannel(channel)) return full;
+                changed = true;
+                const safeChannel = this.escapeAttribute(channel);
+                return `${prefix}<a href="#" class="channel-link" data-channel="${safeChannel}" onclick="return chatManager.handleChannelClick('${safeChannel}');"${linkStyle}>${channel}</a>${trailing || ''}`;
+            });
+
+            // Link nick mentions when the nick exists in the current channel
+            replaced = replaced.replace(nickRegex, (full, prefix, nick, trailing) => {
+                if (!currentChannel || !this.hasNick(currentChannel, nick)) return full;
+                changed = true;
+                const safeNick = this.escapeAttribute(nick);
+                return `${prefix}<a href="#" class="nick-link" data-nick="${safeNick}" onclick="return chatManager.handleNickClick('${safeNick}');"${linkStyle}>${nick}</a>${trailing || ''}`;
+            });
+            
+            if (changed) {
+                const wrapper = document.createElement('span');
+                wrapper.innerHTML = replaced;
+                const frag = document.createDocumentFragment();
+                while (wrapper.firstChild) {
+                    frag.appendChild(wrapper.firstChild);
+                }
+                node.parentNode.replaceChild(frag, node);
+            }
+        };
+        
+        const wrapNickElement = (elem) => {
+            if (!elem || elem.closest('a')) return;
+            const nick = elem.dataset && elem.dataset.nick ? elem.dataset.nick : (elem.textContent || '').trim();
+            if (!nick) return;
+            const safeNick = this.escapeAttribute(nick);
+            const underlined = this.isUnderlined(elem);
+            const link = document.createElement('a');
+            link.href = '#';
+            link.className = 'nick-link';
+            link.dataset.nick = safeNick;
+            if (!underlined) {
+                link.style.textDecoration = 'none';
+            }
+            link.setAttribute('onclick', `return chatManager.handleNickClick('${safeNick}');`);
+            elem.parentNode.insertBefore(link, elem);
+            link.appendChild(elem);
+        };
+        
+        const traverse = (node) => {
+            node.childNodes.forEach(child => {
+                if (child.nodeType === Node.TEXT_NODE) {
+                    wrapTextNode(child);
+                } else if (child.nodeType === Node.ELEMENT_NODE) {
+                    const tag = child.tagName ? child.tagName.toLowerCase() : '';
+                    if (tag === 'a') return; // Skip existing links
+                    if (child.classList && child.classList.contains('message-nick')) {
+                        wrapNickElement(child);
+                    }
+                    traverse(child);
+                }
+            });
+        };
+        
+        traverse(temp);
+        return temp.innerHTML;
+    }
+
+    escapeAttribute(value) {
+        return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    isUnderlined(node) {
+        let current = node;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+            const style = current.getAttribute('style') || '';
+            if (/text-decoration\s*:\s*underline/i.test(style)) {
+                return true;
+            }
+            current = current.parentNode;
+        }
+        return false;
+    }
+
+    hasNick(channel, nick) {
+        const target = nick.toLowerCase();
+        for (const ch of this.channels) {
+            if (ch.page.toLowerCase() !== channel.toLowerCase()) continue;
+            for (const entry of ch.nicks) {
+                const raw = entry.nick || '';
+                const first = raw.length > 0 ? raw[0] : '';
+                const withoutStatus = this.isStatusSymbol(first) ? raw.substring(1) : raw;
+                if (withoutStatus.toLowerCase() === target) return true;
+            }
+        }
+        return false;
     }
     
     addNick(channel, nick, host, color, isAway = false) {
@@ -1854,7 +1969,7 @@ class ChatManager {
                 if (text && text.trim().length > 0) {
                     // Parse control codes first, then convert URLs to links (with topic context)
                     let parsed = this.parseControl(text);
-                    parsed = this.parseUrls(parsed, true);
+                    parsed = this.parseUrls(parsed, true, channel);
                     topicContent = `<span class="topic-prefix">${channel}:&nbsp;</span><span class="topic-content">${parsed.trim()}</span>`;
                 } else {
                     topicContent = `<span class="topic-prefix">${channel}:&nbsp;</span><span class="topic-empty">(No topic set)</span>`;
@@ -1949,7 +2064,7 @@ class ChatManager {
                 
                 // Parse control codes first, then convert URLs to links
                 let parsed = this.parseControl(text);
-                parsed = this.parseUrls(parsed);
+                parsed = this.parseUrls(parsed, false, pg);
                 
                 // Filter empty output (only control codes, no visible text)
                 if (!this.hasVisibleText(parsed)) {
@@ -2007,7 +2122,7 @@ class ChatManager {
         for (const elem of this.channels) {
             // Parse control codes first, then convert URLs to links
             let parsed = this.parseControl(text);
-            parsed = this.parseUrls(parsed);
+            parsed = this.parseUrls(parsed, false, elem.page);
             
             if (this.highlight) {
                 parsed += "</span>";
@@ -2121,6 +2236,32 @@ class ChatManager {
     
     setHighlight(highlight) {
         this.highlight = highlight;
+    }
+
+    handleChannelClick(channel) {
+        const target = this.isChannel(channel) ? channel : `#${channel}`;
+        if (window.postManager) {
+            window.postManager.submitTextMessage(`/join ${target}`);
+        }
+        if (!this.isPage(target)) {
+            this.addPage(target, 'channel', true);
+        } else {
+            this.setWindow(target);
+        }
+        return false;
+    }
+
+    handleNickClick(nick) {
+        if (!nick) return false;
+        if (window.postManager) {
+            window.postManager.submitTextMessage(`/query ${nick}`);
+        }
+        if (!this.isPage(nick)) {
+            this.addPage(nick, 'query', true);
+        } else {
+            this.setWindow(nick);
+        }
+        return false;
     }
     
     /**

@@ -1,11 +1,12 @@
 /* ============================================
    jWebIRC - Modern CSS Stylesheet
-   Version: 2.0
-   Updated: 31.12.2025
+    Version: 2.1
+    Updated: 03.01.2026
+    Bootstrap: 5.3.3
    Author: Andreas Pschorn
    ============================================ */
 
-/* ===== CSS Variables ===== */
+/* ===== CSS Variables (Bootstrap 5 compatible) ===== */
 :root {
     /* Colors - Modern Dark Theme */
     --primary-color: #5865f2;
