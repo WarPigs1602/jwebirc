@@ -62,6 +62,7 @@ class ChatManager {
         
         // Notification system
         this.unreadCounts = new Map(); // Map<tabName, unreadCount>
+        this.highlightedTabs = new Set(); // Set of tabs with incoming messages (visual highlight)
         this.notificationBadge = null;
         this.notificationButton = null;
         
@@ -2115,14 +2116,16 @@ class ChatManager {
         for (let i = 0; i < this.channels.length; i++) {
             const isActive = this.channels[i].page === this.activeWindow ? ' active' : '';
             const isUnread = this.unreadCounts.has(this.channels[i].page) ? ' unread' : '';
+            const isHighlighted = this.highlightedTabs.has(this.channels[i].page) ? ' highlighted' : '';
+            const classes = isActive + isUnread + isHighlighted;
             
             if (i === 0) {
-                this.navElement.innerHTML = `<nv class="${isActive}${isUnread}" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</nv> `;
+                this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</nv> `;
             } else {
                 if (this.channels[i].page.startsWith("#") || this.channels[i].page.startsWith("&")) {
-                    this.navElement.innerHTML += `<nv class="${isActive}${isUnread}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${this.channels[i].page} Closed tab!');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${classes}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${this.channels[i].page} Closed tab!');">✕</span></nv> `;
                 } else {
-                    this.navElement.innerHTML += `<nv class="${isActive}${isUnread}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${this.channels[i].page}');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${classes}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${this.channels[i].page}');">✕</span></nv> `;
                 }
             }
         }
@@ -2153,10 +2156,15 @@ class ChatManager {
                     return;
                 }
                 
-                // Update unread count for notifications
+                // Update unread count for notifications and highlight tabs
                 if (pg.toLowerCase() !== this.activeWindow.toLowerCase()) {
-                    // Add notification for query (private message) or highlight
-                    if (isQuery || this.highlight) {
+                    // Determine if notification will be shown
+                    const willShowNotification = isQuery || this.highlight;
+                    
+                    if (willShowNotification) {
+                        // Notification takes priority - remove any tab highlight
+                        this.clearTabHighlight(pg);
+                        
                         const currentCount = this.unreadCounts.get(pg) || 0;
                         this.updateUnreadCount(pg, currentCount + 1);
                         
@@ -2178,6 +2186,9 @@ class ChatManager {
                                 this.notificationManager.notifyHighlight(pg, nick, cleanText);
                             }
                         }
+                    } else {
+                        // No notification - just highlight the tab visually
+                        this.highlightTab(pg);
                     }
                 }
                 
@@ -2286,6 +2297,7 @@ class ChatManager {
     
     setWindow(win) {
         this.activeWindow = win;
+        this.clearTabHighlight(win); // Remove highlight when tab is activated
         this.addWindow();
         this.renderTopic(win); // Update topic for new channel
         this.refreshNav(); // Update navigation to show active tab
@@ -2601,6 +2613,28 @@ class ChatManager {
         }
     }
     
+    /**
+     * Highlight a tab when an incoming message arrives (no notification)
+     * @param {string} tabName - Name of the tab to highlight
+     */
+    highlightTab(tabName) {
+        if (!this.highlightedTabs.has(tabName)) {
+            this.highlightedTabs.add(tabName);
+            this.refreshNav();
+        }
+    }
+
+    /**
+     * Clear highlight from a tab
+     * @param {string} tabName - Name of the tab
+     */
+    clearTabHighlight(tabName) {
+        if (this.highlightedTabs.has(tabName)) {
+            this.highlightedTabs.delete(tabName);
+            this.refreshNav();
+        }
+    }
+
     /**
      * Update unread count for a tab
      * @param {string} tabName - Name of the tab
