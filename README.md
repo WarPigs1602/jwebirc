@@ -49,7 +49,7 @@ You can see under https://chat.midiandmore.net/?channels=dev an example of the w
 ## Prerequisites
 
 - Java Development Kit (JDK) 17 or higher
-- Jakarta EE 10 compatible application server
+- Jakarta EE 11 compatible application server
 - Apache Ant (for building) or Maven
 
 ## Installation
