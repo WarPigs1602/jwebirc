@@ -2118,14 +2118,15 @@ class ChatManager {
             const isUnread = this.unreadCounts.has(this.channels[i].page) ? ' unread' : '';
             const isHighlighted = this.highlightedTabs.has(this.channels[i].page) ? ' highlighted' : '';
             const classes = isActive + isUnread + isHighlighted;
+            const safePage = this.channels[i].page.replace(/'/g, "\\'");
             
             if (i === 0) {
-                this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</nv> `;
+                this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;">${this.channels[i].page}</nv> `;
             } else {
                 if (this.channels[i].page.startsWith("#") || this.channels[i].page.startsWith("&")) {
-                    this.navElement.innerHTML += `<nv class="${classes}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${this.channels[i].page} Closed tab!');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${safePage} Closed tab!');">✕</span></nv> `;
                 } else {
-                    this.navElement.innerHTML += `<nv class="${classes}"><span class="tab-label" onclick="chatManager.setWindow('${this.channels[i].page}');">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${this.channels[i].page}');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${safePage}');">✕</span></nv> `;
                 }
             }
         }
