@@ -749,8 +749,10 @@ public class IrcParser {
     
     private void handleNicknameInUse(IrcMessage msg, Session session) {
         // Format: :server 433 * nickname :Nickname is already in use
-        // msg.params[1] contains the attempted nickname
-        String attemptedNick = msg.params.length > 1 ? msg.params[1] : pendingNick;
+        // msg.prefix contains: "server 433 * nickname"
+        // Extract the nickname from the prefix (last token before the trailing message)
+        String[] parts = msg.prefix.split("\\s+");
+        String attemptedNick = parts.length > 2 ? parts[2] : pendingNick;
         
         if (attemptedNick == null || attemptedNick.isEmpty()) {
             Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "433 received but no nickname to retry");
