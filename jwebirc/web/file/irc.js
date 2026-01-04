@@ -12,10 +12,20 @@ class IRCParser {
         this.channel = window.chan || '';
         this.user = window.user || '';
         
+        // Shared delay (ms) for WHO and history commands to avoid flooding
+        this.commandDelay = parseInt(window.commandDelayOnJoin) || 2000;
+
         // WHO command queue to avoid flooding the server
         this.whoQueue = [];
         this.whoTimer = null;
-        this.whoDelay = 2000; // 2 seconds delay between WHO commands
+        this.whoDelay = this.commandDelay;
+        
+        // History command queue to avoid flooding the server
+        this.historyQueue = [];
+        this.historyTimer = null;
+        this.historyDelay = this.commandDelay;
+        this.historyCommandEnabled = window.historyCommandEnabled === true || window.historyCommandEnabled === 'true';
+        this.historyCommand = window.historyCommand || '/msg HistServ HISTORY %CHANNEL% 50';
     }
     
     /**
@@ -83,15 +93,18 @@ class IRCParser {
         
         const output = this.getNumerics(text.toString());
         if (!output) return;
+
+        // Use server-provided timestamp if available (IRCv3 server-time)
+        const ts = tags && tags.has('time') ? this.chatManager.getTimestamp(tags.get('time')) : this.chatManager.getTimestamp();
         
         if (this.chatManager.getActiveWindow()) {
             for (const channel of this.chatManager.channels) {
                 if (this.output.toLowerCase() === channel.page.toLowerCase()) {
-                    this.chatManager.parsePages(this.chatManager.getTimestamp() + " " + output.trim() + "\n", channel.page);
+                    this.chatManager.parsePages(ts + " " + output.trim() + "\n", channel.page);
                 }
             }
         } else {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + " " + output.trim() + "\n");
+            this.chatManager.parsePage(ts + " " + output.trim() + "\n");
         }
     }
     
@@ -105,6 +118,12 @@ class IRCParser {
         // CAP handling (IRCv3 Capabilities)
         if (command === 'CAP') {
             this.handleCap(ircMsg);
+            return null;
+        }
+
+        // BATCH handling (IRCv3 batch messages) - ignore control lines
+        if (command === 'BATCH') {
+            // We currently do not need to render batch start/end markers
             return null;
         }
         
@@ -399,6 +418,9 @@ class IRCParser {
         const cmd = command.toLowerCase();
 
         switch (cmd) {
+            case "batch":
+                // Ignore BATCH control messages (IRCv3)
+                return null;
             case "notice":
                 return this.handleNotice(ircMsg);
             case "mode":
@@ -450,10 +472,37 @@ class IRCParser {
             return this.handleCtcpReply(nick, message);
         }
 
-        // Server notices should go to Status window, not create new query windows
-        if (nick.includes('.') || nick === 'Server' || prefix === nick) {
+        // Try to find a channel to route this notice to
+        let targetChannel = null;
+        const hasChatManager = !!this.chatManager;
+
+        // 1) Prefer explicit NOTICE target if it is a joined channel
+        const noticeTarget = (params[0] || '').toLowerCase();
+        if (hasChatManager && noticeTarget.startsWith('#') && this.chatManager.isPage(noticeTarget)) {
+            targetChannel = noticeTarget;
+        }
+
+        // 2) Otherwise look for any mentioned channel names inside the message text
+        if (!targetChannel && hasChatManager) {
+            const mentioned = message.match(/#[a-zA-Z0-9_-]+/g) || [];
+            for (const candidate of mentioned) {
+                const normalized = candidate.toLowerCase();
+                if (this.chatManager.isPage(normalized)) {
+                    targetChannel = normalized;
+                    break;
+                }
+            }
+        }
+
+        // Determine output window
+        if (targetChannel) {
+            // Display in the channel window if channel name was found in message
+            this.output = targetChannel;
+        } else if (nick.includes('.') || nick === 'Server' || prefix === nick) {
+            // Server notices go to Status window
             this.output = "Status";
         } else {
+            // User notices create/use query window
             this.output = nick;
             if (!this.chatManager.isPage(this.output)) {
                 this.chatManager.addPage(this.output, "query", false);
@@ -472,7 +521,6 @@ class IRCParser {
             
             // First, add previously saved channels (priority)
             if (this.chatManager && this.chatManager.joinedChannels) {
-                console.log('Auto-joining saved channels:', Array.from(this.chatManager.joinedChannels));
                 for (const channel of this.chatManager.joinedChannels) {
                     channelsToJoin.add(channel.toLowerCase());
                 }
@@ -481,7 +529,6 @@ class IRCParser {
             // Then add URL-parameter channels (if not already in saved list)
             if (this.channel.length !== 0) {
                 const urlChannels = this.chatManager.parseChannels(this.channel).split(',');
-                console.log('Auto-joining URL channels:', urlChannels);
                 for (const channel of urlChannels) {
                     const normalized = channel.trim().toLowerCase();
                     if (normalized) {
@@ -493,7 +540,6 @@ class IRCParser {
             // Join all channels (saved channels first, then new ones)
             if (channelsToJoin.size > 0 && window.postManager) {
                 const channelList = Array.from(channelsToJoin).join(',');
-                console.log('Joining channels:', channelList);
                 window.postManager.submitTextMessage("/join " + channelList);
             }
             
@@ -609,6 +655,11 @@ class IRCParser {
             // Queue WHO command with delay to avoid flooding the server
             if (window.postManager) {
                 this.queueWhoCommand(channel);
+                
+                // Queue history command if enabled
+                if (this.historyCommandEnabled) {
+                    this.queueHistoryCommand(channel);
+                }
             }
         } else {
             this.output = channel;
@@ -1046,6 +1097,50 @@ class IRCParser {
             }, this.whoDelay);
         } else {
             this.whoTimer = null;
+        }
+    }
+    
+    /**
+     * Queue a history command to be executed with delay
+     * This prevents flooding the server with multiple history commands at once
+     */
+    queueHistoryCommand(channel) {
+        // Add to queue if not already queued
+        if (!this.historyQueue.includes(channel)) {
+            this.historyQueue.push(channel);
+        }
+        
+        // Start processing if not already running
+        if (!this.historyTimer) {
+            this.processHistoryQueue();
+        }
+    }
+    
+    /**
+     * Process the history command queue with delays
+     */
+    processHistoryQueue() {
+        if (this.historyQueue.length === 0) {
+            this.historyTimer = null;
+            return;
+        }
+        
+        // Get and send the next history command
+        const channel = this.historyQueue.shift();
+        
+        // Replace %CHANNEL% placeholder with actual channel name
+        const command = this.historyCommand.replace(/%CHANNEL%/g, channel);
+        
+        // Send the history command
+        window.postManager.submitTextMessage(command);
+        
+        // Schedule next history command if queue is not empty
+        if (this.historyQueue.length > 0) {
+            this.historyTimer = setTimeout(() => {
+                this.processHistoryQueue();
+            }, this.historyDelay);
+        } else {
+            this.historyTimer = null;
         }
     }
     

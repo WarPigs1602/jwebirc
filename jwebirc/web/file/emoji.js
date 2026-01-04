@@ -392,7 +392,6 @@ this.EMOJIES = EMOJIES;
 							if (!typeSwitcher && !categoryHasFamilyType) {
 								['1F466', '1F467', '1F468', '1F469'].forEach(function(l) {
 									if (~emoji.code.split(' ').indexOf(l)) {
-										//console.log('Family found at '+emoji.code+' '+emoji.name);
 										categoryHasFamilyType = !0;
 									}
 								});
@@ -400,7 +399,6 @@ this.EMOJIES = EMOJIES;
 							if (!genderSwitcher && !categoryHasGenders) {
 								['2640', '2642'].forEach(function(l) {
 									if (~emoji.code.split(' ').indexOf(l) && emoji.code != l && emoji.code != l+' FE0F') {
-										//console.log('Gender found at '+emoji.code+' '+emoji.name);
 										categoryHasGenders = !0;
 									}
 								});

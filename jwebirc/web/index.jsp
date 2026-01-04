@@ -424,6 +424,11 @@
 <script>
     window.user = "<% out.print(paramNick); %>";
     window.chan = "<% out.print(paramChannel); %>";
+    // Robust parsing to avoid JS errors if values are not literal booleans/numbers
+    window.historyCommandEnabled = "<%= historyCommandEnabled %>" === "true";
+    window.historyCommand = "<%= historyCommand %>";
+    window.historyCommandDelay = parseInt("<%= historyCommandDelay %>", 10) || 2000;
+    window.commandDelayOnJoin = parseInt("<%= commandDelayOnJoin %>", 10) || 2000;
     
     // Loading screen will be hidden by IRC connection logic
     window.addEventListener('load', function() {

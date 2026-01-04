@@ -56,6 +56,11 @@
     String chatnappingDefaultNick = param(ctx, "jwebirc.chatnappingDefaultNick", "Guest*");
     String chatnappingDefaultChannel = param(ctx, "jwebirc.chatnappingDefaultChannel", "#lobby");
 
+    String historyCommandEnabled = param(ctx, "jwebirc.historyCommandEnabled", "false");
+    String historyCommand = param(ctx, "jwebirc.historyCommand", "/msg HistServ HISTORY %CHANNEL% 50");
+    String historyCommandDelay = param(ctx, "jwebirc.historyCommandDelay", "2000");
+    String commandDelayOnJoin = param(ctx, "jwebirc.commandDelayOnJoin", "2000");
+
     String showStackTrace = param(ctx, "jwebirc.showStackTrace", "true");
     String errorPageStyle = param(ctx, "jwebirc.errorPageStyle", "detailed");
 %>

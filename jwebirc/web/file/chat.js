@@ -74,6 +74,9 @@ class ChatManager {
             modes: 'ov',
             symbols: '@+'
         };
+        
+        // CAP negotiation timeout handler
+        this.capEndTimer = null;
     }
     
     /**
@@ -87,7 +90,9 @@ class ChatManager {
         // List of desired capabilities
         const desiredCaps = [
             'message-tags',
-            'away-notify'
+            'away-notify',
+            'batch',
+            'server-time'
         ];
         
         this.capabilities.requested = [...desiredCaps];
@@ -126,13 +131,29 @@ class ChatManager {
      * @param {Array} caps - Array of activated capabilities
      */
     handleCapACK(caps) {
-        // Replace capabilities list (not push, to avoid duplicates)
+        // Add confirmed capabilities to the enabled list
         this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
         
-        // Don't show message here - will be shown when negotiation ends
+        // Check if we got all requested capabilities
+        const allRequested = this.capabilities.requested.every(cap => 
+            this.capabilities.enabled.includes(cap)
+        );
         
-        // End CAP negotiation
-        this.endCapNegotiation();
+        // Clear previous timeout and set a new one
+        if (this.capEndTimer) {
+            clearTimeout(this.capEndTimer);
+        }
+        
+        // If all requested capabilities are confirmed, end negotiation immediately
+        if (allRequested) {
+            this.endCapNegotiation();
+        } else {
+            // Otherwise, wait a bit for more ACK responses before ending negotiation
+            // Some servers send multiple ACK responses in sequence
+            this.capEndTimer = setTimeout(() => {
+                this.endCapNegotiation();
+            }, 500); // Wait 500ms for additional ACK responses
+        }
     }
     
     /**
@@ -152,6 +173,12 @@ class ChatManager {
      */
     endCapNegotiation() {
         if (this.capNegotiationActive) {
+            // Clear any pending timeout
+            if (this.capEndTimer) {
+                clearTimeout(this.capEndTimer);
+                this.capEndTimer = null;
+            }
+            
             if (window.postManager) {
                 window.postManager.sendRawMessage('/CAP END');
             }
@@ -597,7 +624,6 @@ class ChatManager {
         try {
             const channelList = Array.from(this.joinedChannels);
             localStorage.setItem('jwebirc_channels', JSON.stringify(channelList));
-            console.log('Channels saved to localStorage:', channelList);
         } catch (e) {
             console.error('Could not save channels to localStorage:', e);
         }
@@ -616,11 +642,9 @@ class ChatManager {
                         .map(ch => (this.isChannel(ch) ? ch.toLowerCase() : `#${ch.toLowerCase()}`))
                     : [];
                 this.joinedChannels = new Set(normalized);
-                console.log('Channels loaded from localStorage:', Array.from(this.joinedChannels));
                 // Persist normalized values back to storage to keep format consistent
                 this.saveChannelList();
             } else {
-                console.log('No saved channels found in localStorage');
             }
         } catch (e) {
             console.error('Could not load saved channels:', e);
@@ -2303,8 +2327,9 @@ class ChatManager {
         return new Date(date).toLocaleString();
     }
     
-    getTimestamp() {
-        const time = new Date();
+    getTimestamp(sourceTime) {
+        // If server-time tag is provided (IRCv3), prefer that for display
+        const time = sourceTime ? new Date(sourceTime) : new Date();
         const hour = time.getHours();
         const minute = (time.getMinutes() < 10 ? '0' + time.getMinutes() : time.getMinutes());
         const second = (time.getSeconds() < 10 ? '0' + time.getSeconds() : time.getSeconds());

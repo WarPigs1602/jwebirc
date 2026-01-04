@@ -45,6 +45,9 @@
        <Parameter name="jwebirc.chatnappingAllowedDomains" value="*" override="false" />
        <Parameter name="jwebirc.chatnappingDefaultNick" value="Guest*" override="false" />
        <Parameter name="jwebirc.chatnappingDefaultChannel" value="#lobby" override="false" />
+       <Parameter name="jwebirc.historyCommandEnabled" value="false" override="false" />
+       <Parameter name="jwebirc.historyCommand" value="/msg HistServ HISTORY %CHANNEL% 50" override="false" />
+       <Parameter name="jwebirc.commandDelayOnJoin" value="2000" override="false" />
        <Parameter name="jwebirc.showStackTrace" value="true" override="false" />
        <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false" />
     
