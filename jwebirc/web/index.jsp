@@ -38,6 +38,8 @@
     session.setAttribute("forwarded_for_header", forwardedForHeader);
     session.setAttribute("forwarded_for_ips", forwardedForIps);
     String captchaError = null;
+    String userFontSize = "14";
+    String userHue = "0";
     var paramC = request.getParameter("channels");
     var paramN = request.getParameter("name");
     if (paramC == null) {
@@ -113,6 +115,24 @@
             paramConnect = null; // Prevent connection
         }
     }
+    
+    // Retrieve user preferences from cookies for error page styling (compatible without lambdas)
+    String fontSizeCookie = null;
+    String hueCookie = null;
+    var cookies = request.getCookies();
+    if (cookies != null) {
+        for (jakarta.servlet.http.Cookie c : cookies) {
+            if ("jwebirc_fontSize".equals(c.getName())) {
+                fontSizeCookie = c.getValue();
+            }
+            if ("jwebirc_hue".equals(c.getName())) {
+                hueCookie = c.getValue();
+            }
+        }
+    }
+    
+    if (fontSizeCookie != null) userFontSize = fontSizeCookie;
+    if (hueCookie != null) userHue = hueCookie;
     
     if (paramConnect != null) {
         var paramNick = request.getParameter("nick");
@@ -442,30 +462,32 @@
 
 <!-- CAPTCHA Scripts -->
 <% 
-String activeCaptchaType = (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) ? captchaType : "NONE";
-String activeSiteKey = "";
+    String activeCaptchaType = (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true") && captchaError == null) ? captchaType : "NONE";
+    String activeSiteKey = "";
 
-if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
-    activeSiteKey = turnstileSiteKey;
+    if (!"NONE".equalsIgnoreCase(activeCaptchaType)) {
+        if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
+            activeSiteKey = turnstileSiteKey;
 %>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <%
-} else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_V2")) {
-    activeSiteKey = recaptchaV2SiteKey;
+        } else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_V2")) {
+            activeSiteKey = recaptchaV2SiteKey;
 %>
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <%
-} else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_V3")) {
-    activeSiteKey = recaptchaV3SiteKey;
+        } else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_V3")) {
+            activeSiteKey = recaptchaV3SiteKey;
 %>
 <script src="https://www.google.com/recaptcha/api.js?render=<%= activeSiteKey %>"></script>
 <%
-} else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_ENTERPRISE")) {
-    activeSiteKey = recaptchaEnterpriseSiteKey;
+        } else if (activeCaptchaType.equalsIgnoreCase("RECAPTCHA_ENTERPRISE")) {
+            activeSiteKey = recaptchaEnterpriseSiteKey;
 %>
 <script src="https://www.google.com/recaptcha/enterprise.js?render=<%= activeSiteKey %>"></script>
 <%
-}
+        }
+    }
 %>
 
 <div class="login-container">
@@ -476,69 +498,16 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             <p class="text-muted">Join the conversation</p>
         </div>
         <% if (captchaError != null) { %>
-        <div class="captcha-error-overlay" role="alertdialog" aria-modal="true" aria-labelledby="captchaErrorTitle" aria-describedby="captchaErrorMessage">
-            <div class="captcha-error-card">
-                <div class="captcha-error-title" id="captchaErrorTitle">CAPTCHA verification failed</div>
-                <p class="captcha-error-message" id="captchaErrorMessage"><%= captchaError %></p>
-                <div class="captcha-error-actions">
-                    <button type="button" class="captcha-error-button" onclick="window.history.back(); return false;">Back</button>
-                </div>
-            </div>
+        <div class="captcha-error-card" style="filter: hue-rotate(<%= userHue %>deg); font-size: <%= userFontSize %>px; text-align: center; padding: 1.5rem 1rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color);">⚠️</div>
+            <h3 style="margin-bottom: 0.75rem; color: #fff; font-weight: 700;">CAPTCHA Verification Failed</h3>
+            <p style="color: #b5b5b5; margin-bottom: 1.25rem; line-height: 1.6;"><%= captchaError %></p>
+            <button class="btn btn-primary w-100" onclick="window.history.back();">Back</button>
         </div>
-        <style>
-            .captcha-error-overlay {
-                position: fixed;
-                inset: 0;
-                background: rgba(0, 0, 0, 0.65);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 24px;
-                z-index: 9999;
-            }
-            .captcha-error-card {
-                width: min(90vw, 520px);
-                background: var(--background-main, #0f0f0f);
-                color: var(--text-primary, #ffffff);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 14px;
-                padding: 24px;
-                box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-                text-align: center;
-            }
-            .captcha-error-title {
-                font-size: 18px;
-                font-weight: 700;
-                margin-bottom: 10px;
-            }
-            .captcha-error-message {
-                font-size: 14px;
-                margin: 0 0 18px 0;
-                color: var(--text-secondary, #cccccc);
-            }
-            .captcha-error-actions {
-                display: flex;
-                justify-content: center;
-            }
-            .captcha-error-button {
-                background: var(--primary-color, #ff6600);
-                color: #ffffff;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 16px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: transform 0.1s ease, box-shadow 0.2s ease;
-            }
-            .captcha-error-button:hover {
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-                transform: translateY(-1px);
-            }
-            .captcha-error-button:active {
-                transform: translateY(0);
-            }
-        </style>
-        <% } %>
+        <%
+            return;
+        }
+        %>
         
         <script>
             // Cookie-Verwaltung
@@ -716,7 +685,7 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             <% } %>
             
             <!-- CAPTCHA Widget -->
-            <% if (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) { %>
+            <% if (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true") && captchaError == null) { %>
             <div class="form-section" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
                 <div class="mb-3" style="text-align: center;">
                     <% if (captchaType.equalsIgnoreCase("TURNSTILE")) { %>

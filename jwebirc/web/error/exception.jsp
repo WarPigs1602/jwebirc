@@ -36,7 +36,7 @@
                 align-items: center;
                 justify-content: center;
                 padding: var(--spacing-md);
-                background: linear-gradient(135deg, #4a4a8a 0%, #6b5b95 50%, #8b5a7d 100%);
+                background: var(--background-main);
                 overflow-y: auto;
             }
             .error-card {
@@ -67,10 +67,7 @@
             .error-code {
                 font-size: 4rem;
                 font-weight: 800;
-                background: linear-gradient(135deg, var(--danger-color) 0%, var(--warning-color) 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
+                color: var(--danger-color);
                 margin: 0;
                 line-height: 1.2;
             }
@@ -91,7 +88,7 @@
                 margin-bottom: 1rem;
             }
             .btn-home {
-                background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+                background: var(--primary-color);
                 color: var(--text-primary);
                 padding: 12px 30px;
                 border: none;
@@ -107,7 +104,7 @@
                 transform: translateY(-2px);
                 box-shadow: var(--shadow-hover), var(--glow-primary);
                 color: var(--text-primary);
-                background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
+                background: var(--primary-light);
             }
             .stack-trace-container {
                 background: var(--background-tertiary);
@@ -255,7 +252,7 @@
                         <i class="fas fa-home"></i> Back to Home
                     </a>
                     <% if (showTrace && "detailed".equalsIgnoreCase(style)) { %>
-                    <button onclick="location.reload()" class="btn-home" style="margin-left: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <button onclick="location.reload()" class="btn-home" style="margin-left: 10px; background: var(--primary-color);">
                         <i class="fas fa-redo"></i> Retry
                     </button>
                     <% } %>
