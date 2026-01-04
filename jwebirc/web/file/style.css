@@ -948,9 +948,10 @@ a:focus {
         hsl(180, 100%, 50%),
         hsl(240, 100%, 50%),
         hsl(300, 100%, 50%),
-        hsl(360, 100%, 50%));
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
+        hsl(360, 100%, 50%)) !important;
+    background-repeat: no-repeat !important;
+    background-size: 100% 100% !important;
+    transition: filter 0.2s ease;
 }
 
 .hue-track {
@@ -3281,17 +3282,7 @@ a:hover {
     border-radius: 3px;
 }
 
-#loginOptionsMenu .nav-range-slider::-moz-range-track {
-    background: var(--background-tertiary);
-    height: 6px;
-    border-radius: 3px;
-    border: none;
-}
-
-#loginOptionsMenu .hue-slider {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
+#loginOptionsMenu .hue-slider::-webkit-slider-runnable-track {
     background: linear-gradient(to right, 
         hsl(0, 100%, 50%),
         hsl(30, 100%, 50%),
@@ -3301,42 +3292,33 @@ a:hover {
         hsl(240, 100%, 50%),
         hsl(300, 100%, 50%),
         hsl(360, 100%, 50%)) !important;
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
     height: 6px;
     border-radius: 3px;
-    outline: none;
-    cursor: pointer;
 }
 
-/* Webkit browsers (Chrome, Safari) */
-#loginOptionsMenu .hue-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: white;
-    border: 2px solid #666;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+#loginOptionsMenu .nav-range-slider::-moz-range-track {
+    background: var(--background-tertiary);
+    height: 6px;
+    border-radius: 3px;
+    border: none;
 }
 
-/* Firefox */
-#loginOptionsMenu .hue-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: white;
-    border: 2px solid #666;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-/* Firefox track */
 #loginOptionsMenu .hue-slider::-moz-range-track {
-    background: transparent;
+    background: linear-gradient(to right, 
+        hsl(0, 100%, 50%),
+        hsl(30, 100%, 50%),
+        hsl(60, 100%, 50%),
+        hsl(120, 100%, 50%),
+        hsl(180, 100%, 50%),
+        hsl(240, 100%, 50%),
+        hsl(300, 100%, 50%),
+        hsl(360, 100%, 50%)) !important;
+    height: 6px;
+    border-radius: 3px;
+    border: none;
 }
+
+
 
 #loginOptionsMenu .nav-dropdown-divider {
     height: 1px;
