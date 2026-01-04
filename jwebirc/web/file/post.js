@@ -14,6 +14,28 @@ class PostManager {
         this.typingTimer = null;
         this.isTyping = false;
         this.typingTimeout = 4000; // 4 seconds between typing notifications
+
+        // Color picker state
+        this.colorPicker = null;
+        this.colorSelection = { fg: null, bg: null };
+        this.colorPalette = [
+            { code: '00', label: 'White', color: '#ffffff' },
+            { code: '01', label: 'Black', color: '#000000' },
+            { code: '02', label: 'Navy', color: '#00007f' },
+            { code: '03', label: 'Green', color: '#009300' },
+            { code: '04', label: 'Red', color: '#ff0000' },
+            { code: '05', label: 'Brown', color: '#7f0000' },
+            { code: '06', label: 'Purple', color: '#9c009c' },
+            { code: '07', label: 'Orange', color: '#fc7f00' },
+            { code: '08', label: 'Yellow', color: '#ffff00' },
+            { code: '09', label: 'Light Green', color: '#00fc00' },
+            { code: '10', label: 'Teal', color: '#009393' },
+            { code: '11', label: 'Cyan', color: '#00ffff' },
+            { code: '12', label: 'Blue', color: '#0000ff' },
+            { code: '13', label: 'Pink', color: '#ff00ff' },
+            { code: '14', label: 'Gray', color: '#7f7f7f' },
+            { code: '15', label: 'Light Gray', color: '#d2d2d2' }
+        ];
         
         // Tab completion state
         this.tabState = {
@@ -28,6 +50,7 @@ class PostManager {
     
     initialize() {
         this.messageInput = document.getElementById("message");
+        this.setupColorPicker();
     }
     
     clearMessageHistory() {
@@ -40,6 +63,7 @@ class PostManager {
     
     submitChatInput(keyEvent) {
         const key = keyEvent.key;
+        const keyLower = key && key.toLowerCase ? key.toLowerCase() : key;
         
         // Send typing notification if message-tags capability is enabled
         if (!['Enter', 'ArrowUp', 'ArrowDown', 'Tab', 'Escape'].includes(key) && 
@@ -59,8 +83,8 @@ class PostManager {
         
         // Control keys for IRC formatting
         if (keyEvent.ctrlKey) {
-            switch (key) {
-                case 'k': this.control(3); return false;   // Color \x03
+            switch (keyLower) {
+                case 'k': this.showColorPicker(keyEvent); return false;   // Color picker
                 case 'b': this.control(2); return false;   // Bold \x02
                 case 'i': this.control(29); return false;  // Italic \x1D
                 case 'l': this.control(30); return false;  // Strikethrough \x1E
@@ -99,6 +123,172 @@ class PostManager {
         
         // Move cursor after inserted control code
         const newPos = start + 1;
+        this.messageInput.setSelectionRange(newPos, newPos);
+        this.messageInput.focus();
+    }
+
+    setupColorPicker() {
+        this.colorPicker = document.getElementById('colorPicker');
+        if (!this.colorPicker) {
+            return;
+        }
+
+        // Ensure picker is not clipped by parent overflow
+        if (this.colorPicker.parentElement !== document.body) {
+            document.body.appendChild(this.colorPicker);
+        }
+
+        this.colorPickerFgButtons = this.colorPicker.querySelectorAll('[data-color-role="fg"] button');
+        this.colorPickerBgButtons = this.colorPicker.querySelectorAll('[data-color-role="bg"] button');
+        this.colorPickerApply = document.getElementById('colorPickerApply');
+        this.colorPickerClearBg = document.getElementById('colorPickerClearBg');
+        this.colorPickerClose = document.getElementById('colorPickerClose');
+
+        const bindColor = (buttons, role) => {
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const colorCode = btn.dataset.colorCode;
+                    this.colorSelection[role] = colorCode;
+                    this.updateColorPickerSelection();
+                });
+            });
+        };
+
+        bindColor(this.colorPickerFgButtons, 'fg');
+        bindColor(this.colorPickerBgButtons, 'bg');
+
+        if (this.colorPickerClearBg) {
+            this.colorPickerClearBg.addEventListener('click', () => {
+                this.colorSelection.bg = null;
+                this.updateColorPickerSelection();
+            });
+        }
+
+        if (this.colorPickerApply) {
+            this.colorPickerApply.addEventListener('click', () => {
+                this.applyColorSelection();
+            });
+        }
+
+        if (this.colorPickerClose) {
+            this.colorPickerClose.addEventListener('click', () => {
+                this.hideColorPicker();
+            });
+        }
+
+        document.addEventListener('click', (evt) => {
+            if (!this.colorPicker || this.colorPicker.style.display !== 'block') {
+                return;
+            }
+            const isInside = this.colorPicker.contains(evt.target) || evt.target.id === 'message';
+            if (!isInside) {
+                this.hideColorPicker();
+            }
+        });
+
+        const handleCtrlK = (evt) => {
+            const key = evt.key && evt.key.toLowerCase ? evt.key.toLowerCase() : evt.key;
+            if (!evt.ctrlKey || evt.altKey || evt.metaKey) {
+                return;
+            }
+            if (key !== 'k' && evt.code !== 'KeyK' && evt.keyCode !== 75) {
+                return;
+            }
+            evt.preventDefault();
+            this.showColorPicker(evt);
+        };
+
+        // Capture globally (before browser default)
+        window.addEventListener('keydown', handleCtrlK, true);
+
+        // Capture directly on the input as fallback
+        if (this.messageInput) {
+            this.messageInput.addEventListener('keydown', handleCtrlK, true);
+        }
+    }
+
+    showColorPicker(keyEvent) {
+        if (keyEvent) {
+            keyEvent.preventDefault();
+        }
+
+        if (!this.colorPicker) {
+            this.control(3);
+            return;
+        }
+
+        this.colorSelection = { fg: null, bg: null };
+        this.updateColorPickerSelection();
+        this.colorPicker.style.display = 'block';
+        this.positionColorPicker();
+
+        // Fallback: if not visible (height 0), at least insert control code
+        setTimeout(() => {
+            if (!this.colorPicker || this.colorPicker.offsetHeight > 0) {
+                return;
+            }
+            this.control(3);
+        }, 50);
+    }
+
+    hideColorPicker() {
+        if (this.colorPicker) {
+            this.colorPicker.style.display = 'none';
+        }
+    }
+
+    positionColorPicker() {
+        if (!this.colorPicker || !this.messageInput) {
+            return;
+        }
+        const inputRect = this.messageInput.getBoundingClientRect();
+        const pickerRect = this.colorPicker.getBoundingClientRect();
+        const top = inputRect.top - pickerRect.height - 12;
+        const left = inputRect.left;
+        this.colorPicker.style.top = `${Math.max(10, top)}px`;
+        this.colorPicker.style.left = `${Math.max(10, left)}px`;
+    }
+
+    updateColorPickerSelection() {
+        const highlight = (buttons, role) => {
+            buttons.forEach(btn => {
+                const selected = this.colorSelection[role] === btn.dataset.colorCode;
+                if (selected) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        };
+
+        if (this.colorPickerFgButtons) {
+            highlight(this.colorPickerFgButtons, 'fg');
+        }
+        if (this.colorPickerBgButtons) {
+            highlight(this.colorPickerBgButtons, 'bg');
+        }
+    }
+
+    applyColorSelection() {
+        if (this.colorSelection.fg === null) {
+            return;
+        }
+
+        let code = String.fromCharCode(3) + this.colorSelection.fg;
+        if (this.colorSelection.bg !== null) {
+            code += ',' + this.colorSelection.bg;
+        }
+
+        this.insertAtCursor(code);
+        this.hideColorPicker();
+    }
+
+    insertAtCursor(text) {
+        const start = this.messageInput.selectionStart;
+        const end = this.messageInput.selectionEnd;
+        const current = this.messageInput.value;
+        this.messageInput.value = current.substring(0, start) + text + current.substring(end);
+        const newPos = start + text.length;
         this.messageInput.setSelectionRange(newPos, newPos);
         this.messageInput.focus();
     }

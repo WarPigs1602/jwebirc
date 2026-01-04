@@ -418,6 +418,62 @@
                 <div class="format-help-item"><kbd>Ctrl+O</kbd> <span style="color: white;">Reset all formatting</span></div>
             </div>
         </div>
+
+        <!-- Color Picker (Ctrl+K) -->
+        <div id="colorPicker" class="color-picker" style="display: none;" aria-label="IRC color picker">
+            <div class="color-picker-header">
+                <span><i class="fas fa-palette"></i> Colors (Ctrl+K)</span>
+                <button id="colorPickerClose" class="color-picker-close" type="button" aria-label="Close color picker">×</button>
+            </div>
+            <div class="color-picker-body">
+                <div class="color-picker-section" data-color-role="fg">
+                    <div class="color-picker-label">Foreground</div>
+                    <div class="color-grid">
+                        <button type="button" data-color-code="00" style="background:#ffffff;"></button>
+                        <button type="button" data-color-code="01" style="background:#000000;"></button>
+                        <button type="button" data-color-code="02" style="background:#00007f;"></button>
+                        <button type="button" data-color-code="03" style="background:#009300;"></button>
+                        <button type="button" data-color-code="04" style="background:#ff0000;"></button>
+                        <button type="button" data-color-code="05" style="background:#7f0000;"></button>
+                        <button type="button" data-color-code="06" style="background:#9c009c;"></button>
+                        <button type="button" data-color-code="07" style="background:#fc7f00;"></button>
+                        <button type="button" data-color-code="08" style="background:#ffff00;"></button>
+                        <button type="button" data-color-code="09" style="background:#00fc00;"></button>
+                        <button type="button" data-color-code="10" style="background:#009393;"></button>
+                        <button type="button" data-color-code="11" style="background:#00ffff;"></button>
+                        <button type="button" data-color-code="12" style="background:#0000ff;"></button>
+                        <button type="button" data-color-code="13" style="background:#ff00ff;"></button>
+                        <button type="button" data-color-code="14" style="background:#7f7f7f;"></button>
+                        <button type="button" data-color-code="15" style="background:#d2d2d2;"></button>
+                    </div>
+                </div>
+                <div class="color-picker-section" data-color-role="bg">
+                    <div class="color-picker-label">Background</div>
+                    <div class="color-grid">
+                        <button type="button" data-color-code="00" style="background:#ffffff;"></button>
+                        <button type="button" data-color-code="01" style="background:#000000;"></button>
+                        <button type="button" data-color-code="02" style="background:#00007f;"></button>
+                        <button type="button" data-color-code="03" style="background:#009300;"></button>
+                        <button type="button" data-color-code="04" style="background:#ff0000;"></button>
+                        <button type="button" data-color-code="05" style="background:#7f0000;"></button>
+                        <button type="button" data-color-code="06" style="background:#9c009c;"></button>
+                        <button type="button" data-color-code="07" style="background:#fc7f00;"></button>
+                        <button type="button" data-color-code="08" style="background:#ffff00;"></button>
+                        <button type="button" data-color-code="09" style="background:#00fc00;"></button>
+                        <button type="button" data-color-code="10" style="background:#009393;"></button>
+                        <button type="button" data-color-code="11" style="background:#00ffff;"></button>
+                        <button type="button" data-color-code="12" style="background:#0000ff;"></button>
+                        <button type="button" data-color-code="13" style="background:#ff00ff;"></button>
+                        <button type="button" data-color-code="14" style="background:#7f7f7f;"></button>
+                        <button type="button" data-color-code="15" style="background:#d2d2d2;"></button>
+                    </div>
+                    <button type="button" id="colorPickerClearBg" class="color-picker-clear">No background</button>
+                </div>
+            </div>
+            <div class="color-picker-actions">
+                <button type="button" id="colorPickerApply" class="btn btn-primary btn-sm">Insert</button>
+            </div>
+        </div>
     </div>
 </div>
 

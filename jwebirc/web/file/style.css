@@ -1577,6 +1577,134 @@ nv.highlighted:not(.unread)::after {
     border-radius: 3px;
 }
 
+/* ===== Color Picker (Ctrl+K) ===== */
+.color-picker {
+    position: fixed;
+    background: var(--background-secondary);
+    border: 2px solid var(--primary-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 320px;
+    z-index: 1200;
+    animation: slideUp 0.2s ease-out;
+}
+
+.color-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--primary-color);
+    color: var(--text-primary);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    font-weight: 600;
+}
+
+.color-picker-close {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 20px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.color-picker-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.color-picker-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+}
+
+.color-picker-section {
+    background: var(--background-tertiary);
+    border-radius: var(--border-radius);
+    padding: 10px;
+    box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+.color-picker-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.color-grid button {
+    width: 100%;
+    padding-top: 100%;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+    outline: none;
+}
+
+.color-grid button.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.4);
+}
+
+.color-grid button::after {
+    content: attr(data-color-code);
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    font-size: 10px;
+    color: #000;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+
+.color-grid button:nth-child(1)::after,
+.color-grid button:nth-child(2)::after,
+.color-grid button:nth-child(14)::after,
+.color-grid button:nth-child(15)::after,
+.color-grid button:nth-child(16)::after {
+    color: #000;
+}
+
+.color-picker-clear {
+    margin-top: 10px;
+    width: 100%;
+    border: 1px dashed var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.color-picker-clear:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-light);
+}
+
+.color-picker-actions {
+    padding: 10px 12px;
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-color);
+}
+
 /* ===== Custom Scrollbar ===== */
 .chat_frame::-webkit-scrollbar,
 .right_frame::-webkit-scrollbar,
