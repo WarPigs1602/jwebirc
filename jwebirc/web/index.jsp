@@ -37,6 +37,7 @@
     session.setAttribute("ip", request.getRemoteAddr());
     session.setAttribute("forwarded_for_header", forwardedForHeader);
     session.setAttribute("forwarded_for_ips", forwardedForIps);
+    String captchaError = null;
     var paramC = request.getParameter("channels");
     var paramN = request.getParameter("name");
     if (paramC == null) {
@@ -56,7 +57,6 @@
     var paramConnect = request.getParameter("connect");
     if (paramConnect != null) {
         // CAPTCHA Validation
-        String captchaError = null;
         if (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) {
             String captchaToken = request.getParameter("captchaToken");
             String remoteIp = request.getRemoteAddr();
@@ -104,7 +104,7 @@
                                                             remoteIp, projectId, siteKey, minScore);
             
             if (!captchaValid) {
-                captchaError = "CAPTCHA validation failed. Please try again.";
+                captchaError = "CAPTCHA verification failed. Please try again.";
             }
         }
         
@@ -475,6 +475,70 @@ if (activeCaptchaType.equalsIgnoreCase("TURNSTILE")) {
             <h2><%= session.getAttribute("irc_network_name") != null ? session.getAttribute("irc_network_name") : "IRC" %></h2>
             <p class="text-muted">Join the conversation</p>
         </div>
+        <% if (captchaError != null) { %>
+        <div class="captcha-error-overlay" role="alertdialog" aria-modal="true" aria-labelledby="captchaErrorTitle" aria-describedby="captchaErrorMessage">
+            <div class="captcha-error-card">
+                <div class="captcha-error-title" id="captchaErrorTitle">CAPTCHA verification failed</div>
+                <p class="captcha-error-message" id="captchaErrorMessage"><%= captchaError %></p>
+                <div class="captcha-error-actions">
+                    <button type="button" class="captcha-error-button" onclick="window.history.back(); return false;">Back</button>
+                </div>
+            </div>
+        </div>
+        <style>
+            .captcha-error-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.65);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                z-index: 9999;
+            }
+            .captcha-error-card {
+                width: min(90vw, 520px);
+                background: var(--background-main, #0f0f0f);
+                color: var(--text-primary, #ffffff);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 14px;
+                padding: 24px;
+                box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+                text-align: center;
+            }
+            .captcha-error-title {
+                font-size: 18px;
+                font-weight: 700;
+                margin-bottom: 10px;
+            }
+            .captcha-error-message {
+                font-size: 14px;
+                margin: 0 0 18px 0;
+                color: var(--text-secondary, #cccccc);
+            }
+            .captcha-error-actions {
+                display: flex;
+                justify-content: center;
+            }
+            .captcha-error-button {
+                background: var(--primary-color, #ff6600);
+                color: #ffffff;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.1s ease, box-shadow 0.2s ease;
+            }
+            .captcha-error-button:hover {
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+                transform: translateY(-1px);
+            }
+            .captcha-error-button:active {
+                transform: translateY(0);
+            }
+        </style>
+        <% } %>
         
         <script>
             // Cookie-Verwaltung

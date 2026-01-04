@@ -467,14 +467,34 @@ class IRCParser {
     autoJoinAfterLogin() {
         if (this.login) {
             
-            if (this.channel.length !== 0 && window.postManager) {
-                const channelsToJoin = this.chatManager.parseChannels(this.channel);
-                window.postManager.submitTextMessage("/join " + channelsToJoin);
+            // Collect all channels to join, prioritizing saved channels
+            const channelsToJoin = new Set();
+            
+            // First, add previously saved channels (priority)
+            if (this.chatManager && this.chatManager.joinedChannels) {
+                console.log('Auto-joining saved channels:', Array.from(this.chatManager.joinedChannels));
+                for (const channel of this.chatManager.joinedChannels) {
+                    channelsToJoin.add(channel.toLowerCase());
+                }
             }
             
-            // Rejoin previously saved channels
-            if (this.chatManager && window.postManager) {
-                this.chatManager.rejoinSavedChannels();
+            // Then add URL-parameter channels (if not already in saved list)
+            if (this.channel.length !== 0) {
+                const urlChannels = this.chatManager.parseChannels(this.channel).split(',');
+                console.log('Auto-joining URL channels:', urlChannels);
+                for (const channel of urlChannels) {
+                    const normalized = channel.trim().toLowerCase();
+                    if (normalized) {
+                        channelsToJoin.add(normalized);
+                    }
+                }
+            }
+            
+            // Join all channels (saved channels first, then new ones)
+            if (channelsToJoin.size > 0 && window.postManager) {
+                const channelList = Array.from(channelsToJoin).join(',');
+                console.log('Joining channels:', channelList);
+                window.postManager.submitTextMessage("/join " + channelList);
             }
             
             this.login = false;

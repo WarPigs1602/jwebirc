@@ -593,20 +593,37 @@ class ChatManager {
     }
     
     saveChannelList() {
-        // Save the list of channels to localStorage
-        const channelList = Array.from(this.joinedChannels);
-        sessionStorage.setItem('jwebirc_channels', JSON.stringify(channelList));
+        // Save the list of channels to localStorage for persistent storage
+        try {
+            const channelList = Array.from(this.joinedChannels);
+            localStorage.setItem('jwebirc_channels', JSON.stringify(channelList));
+            console.log('Channels saved to localStorage:', channelList);
+        } catch (e) {
+            console.error('Could not save channels to localStorage:', e);
+        }
     }
     
     loadSavedChannels() {
-        // Load saved channels from localStorage
+        // Load saved channels from localStorage (persistent storage)
         try {
-            const saved = sessionStorage.getItem('jwebirc_channels');
+            const saved = localStorage.getItem('jwebirc_channels');
             if (saved) {
-                this.joinedChannels = new Set(JSON.parse(saved));
+                const parsed = JSON.parse(saved);
+                const normalized = Array.isArray(parsed)
+                    ? parsed
+                        .map(ch => (typeof ch === 'string' ? ch.trim() : ''))
+                        .filter(Boolean)
+                        .map(ch => (this.isChannel(ch) ? ch.toLowerCase() : `#${ch.toLowerCase()}`))
+                    : [];
+                this.joinedChannels = new Set(normalized);
+                console.log('Channels loaded from localStorage:', Array.from(this.joinedChannels));
+                // Persist normalized values back to storage to keep format consistent
+                this.saveChannelList();
+            } else {
+                console.log('No saved channels found in localStorage');
             }
         } catch (e) {
-            console.warn('Could not load saved channels:', e);
+            console.error('Could not load saved channels:', e);
         }
     }
 
@@ -912,19 +929,17 @@ class ChatManager {
     }
     
     addToChannelMemory(channel) {
-        // Add channel to memory
-        if (this.isChannel(channel)) {
-            this.joinedChannels.add(channel.toLowerCase());
-            this.saveChannelList();
-        }
+        // Persist channel so it can be rejoined after reconnect/browser restart
+        const normalized = this.isChannel(channel) ? channel.toLowerCase() : `#${channel.toLowerCase()}`;
+        this.joinedChannels.add(normalized);
+        this.saveChannelList();
     }
     
     removeFromChannelMemory(channel) {
         // Remove channel from memory
-        if (this.isChannel(channel)) {
-            this.joinedChannels.delete(channel.toLowerCase());
-            this.saveChannelList();
-        }
+        const normalized = this.isChannel(channel) ? channel.toLowerCase() : `#${channel.toLowerCase()}`;
+        this.joinedChannels.delete(normalized);
+        this.saveChannelList();
     }
     
     rejoinSavedChannels() {
