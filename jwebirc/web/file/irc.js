@@ -182,8 +182,35 @@ class IRCParser {
         let parsed = "";
 
         switch (code) {
-            case "903": // SASL authentication successful (avoid duplicate notice)
-                return null;
+            case "903": { // SASL authentication successful
+                this.output = "Status";
+                this.hideLoadingScreen();
+                return " <span style=\"color: #00aa00\">==</span> SASL authentication successful.";
+            }
+
+            case "904": { // SASL authentication failed (bad credentials)
+                this.output = "Status";
+                this.hideLoadingScreen();
+                return " <span style=\"color: #ff0000\">==</span> SASL authentication failed: invalid username or password.";
+            }
+
+            case "905": { // SASL authentication failed (message too long)
+                this.output = "Status";
+                this.hideLoadingScreen();
+                return " <span style=\"color: #ff0000\">==</span> SASL authentication failed: authentication data too long.";
+            }
+
+            case "906": { // SASL authentication aborted
+                this.output = "Status";
+                this.hideLoadingScreen();
+                return " <span style=\"color: #ff0000\">==</span> SASL authentication aborted by server.";
+            }
+
+            case "907": { // Already authenticated
+                this.output = "Status";
+                this.hideLoadingScreen();
+                return " <span style=\"color: #00aa00\">==</span> SASL already authenticated.";
+            }
 
             case "005": // Server features (ISUPPORT)
                 // Parse PREFIX parameter
