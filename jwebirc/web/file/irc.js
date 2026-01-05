@@ -26,6 +26,13 @@ class IRCParser {
         this.historyDelay = this.commandDelay;
         this.historyCommandEnabled = window.historyCommandEnabled === true || window.historyCommandEnabled === 'true';
         this.historyCommand = window.historyCommand || '/msg HistServ HISTORY %CHANNEL% 50';
+
+        // Cache last shown capabilities to avoid duplicate CAP lines
+        this.capDisplayLast = { ls: null, ack: null, nak: null };
+
+        // Track capabilities (as reported by backend negotiation)
+        this.availableCaps = new Set();
+        this.enabledCaps = new Set();
     }
     
     /**
@@ -78,8 +85,8 @@ class IRCParser {
                 tags = this.parseMessageTags(text.substring(1, spaceIndex));
                 text = text.substring(spaceIndex + 1);
                 
-                // Handle typing notification (tagmsg with typing tag)
-                if (tags.has('typing') || tags.has('+typing')) {
+                // Handle typing notification only if message-tags capability is enabled
+                if (this.enabledCaps.has('message-tags') && (tags.has('typing') || tags.has('+typing'))) {
                     // Check if this is a TAGMSG command
                     const parts = text.split(' ');
                     if (parts.length >= 3 && parts[1] === 'TAGMSG') {
@@ -94,8 +101,10 @@ class IRCParser {
         const output = this.getNumerics(text.toString());
         if (!output) return;
 
-        // Use server-provided timestamp if available (IRCv3 server-time)
-        const ts = tags && tags.has('time') ? this.chatManager.getTimestamp(tags.get('time')) : this.chatManager.getTimestamp();
+        // Use server-provided timestamp if available and server-time is enabled
+        const ts = (tags && tags.has('time') && this.enabledCaps.has('server-time'))
+            ? this.chatManager.getTimestamp(tags.get('time'))
+            : this.chatManager.getTimestamp();
         
         if (this.chatManager.getActiveWindow()) {
             for (const channel of this.chatManager.channels) {
@@ -115,10 +124,9 @@ class IRCParser {
         const ircMsg = this.parseIrcMessage(text);
         const { prefix, command, params } = ircMsg;
         
-        // CAP handling (IRCv3 Capabilities)
+        // Show CAP capability info (backend still negotiates)
         if (command === 'CAP') {
-            this.handleCap(ircMsg);
-            return null;
+            return this.handleCapDisplay(ircMsg);
         }
 
         // BATCH handling (IRCv3 batch messages) - ignore control lines
@@ -174,6 +182,9 @@ class IRCParser {
         let parsed = "";
 
         switch (code) {
+            case "903": // SASL authentication successful (avoid duplicate notice)
+                return null;
+
             case "005": // Server features (ISUPPORT)
                 // Parse PREFIX parameter
                 for (const param of params) {
@@ -411,6 +422,50 @@ class IRCParser {
             default:
                 return this.handleGenericNumeric(ircMsg, code, text);
         }
+    }
+
+    /**
+     * Display CAP (capabilities) information in Status
+     */
+    handleCapDisplay(ircMsg) {
+        const { params } = ircMsg;
+        if (!params || params.length < 2) return null;
+
+        const target = params[0];
+        const sub = params[1].toUpperCase();
+        const capsString = params.length > 2 ? params[params.length - 1] : "";
+        const caps = capsString.split(" ").filter(Boolean);
+
+        // Deduplicate identical CAP announcements
+        const joined = caps.join(", ");
+        const lastKey = sub === "LS" ? "ls" : sub === "ACK" ? "ack" : sub === "NAK" ? "nak" : null;
+        if (lastKey && this.capDisplayLast[lastKey] === joined) {
+            return null;
+        }
+        if (lastKey) {
+            this.capDisplayLast[lastKey] = joined;
+        }
+
+        // Persist caps state for UI/feature toggles
+        if (sub === "LS") {
+            this.availableCaps = new Set(caps.map(c => c.toLowerCase()));
+        } else if (sub === "ACK") {
+            this.enabledCaps = new Set(caps.map(c => c.toLowerCase()));
+        }
+
+        this.output = "Status";
+
+        if (sub === "LS") {
+            return " <span style=\"color: #00aaff\">==</span> Available capabilities: " + joined;
+        }
+        if (sub === "ACK") {
+            return " <span style=\"color: #00aaff\">==</span> Enabled capabilities: " + joined;
+        }
+        if (sub === "NAK") {
+            return " <span style=\"color: #ff6600\">==</span> Rejected capabilities: " + joined;
+        }
+
+        return null;
     }
     
     handleCommand(ircMsg, text) {
@@ -924,7 +979,9 @@ class IRCParser {
         
         for (const pair of pairs) {
             const [key, value] = pair.split('=');
-            tags.set(key, value || true);
+            const k = key ? key.toLowerCase() : '';
+            if (!k) continue;
+            tags.set(k, value || true);
         }
         
         return tags;
@@ -1006,58 +1063,6 @@ class IRCParser {
                 
             default:
                 return ` <span style="color: #00aaff">==</span> CTCP ${ctcpCommand} reply from <span style="font-weight: bold;">${nick}</span>: ${ctcpResponse}`;
-        }
-    }
-    
-    /**
-     * Processes CAP (Capability) responses
-     * @param {Object} ircMsg - Parsed IRC message
-     */
-    handleCap(ircMsg) {
-        const { params } = ircMsg;
-        // Expected format: :server CAP nick LS :cap1 cap2 cap3
-        // params = [nick, 'LS', 'cap1 cap2 cap3']
-        // or: :server CAP * LS :cap1 cap2 cap3
-        // params = ['*', 'LS', 'cap1 cap2 cap3']
-        
-        if (params.length < 2) {
-            return;
-        }
-        
-        // First param is target (nick or '*')
-        const target = params[0];
-        const subcommand = params[1].toUpperCase();
-        
-        // Capabilities are in the last parameter (trailing), possibly with '*' continuation marker
-        const capsString = params.length > 2 ? params[params.length - 1] : '';
-        
-        // Split by space and filter out empty strings and continuation marker
-        const caps = capsString
-            .split(' ')
-            .filter(cap => cap.length > 0 && cap !== '*');
-        
-        switch (subcommand) {
-            case 'LS':
-                // Server lists available capabilities
-                this.chatManager.handleCapLS(caps);
-                break;
-            case 'ACK':
-                // Server confirms capabilities
-                this.chatManager.handleCapACK(caps);
-                break;
-            case 'NAK':
-                // Server rejects capabilities
-                this.chatManager.handleCapNAK(caps);
-                break;
-            case 'LIST':
-                // List of active capabilities
-                break;
-            case 'NEW':
-                // New capabilities available
-                break;
-            case 'DEL':
-                // Capabilities no longer available
-                break;
         }
     }
     

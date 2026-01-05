@@ -537,15 +537,27 @@ public class IrcParser {
     }
 
     protected void parseCommands(String line, Session session) {
+        // Keep original line with tags for forwarding to client
+        String originalLine = line;
+        
+        // Strip IRCv3 message tags for backend parsing only
+        String lineForParsing = line;
+        if (lineForParsing != null && lineForParsing.startsWith("@")) {
+            int firstSpace = lineForParsing.indexOf(' ');
+            if (firstSpace > 0 && firstSpace + 1 < lineForParsing.length()) {
+                lineForParsing = lineForParsing.substring(firstSpace + 1);
+            }
+        }
+
         // Parse only to check for special commands that need backend handling
-        IrcMessage msg = parseString(line);
+        IrcMessage msg = parseString(lineForParsing);
         String command = msg.command;
         
         // Handle 433 (Nickname already in use) - auto-retry with alternative
         if ("433".equals(command)) {
             handleNicknameInUse(msg, session);
             // Forward to client for display
-            sendText(line + "\n", session, "chat", "");
+            sendText(originalLine + "\n", session, "chat", "");
             return;
         }
         
@@ -553,7 +565,7 @@ public class IrcParser {
         if ("CAP".equals(command)) {
             handleCap(msg.prefix, msg.trailing, session);
             // Forward CAP messages to client so it can track enabled capabilities
-            sendText(line + "\n", session, "chat", "");
+            sendText(originalLine + "\n", session, "chat", "");
             return;
         }
         
@@ -565,8 +577,10 @@ public class IrcParser {
         
         // Handle numeric 903 (SASL success) and 904/905 (SASL failure)
         if ("903".equals(command) || "904".equals(command) || "905".equals(command)) {
-            handleSaslEnd(command, msg.trailing, session);
-            // Don't return here - forward SASL messages to client
+            handleSaslEnd(command, session);
+            // Forward SASL messages to client for display
+            sendText(originalLine + "\n", session, "chat", "");
+            return;
         }
         
         // Handle CTCP requests - format: :nick!user@host PRIVMSG target :\001COMMAND args\001
@@ -574,19 +588,19 @@ public class IrcParser {
             // Answer the CTCP request
             handleCtcpRequest(msg.prefix, msg.trailing, session);
             // Forward original line to client for display
-            sendText(line + "\n", session, "chat", "");
+            sendText(originalLine + "\n", session, "chat", "");
             return;
         }
         
         // Handle CTCP replies - format: :nick!user@host NOTICE target :\001COMMAND response\001
         if ("NOTICE".equals(command) && msg.trailing.startsWith("\u0001")) {
             // Forward original line to client for display in active window
-            sendText(line + "\n", session, "chat", "active");
+            sendText(originalLine + "\n", session, "chat", "active");
             return;
         }
         
-        // Forward original IRC line unmodified to client
-        sendText(line + "\n", session, "chat", "");
+        // Forward original IRC line unmodified to client (with tags intact)
+        sendText(originalLine + "\n", session, "chat", "");
     }
     
     private static final String DESIRED_CAPS = "message-tags";
@@ -656,6 +670,12 @@ public class IrcParser {
             if (availableCaps.contains("chghost")) {
                 capsToRequest.add("chghost");
             }
+            if (availableCaps.contains("batch")) {
+                capsToRequest.add("batch");
+            }
+            if (availableCaps.contains("server-time")) {
+                capsToRequest.add("server-time");
+            }
             
             // Request capabilities
             if (!capsToRequest.isEmpty()) {
@@ -680,9 +700,6 @@ public class IrcParser {
         else if ("ACK".equals(subCommand)) {
             String ackedCaps = trailing.trim();
             Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP ACK received: {0}", ackedCaps);
-            
-            // Forward CAP ACK to client for capability tracking
-            sendText(":" + prefix + " :" + trailing + "\n", session, "chat", "");
             
             // Parse ACKed capabilities
             java.util.Set<String> ackedCapSet = new java.util.HashSet<>();
@@ -802,50 +819,87 @@ public class IrcParser {
         
         String afterAuth = prefix.substring(authPos + 12).trim(); // 12 = length of "AUTHENTICATE"
         
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE received with parameter: [{0}]", afterAuth);
+        
         if ("+".equals(afterAuth)) {
             try {
-                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending credentials...");
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending PLAIN credentials...");
+                
+                // Validate SASL credentials
+                if (getSaslUsername() == null || getSaslUsername().isEmpty()) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL username is null or empty!");
+                    submitMessage("AUTHENTICATE *");
+                    return;
+                }
+                if (getSaslPassword() == null) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL password is null!");
+                    submitMessage("AUTHENTICATE *");
+                    return;
+                }
+                
                 // Send SASL PLAIN authentication: base64(username\0username\0password)
                 String authString = getSaslUsername() + "\0" + getSaslUsername() + "\0" + getSaslPassword();
                 String base64Auth = java.util.Base64.getEncoder().encodeToString(authString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                
+                Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "Sending AUTHENTICATE with base64 length: {0}", base64Auth.length());
                 submitMessage("AUTHENTICATE %s", base64Auth);
                 doSleep();
+                
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL PLAIN credentials sent, waiting for server response (903/904/905)...");
             } catch (Exception e) {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error sending SASL credentials", e);
+                // Abort SASL authentication
                 submitMessage("AUTHENTICATE *");
-                submitMessage("CAP END");
-                capNegotiating = false;
-                try {
-                    completeLogin();
-                } catch (IOException ex) {
-                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL error", ex);
-                }
+                doSleep();
+                // Server will send 904/905, which will be handled by handleSaslEnd
             }
+        } else {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Unexpected AUTHENTICATE parameter: {0}", afterAuth);
         }
     }
     
-    private void handleSaslEnd(String numeric, String trailing, Session session) {
+    private void handleSaslEnd(String numeric, Session session) {
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "handleSaslEnd called with numeric {0}, capNegotiating={1}, loginComplete={2}", 
+            new Object[]{numeric, capNegotiating, loginComplete});
+        
+        // SASL response received - don't send duplicate notices, parseCommands already forwards the line
         if (numeric.equals("903")) {
-            // SASL authentication successful
-            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL authentication successful (903)");
-            sendText(":Server NOTICE * :SASL authentication successful\n", session, "chat", "");
-        } else if (numeric.equals("904") || numeric.equals("905")) {
-            // SASL authentication failed
-            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "SASL authentication failed ({0}): {1}", new Object[]{numeric, trailing});
-            sendText(":Server NOTICE * :SASL authentication failed: " + trailing + "\n", session, "chat", "");
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "✓ SASL authentication successful (903)");
+        } else if (numeric.equals("904")) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "✗ SASL authentication failed (904 - bad auth)");
+        } else if (numeric.equals("905")) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "✗ SASL authentication failed (905 - too long)");
+        } else if (numeric.equals("906")) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "✗ SASL authentication aborted (906)");
+        } else if (numeric.equals("907")) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL: Already authenticated (907)");
         }
         
-        // End capability negotiation
+        // End capability negotiation after SASL completes (success or failure)
         if (capNegotiating) {
-            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Ending capability negotiation (CAP END)");
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "→ Sending CAP END to complete negotiation");
             submitMessage("CAP END");
+            doSleep();
             capNegotiating = false;
             
             // Now send NICK/USER to complete login
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "→ Calling completeLogin() after CAP END");
             try {
                 completeLogin();
             } catch (IOException e) {
                 Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL", e);
+            }
+        } else {
+            // If we're not in CAP negotiation but got SASL response, still ensure login completes
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "⚠ SASL response received but capNegotiating is false - attempting to complete login anyway");
+            if (!loginComplete) {
+                try {
+                    completeLogin();
+                } catch (IOException e) {
+                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error completing login after SASL recovery", e);
+                }
+            } else {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Login already complete, nothing to do");
             }
         }
     }

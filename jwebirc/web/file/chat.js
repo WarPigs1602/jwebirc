@@ -2330,7 +2330,7 @@ class ChatManager {
     getTimestamp(sourceTime) {
         // If server-time tag is provided (IRCv3), prefer that for display
         const time = sourceTime ? new Date(sourceTime) : new Date();
-        const hour = time.getHours();
+        const hour = (time.getHours() < 10 ? '0' + time.getHours() : time.getHours());
         const minute = (time.getMinutes() < 10 ? '0' + time.getMinutes() : time.getMinutes());
         const second = (time.getSeconds() < 10 ? '0' + time.getSeconds() : time.getSeconds());
         return `[${hour}:${minute}:${second}]`;
