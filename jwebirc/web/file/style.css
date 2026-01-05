@@ -685,6 +685,22 @@ a:focus {
     transition: all 0.2s ease;
 }
 
+/* Language toggle pill */
+.nav-action-btn.lang-btn {
+    min-width: 74px;
+    height: 32px;
+    padding: 0 10px;
+    gap: 6px;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-radius: 6px;
+}
+.nav-action-btn.lang-btn span {
+    line-height: 1;
+    letter-spacing: 0.04em;
+}
+
 .nav-action-btn:hover {
     background: rgba(88, 101, 242, 0.4);
     border-color: rgba(88, 101, 242, 0.6);
@@ -791,6 +807,27 @@ a:focus {
     cursor: pointer;
     transition: all 0.2s ease;
     user-select: none;
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    text-align: left;
+}
+
+/* Normalize button look inside dropdowns (language switch) */
+button.nav-dropdown-item {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 12px 12px;
+    margin: 0;
+    width: 100%;
+    text-align: left;
+    color: var(--text-secondary);
+    font: inherit;
 }
 
 .nav-dropdown-item:hover {

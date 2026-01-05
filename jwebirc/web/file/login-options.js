@@ -45,6 +45,15 @@ class LoginOptionsManager {
         
         // Setup event listeners
         this.setupEventListeners();
+
+        // Re-apply translations when language changes at runtime
+        window.addEventListener('jwebirc:languageChanged', () => {
+            if (typeof window.jwebircApplyTranslations === 'function') {
+                window.jwebircApplyTranslations();
+            }
+            // Keep slider labels in sync after language switch
+            this.applyPreferences();
+        });
         
         // Apply preferences to UI
         this.applyPreferences();
@@ -151,7 +160,9 @@ class LoginOptionsManager {
         // Close menu when clicking outside
         document.addEventListener('click', (e) => {
             if (!this.optionsMenu.contains(e.target) && e.target !== this.optionsToggle && !this.optionsToggle.contains(e.target)) {
+                this.optionsMenu.classList.remove('open');
                 this.optionsMenu.classList.remove('show');
+                this.optionsMenu.style.display = '';
                 this.optionsToggle.setAttribute('aria-expanded', 'false');
             }
         });
@@ -230,8 +241,11 @@ class LoginOptionsManager {
      * Toggle menu visibility
      */
     toggleMenu() {
+        this.optionsMenu.classList.toggle('open');
+        // Add .show for compatibility with older styles
         this.optionsMenu.classList.toggle('show');
-        const isVisible = this.optionsMenu.classList.contains('show');
+        const isVisible = this.optionsMenu.classList.contains('open');
+        this.optionsMenu.style.display = isVisible ? 'block' : '';
         this.optionsToggle.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
     }
     
@@ -368,8 +382,19 @@ class LoginOptionsManager {
     }
 }
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    const loginOptionsManager = new LoginOptionsManager();
-    loginOptionsManager.initialize();
-});
+// Initialize on page load (also works if DOMContentLoaded already fired)
+function initLoginOptionsManager() {
+    try {
+        const manager = new LoginOptionsManager();
+        manager.initialize();
+        window.loginOptionsManager = manager;
+    } catch (e) {
+        console.error('Login options initialization failed', e);
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLoginOptionsManager);
+} else {
+    initLoginOptionsManager();
+}

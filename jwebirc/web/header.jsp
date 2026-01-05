@@ -10,6 +10,10 @@
     // Set X-Frame-Options based on chatnapping configuration
     String chatnappingEnabled = (String) session.getAttribute("chatnapping_enabled");
     String allowedDomains = (String) session.getAttribute("chatnapping_allowed_domains");
+    String uiLang = (String) session.getAttribute("ui_lang");
+    if (uiLang == null) {
+        uiLang = "en";
+    }
     
     if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
         if (allowedDomains != null && !allowedDomains.equals("*")) {
@@ -25,7 +29,7 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= uiLang %>">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -52,83 +56,141 @@
         
         <!-- Scripts -->
         <script src="file/jquery.js"></script>
+        <script src="file/i18n.js"></script>
         <script src="file/login-options.js"></script>
     </head>
     <body>
-        <!-- Login Options Menu Button -->
-        <div id="loginOptionsContainer" style="position: fixed; top: 10px; right: 10px; z-index: 1000;">
-            <button class="nav-action-btn" id="loginOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Display Options">
-                <i class="fas fa-cog"></i>
-            </button>
+        <!-- Language + Login Options -->
+        <div style="position: fixed; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 8px; align-items: flex-start; flex-direction: row-reverse;">
+            <div id="loginOptionsContainer">
+                <button class="nav-action-btn" id="loginOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Display Options" data-i18n-title="options.display">
+                    <i class="fas fa-cog"></i>
+                </button>
             
-            <!-- Login Options Dropdown -->
-            <div class="nav-dropdown" id="loginOptionsMenu" role="menu">
-                <div class="nav-dropdown-header">
-                    <i class="fas fa-sliders-h"></i>
-                    <span>Display Options</span>
-                </div>
-                <div class="nav-dropdown-content">
-                    <div class="nav-dropdown-item slider-item">
-                        <div class="nav-dropdown-item-header">
-                            <i class="fas fa-text-height"></i>
-                            <span>Font Size</span>
-                            <span class="nav-slider-value" id="loginFontSizeValue">14px</span>
-                        </div>
-                        <div class="nav-slider-wrapper">
-                            <input type="range" id="loginOptFontSize" min="12" max="18" step="1" value="14" class="nav-range-slider">
-                            <div class="nav-slider-track"></div>
-                        </div>
+                <!-- Login Options Dropdown -->
+                <div class="nav-dropdown" id="loginOptionsMenu" role="menu">
+                    <div class="nav-dropdown-header">
+                        <i class="fas fa-sliders-h"></i>
+                        <span data-i18n="options.display">Display Options</span>
                     </div>
-                    <div class="nav-dropdown-divider"></div>
-                    <label class="nav-dropdown-item" for="loginOptHideTopic">
-                        <div class="nav-dropdown-item-left">
-                            <i class="fas fa-bars"></i>
-                            <span>Hide Topic</span>
+                    <div class="nav-dropdown-content">
+                        <div class="nav-dropdown-item slider-item">
+                            <div class="nav-dropdown-item-header">
+                                <i class="fas fa-text-height"></i>
+                                <span data-i18n="nav.fontSize">Font Size</span>
+                                <span class="nav-slider-value" id="loginFontSizeValue">14px</span>
+                            </div>
+                            <div class="nav-slider-wrapper">
+                                <input type="range" id="loginOptFontSize" min="12" max="18" step="1" value="14" class="nav-range-slider">
+                                <div class="nav-slider-track"></div>
+                            </div>
                         </div>
-                        <input type="checkbox" id="loginOptHideTopic" class="nav-toggle">
-                    </label>
-                    <label class="nav-dropdown-item" for="loginOptHideNicklist">
-                        <div class="nav-dropdown-item-left">
-                            <i class="fas fa-users"></i>
-                            <span>Hide Nicklist</span>
-                        </div>
-                        <input type="checkbox" id="loginOptHideNicklist" class="nav-toggle">
-                    </label>
-                    <div class="nav-dropdown-divider"></div>
-                    <label class="nav-dropdown-item" for="loginOptNavLeft">
-                        <div class="nav-dropdown-item-left">
-                            <i class="fas fa-align-left"></i>
-                            <span>Sidebar Mode</span>
-                        </div>
-                        <input type="checkbox" id="loginOptNavLeft" class="nav-toggle">
-                    </label>
-                    <div class="nav-dropdown-divider"></div>
-                    <label class="nav-dropdown-item" for="loginOptNotifications">
-                        <div class="nav-dropdown-item-left">
-                            <i class="fas fa-bell"></i>
-                            <span>Browser Notifications</span>
-                        </div>
-                        <input type="checkbox" id="loginOptNotifications" class="nav-toggle" checked>
-                    </label>
-                    <label class="nav-dropdown-item" for="loginOptNotificationSound">
-                        <div class="nav-dropdown-item-left">
-                            <i class="fas fa-volume-up"></i>
-                            <span>Notification Sound</span>
-                        </div>
-                        <input type="checkbox" id="loginOptNotificationSound" class="nav-toggle" checked>
-                    </label>
-                    <div class="nav-dropdown-divider"></div>
-                    <div class="nav-dropdown-item slider-item">
-                        <div class="nav-dropdown-item-header">
-                            <i class="fas fa-palette"></i>
-                            <span>Hue</span>
-                            <span class="nav-slider-value" id="loginHueValue">0°</span>
-                        </div>
-                        <div class="nav-slider-wrapper">
-                            <input type="range" id="loginOptHue" min="0" max="360" step="1" value="0" class="nav-range-slider hue-slider">
-                            <div class="nav-slider-track hue-track"></div>
+                        <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="loginOptHideTopic">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-bars"></i>
+                                <span data-i18n="nav.hideTopic">Hide Topic</span>
+                            </div>
+                            <input type="checkbox" id="loginOptHideTopic" class="nav-toggle">
+                        </label>
+                        <label class="nav-dropdown-item" for="loginOptHideNicklist">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-users"></i>
+                                <span data-i18n="nav.hideNicklist">Hide Nicklist</span>
+                            </div>
+                            <input type="checkbox" id="loginOptHideNicklist" class="nav-toggle">
+                        </label>
+                        <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="loginOptNavLeft">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-align-left"></i>
+                                <span data-i18n="nav.sidebarMode">Sidebar Mode</span>
+                            </div>
+                            <input type="checkbox" id="loginOptNavLeft" class="nav-toggle">
+                        </label>
+                        <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="loginOptNotifications">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-bell"></i>
+                                <span data-i18n="nav.browserNotifications">Browser Notifications</span>
+                            </div>
+                            <input type="checkbox" id="loginOptNotifications" class="nav-toggle" checked>
+                        </label>
+                        <label class="nav-dropdown-item" for="loginOptNotificationSound">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-volume-up"></i>
+                                <span data-i18n="nav.notificationSound">Notification Sound</span>
+                            </div>
+                            <input type="checkbox" id="loginOptNotificationSound" class="nav-toggle" checked>
+                        </label>
+                        <div class="nav-dropdown-divider"></div>
+                        <div class="nav-dropdown-item slider-item">
+                            <div class="nav-dropdown-item-header">
+                                <i class="fas fa-palette"></i>
+                                <span data-i18n="nav.hue">Hue</span>
+                                <span class="nav-slider-value" id="loginHueValue">0°</span>
+                            </div>
+                            <div class="nav-slider-wrapper">
+                                <input type="range" id="loginOptHue" min="0" max="360" step="1" value="0" class="nav-range-slider hue-slider">
+                                <div class="nav-slider-track hue-track"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <div id="languageSwitcher">
+                <button class="nav-action-btn lang-btn" id="languageToggle" aria-haspopup="true" aria-expanded="false" title="Language" data-i18n-title="lang.menu">
+                    <i class="fas fa-language"></i>
+                    <span id="languageToggleLabel"><%= uiLang != null ? uiLang.toUpperCase() : "EN" %></span>
+                </button>
+                <div class="nav-dropdown" id="languageMenu" role="menu">
+                    <div class="nav-dropdown-header">
+                        <i class="fas fa-language"></i>
+                        <span data-i18n="lang.menu">Language</span>
+                    </div>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="en" data-i18n="lang.english">English</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="de" data-i18n="lang.german">Deutsch</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="fr" data-i18n="lang.french">Français</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="it" data-i18n="lang.italian">Italiano</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="es" data-i18n="lang.spanish">Español</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="sv" data-i18n="lang.swedish">Svenska</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="pt" data-i18n="lang.portuguese">Português</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="tr" data-i18n="lang.turkish">Türkçe</button>
+                </div>
+            </div>
         </div>
+
+        <script>
+            (function() {
+                const langToggle = document.getElementById('languageToggle');
+                const langMenu = document.getElementById('languageMenu');
+                const langOptions = langMenu ? langMenu.querySelectorAll('.lang-option') : [];
+            
+                function closeMenu(e) {
+                    if (!langMenu || !langToggle) return;
+                    if (e && (langMenu.contains(e.target) || langToggle.contains(e.target))) return;
+                    langMenu.classList.remove('open');
+                    langToggle.setAttribute('aria-expanded', 'false');
+                }
+            
+                if (langToggle && langMenu) {
+                    langToggle.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const willOpen = !langMenu.classList.contains('open');
+                        langMenu.classList.toggle('open', willOpen);
+                        langToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                    });
+                    document.addEventListener('click', closeMenu);
+                }
+            
+                if (langOptions && langOptions.length && window.jwebircSetLanguage) {
+                    langOptions.forEach((btn) => {
+                        btn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            window.jwebircSetLanguage(btn.dataset.lang || 'en');
+                        });
+                    });
+                }
+            })();
+        </script>

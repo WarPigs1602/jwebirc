@@ -46,11 +46,42 @@ class PostManager {
             wordStart: 0,
             lastTabTime: 0
         };
+
+        // i18n helper
+        this.t = (key, fallback, replacements) => {
+            if (this.chatManager && typeof this.chatManager.t === 'function') {
+                return this.chatManager.t(key, fallback, replacements);
+            }
+            if (replacements && fallback) {
+                return Object.keys(replacements).reduce((acc, rKey) => acc.replace(`{${rKey}}`, replacements[rKey]), fallback);
+            }
+            return fallback || key;
+        };
+
+        // React to runtime language switches for input UI
+        window.addEventListener('jwebirc:languageChanged', () => {
+            this.updateMessagePlaceholder();
+        });
     }
     
     initialize() {
         this.messageInput = document.getElementById("message");
         this.setupColorPicker();
+        this.updateMessagePlaceholder();
+    }
+
+    updateMessagePlaceholder() {
+        if (!this.messageInput) return;
+        // Honor explicit data-i18n-placeholder if present
+        if (this.messageInput.dataset && this.messageInput.dataset.i18nPlaceholder) {
+            if (typeof window.jwebircApplyTranslations === 'function') {
+                window.jwebircApplyTranslations();
+            }
+            return;
+        }
+        if (typeof window.jwebircTranslate === 'function') {
+            this.messageInput.placeholder = window.jwebircTranslate('chat.placeholder');
+        }
     }
     
     clearMessageHistory() {
@@ -431,7 +462,7 @@ class PostManager {
                 // Build proper IRC message through ircText to handle special cases
                 return this.ircText("/privmsg " + activeWindow + " " + text);
             } else {
-                this.chatManager.parsePage(this.chatManager.getTimestamp() + " *** You must start with / in the status window\n");
+                    this.chatManager.parsePage(this.chatManager.getTimestamp() + " " + this.t('chat.command.statusSlash', '*** You must start with / in the status window') + "\n");
                 this.chatManager.addWindow();
                 return null;
             }
@@ -452,7 +483,7 @@ class PostManager {
         
         // Block /LIST command
         if (text.toLowerCase().startsWith("/list")) {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> The /LIST command is disabled\n");
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.listDisabled', 'The /LIST command is disabled') + "\n");
             this.chatManager.addWindow();
             return null;
         }
@@ -468,10 +499,10 @@ class PostManager {
                 }
                 // Display message in the query window itself
                 this.chatManager.setOutput(nick);
-                this.chatManager.parsePages(this.chatManager.getTimestamp() + " <span style=\"color: #00ff00\">==</span> Query window opened for " + nick + "\n", nick);
+                this.chatManager.parsePages(this.chatManager.getTimestamp() + " <span style=\"color: #00ff00\">==</span> " + this.t('chat.command.queryOpened', 'Query window opened for {nick}', { nick }) + "\n", nick);
                 this.chatManager.addWindow();
             } else {
-                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Usage: /query <nick>\n");
+                    this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.queryUsage', 'Usage: /query <nick>') + "\n");
                 this.chatManager.addWindow();
             }
             return null;
@@ -652,8 +683,8 @@ class PostManager {
     handleCtcpCommand(text, activeWindow) {
         const parts = text.substring(6).trim().split(" ");
         if (parts.length < 2) {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Usage: /ctcp <target> <command> [args]\n");
-            this.chatManager.addWindow();
+              this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.ctcpUsage', 'Usage: /ctcp <target> <command> [args]') + "\n");
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.invalidChannel', 'Invalid channel: {channel}', { channel }) + "\n");
             return null;
         }
         
@@ -673,7 +704,7 @@ class PostManager {
      */
     sendCtcp(target, command, args = "") {
         if (!target || target.length === 0) {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: No target specified\n");
+              this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.noTarget', 'Error: No target specified') + "\n");
             this.chatManager.addWindow();
             return null;
         }
@@ -683,7 +714,8 @@ class PostManager {
         // Display sent CTCP request
         if (window.ircParser) {
             window.ircParser.output = this.chatManager.getActiveWindow();
-            window.ircParser.parseOutput(` <span style="color: #00aaff">==</span> CTCP ${command} request sent to <span style="font-weight: bold;">${target}</span>${args ? ': ' + args : ''}`);
+              const sentText = this.t('chat.command.ctcpSent', 'CTCP {command} request sent to {target}{args}', { command, target, args: args ? ': ' + args : '' });
+              window.ircParser.parseOutput(` <span style=\"color: #00aaff\">==</span> ${sentText}`);
         }
         this.chatManager.addWindow();
         

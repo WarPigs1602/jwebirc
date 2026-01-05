@@ -77,6 +77,79 @@ class ChatManager {
         
         // CAP negotiation timeout handler
         this.capEndTimer = null;
+
+        // i18n helper
+        this.t = (key, fallback, replacements) => {
+            const format = (text) => {
+                if (!text || !replacements) return text;
+                return Object.keys(replacements).reduce((acc, rKey) => acc.replace(`{${rKey}}`, replacements[rKey]), text);
+            };
+
+            if (typeof window.jwebircTranslate === 'function') {
+                const translated = window.jwebircTranslate(key, replacements);
+                if (translated && translated !== key) {
+                    return translated;
+                }
+            }
+            const base = fallback || key;
+            return format(base);
+        };
+
+        // React to runtime language switches
+        window.addEventListener('jwebirc:languageChanged', () => {
+            if (typeof window.jwebircApplyTranslations === 'function') {
+                window.jwebircApplyTranslations();
+            }
+            // Refresh dynamic UI text such as typing bar in current language
+            this.updateTypingBar(this.activeWindow);
+            // Refresh already-rendered system lines without reload
+            this.refreshLogTranslations();
+        });
+    }
+
+    buildI18nSpan(key, fallback, replacements) {
+        const attrs = [
+            'data-i18n-log="true"',
+            `data-i18n-key="${this.escapeAttr(key)}"`,
+        ];
+
+        if (fallback) {
+            attrs.push(`data-i18n-fallback="${encodeURIComponent(fallback)}"`);
+        }
+
+        if (replacements) {
+            try {
+                attrs.push(`data-i18n-repl="${encodeURIComponent(JSON.stringify(replacements))}"`);
+            } catch (e) {
+                // Ignore serialization issues; message will still render in current language
+            }
+        }
+
+        const translated = this.t(key, fallback, replacements);
+        return `<span ${attrs.join(' ')}>${translated}</span>`;
+    }
+
+    refreshLogTranslations(root = document) {
+        if (!root || typeof window.jwebircTranslate !== 'function') return;
+
+        root.querySelectorAll('[data-i18n-log="true"]').forEach((span) => {
+            const key = span.getAttribute('data-i18n-key');
+            const fallbackRaw = span.getAttribute('data-i18n-fallback');
+            const replRaw = span.getAttribute('data-i18n-repl');
+
+            let replacements = null;
+            if (replRaw) {
+                try {
+                    replacements = JSON.parse(decodeURIComponent(replRaw));
+                } catch (e) {
+                    // Leave replacements null if parsing fails
+                }
+            }
+
+            const fallback = fallbackRaw ? decodeURIComponent(fallbackRaw) : key;
+            const translated = window.jwebircTranslate(key, replacements);
+            span.textContent = translated && translated !== key ? translated : fallback;
+        });
     }
     
     /**
@@ -161,7 +234,8 @@ class ChatManager {
      * @param {Array} caps - Array of rejected capabilities
      */
     handleCapNAK(caps) {
-        this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Capabilities rejected: " + caps.join(', ') + "\n");
+        const capsRejected = this.buildI18nSpan('chat.capabilitiesRejected', 'Capabilities rejected');
+        this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> " + capsRejected + ": " + caps.join(', ') + "\n");
         this.addWindow();
         
         // End CAP negotiation even on rejection
@@ -186,7 +260,8 @@ class ChatManager {
             
             // Show all enabled capabilities once at the end
             if (this.capabilities.enabled.length > 0) {
-                this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> Capabilities enabled: " + this.capabilities.enabled.join(', ') + "\n");
+                const capsEnabled = this.buildI18nSpan('chat.capabilitiesEnabled', 'Capabilities enabled');
+                this.parsePage(this.getTimestamp() + " <span style='color: #00aaff'>==</span> " + capsEnabled + ": " + this.capabilities.enabled.join(', ') + "\n");
                 this.addWindow();
             }
         }
@@ -273,7 +348,7 @@ class ChatManager {
             this.typingUsers.set(channel, new Map());
         }
         
-        const channelTyping = this.typingUsers.get(channel);
+        const channelTyping = this.typingUsers.get(channel); 
         
         if (state === 'active') {
             if (channelTyping.has(user)) {
@@ -349,13 +424,21 @@ class ChatManager {
         if (typingText) {
             let text = '';
             if (typingUsersList.length === 1) {
-                text = `${typingUsersList[0]} is typing`;
+                text = this.t('chat.typing.one', `${typingUsersList[0]} is typing`, { user: typingUsersList[0] });
             } else if (typingUsersList.length === 2) {
-                text = `${typingUsersList[0]} and ${typingUsersList[1]} are typing`;
+                text = this.t(
+                    'chat.typing.two',
+                    `${typingUsersList[0]} and ${typingUsersList[1]} are typing`,
+                    { user1: typingUsersList[0], user2: typingUsersList[1] }
+                );
             } else if (typingUsersList.length === 3) {
-                text = `${typingUsersList[0]}, ${typingUsersList[1]} and ${typingUsersList[2]} are typing`;
+                text = this.t(
+                    'chat.typing.three',
+                    `${typingUsersList[0]}, ${typingUsersList[1]} and ${typingUsersList[2]} are typing`,
+                    { user1: typingUsersList[0], user2: typingUsersList[1], user3: typingUsersList[2] }
+                );
             } else {
-                text = `${typingUsersList.length} users are typing`;
+                text = this.t('chat.typing.many', `${typingUsersList.length} users are typing`, { count: typingUsersList.length });
             }
             typingText.textContent = text;
         }
@@ -427,7 +510,8 @@ class ChatManager {
         this.socket.onerror = (errorEvent) => {
             console.error('[WebSocket] Error:', errorEvent);
             const errorMsg = errorEvent.message || errorEvent.type || 'Unknown WebSocket error';
-            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> Connection error: " + errorMsg + "\n");
+            const connError = this.buildI18nSpan('chat.connectionError', 'Connection error');
+            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> " + connError + ": " + errorMsg + "\n");
             this.addWindow();
             this.scrollToEnd("#chat_window", 100);
         };
@@ -445,7 +529,7 @@ class ChatManager {
                 }
             }
             
-            let closeMsg = "Connection to server closed";
+            let closeMsg = this.buildI18nSpan('chat.connectionClosed', 'Connection to server closed');
             if (closeEvent.code) {
                 closeMsg += " (Code: " + closeEvent.code + ")";
             }
@@ -467,7 +551,8 @@ class ChatManager {
             
             // Optional: Attempt reconnection
             if (!closeEvent.wasClean && closeEvent.code !== 1000) {
-                this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> Connection lost unexpectedly. Please reload the page to reconnect.\n");
+                const connLost = this.buildI18nSpan('chat.connectionLost', 'Connection lost unexpectedly. Please reload the page to reconnect.');
+                this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> " + connLost + "\n");
                 this.addWindow();
             }
         };
@@ -479,7 +564,8 @@ class ChatManager {
                 
                 if (category === "error") {
                     console.error('[WebSocket] Server error:', message);
-                    this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error: " + message + "\n");
+                    const connErr = this.buildI18nSpan('chat.connectionError', 'Error');
+                    this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + connErr + ": " + message + "\n");
                     this.addWindow();
                 } else if (category === "chat") {
                     if (message !== "Ping? Pong!") {
@@ -506,12 +592,14 @@ class ChatManager {
                     }
                 } else {
                     console.warn('[WebSocket] Unknown category:', category);
-                    this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Unknown category: " + category + "\n");
+                    const unknownCat = this.buildI18nSpan('chat.unknownCategory', 'Unknown category');
+                    this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + unknownCat + ": " + category + "\n");
                     this.addWindow();
                 }
             } catch (error) {
                 console.error('[WebSocket] Error parsing message:', error, messageEvent.data);
-                this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> Error parsing server message: " + error.message + "\n");
+                const parseErr = this.buildI18nSpan('chat.errorParsing', 'Error parsing server message');
+                this.parsePage(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + parseErr + ": " + error.message + "\n");
                 this.addWindow();
             }
         };
@@ -612,8 +700,10 @@ class ChatManager {
         this.parsePage(this.getTimestamp() + " jwebirc 2.0\n");
         this.parsePage(this.getTimestamp() + " &copy; 2024-2025 by Andreas Pschorn\n");
         this.parsePage(this.getTimestamp() + " <a href=\"https://github.com/WarPigs1602/jwebirc\" target=\"_blank\">https://github.com/WarPigs1602/jwebirc</a>\n");
-        this.parsePage(this.getTimestamp() + " Licensed under the MIT License\n");
-        this.parsePage(this.getTimestamp() + " <span style=\"color: #ffaa00\">==</span> Connecting to server, please wait...\n");
+        const mitLicense = this.buildI18nSpan('chat.license', 'Licensed under the MIT License');
+        this.parsePage(this.getTimestamp() + " " + mitLicense + "\n");
+        const connecting = this.buildI18nSpan('chat.connecting', 'Connecting to server, please wait...');
+        this.parsePage(this.getTimestamp() + " <span style=\"color: #ffaa00\">==</span> " + connecting + "\n");
         
         // Load saved channels for rejoin
         this.loadSavedChannels();
@@ -813,14 +903,14 @@ class ChatManager {
                     const enabled = await this.notificationManager.enable();
                     if (!enabled) {
                         notificationToggle.checked = false;
-                        this.showEventBar('Browser notifications were denied', 'error');
+                        this.showEventBar(this.t('chat.notificationsDenied', 'Browser notifications were denied'), 'error');
                     } else {
-                        this.showEventBar('Browser notifications enabled', 'success');
+                        this.showEventBar(this.t('chat.notificationsEnabled', 'Browser notifications enabled'), 'success');
                         this.saveUiPreference('notificationsEnabled', true);
                     }
                 } else {
                     this.notificationManager.disable();
-                    this.showEventBar('Browser notifications disabled', 'info');
+                    this.showEventBar(this.t('chat.notificationsDisabled', 'Browser notifications disabled'), 'info');
                     this.saveUiPreference('notificationsEnabled', false);
                 }
             });
@@ -1321,6 +1411,10 @@ class ChatManager {
         // This preserves link formatting and other HTML from parsePages
         return text;
     }
+
+    escapeAttr(value) {
+        return String(value).replace(/"/g, '&quot;');
+    }
     
     /**
      * Checks if HTML string contains visible text (not just tags)
@@ -1747,7 +1841,8 @@ class ChatManager {
                     }
                     
                     const reasonText = reason.length !== 0 ? " (" + reason + ")" : "";
-                    this.parsePages(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + parsed + "</span> has left IRC" + reasonText + "\n", channel);
+                    const quitText = this.buildI18nSpan('chat.userLeft', '{nick} has left IRC{reason}', { nick: parsed, reason: reasonText });
+                    this.parsePages(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + quitText + "</span>\n", channel);
                 }
             }
         }
@@ -1775,7 +1870,8 @@ class ChatManager {
                         this.renderUserlist(channel);
                     }
                     
-                    this.parsePages(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + parsed + "</span> has changed his nick to <span style=\"color: " + color + ";\">" + newnick + "</span>\n", channel);
+                    const nickChange = this.buildI18nSpan('chat.nickChange', '{oldnick} has changed their nick to {newnick}', { oldnick: parsed, newnick });
+                    this.parsePages(this.getTimestamp() + " <span style=\"color: #ff0000\">==</span> <span style=\"color: " + color + ";\">" + nickChange + "</span>\n", channel);
                     break;
                 }
             }

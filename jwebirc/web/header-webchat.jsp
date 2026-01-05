@@ -10,6 +10,10 @@
     // Set X-Frame-Options based on chatnapping configuration
     String chatnappingEnabled = (String) session.getAttribute("chatnapping_enabled");
     String allowedDomains = (String) session.getAttribute("chatnapping_allowed_domains");
+    String uiLang = (String) session.getAttribute("ui_lang");
+    if (uiLang == null) {
+        uiLang = "en";
+    }
     
     if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
         if (allowedDomains != null && !allowedDomains.equals("*")) {
@@ -25,7 +29,7 @@
     }
 %>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="<%= uiLang %>" data-theme="dark">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
@@ -62,7 +66,9 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer">
         
         <!-- Scripts -->
+        <script>window.jwebircLang = "<%= uiLang %>";</script>
         <script src="file/jquery.js"></script>
+        <script src="file/i18n.js"></script>
         <script src="file/emoji-picker.js"></script>
         
         <style>
@@ -133,15 +139,27 @@
         <div class="loading-screen" id="loadingScreen">
             <div class="loading-content">
                 <div class="loading-spinner"></div>
-                <div class="loading-text" id="loadingText">Connecting to IRC...</div>
+                <div class="loading-text" id="loadingText" data-i18n="chat.loading">Connecting to IRC...</div>
             </div>
         </div>
         <script>
             // Update loading text with nickname when available
-            if (typeof window.user !== 'undefined' && window.user) {
+            (function() {
                 const loadingText = document.getElementById('loadingText');
-                if (loadingText) {
-                    loadingText.textContent = 'Connecting to IRC as ' + window.user + '...';
+                if (!loadingText) return;
+                const translate = window.jwebircTranslate || function(key, replacements) {
+                    if (key === 'chat.loadingAs' && replacements && replacements.nick) {
+                        return 'Connecting to IRC as ' + replacements.nick + '...';
+                    }
+                    if (key === 'chat.loading') {
+                        return 'Connecting to IRC...';
+                    }
+                    return key;
+                };
+                if (typeof window.user !== 'undefined' && window.user) {
+                    loadingText.textContent = translate('chat.loadingAs', { nick: window.user });
+                } else {
+                    loadingText.textContent = translate('chat.loading');
                 }
-            }
+            })();
         </script>

@@ -9,6 +9,19 @@
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@include file="init.jsp"%>
 <%
+    // Persist UI language in session (supports en/de)
+    String uiLang = (String) session.getAttribute("ui_lang");
+    String langParam = request.getParameter("lang");
+    if (langParam != null && ("en".equalsIgnoreCase(langParam) || "de".equalsIgnoreCase(langParam))) {
+        uiLang = langParam.toLowerCase();
+    }
+    if (uiLang == null) {
+        String browserLang = request.getLocale() != null ? request.getLocale().getLanguage() : "en";
+        uiLang = "de".equalsIgnoreCase(browserLang) ? "de" : "en";
+    }
+    session.setAttribute("ui_lang", uiLang);
+    request.setAttribute("ui_lang", uiLang);
+    
     var nick = (String) session.getAttribute("nick");
     session.setAttribute("webchat_session_timout", webchatSessionTimeout);
     session.setAttribute("webchat_host", webchatHost);
@@ -106,7 +119,9 @@
                                                             remoteIp, projectId, siteKey, minScore);
             
             if (!captchaValid) {
-                captchaError = "CAPTCHA verification failed. Please try again.";
+                captchaError = uiLang != null && uiLang.equalsIgnoreCase("de")
+                    ? "CAPTCHA-Überprüfung fehlgeschlagen. Bitte erneut versuchen."
+                    : "CAPTCHA verification failed. Please try again.";
             }
         }
         
@@ -186,14 +201,14 @@
                 <i class="fas fa-cookie"></i>
             </div>
             <div class="cookie-warning-text">
-                <p class="cookie-warning-title">We Use Cookies</p>
-                <p class="cookie-warning-message">
+                <p class="cookie-warning-title" data-i18n="cookie.title">We Use Cookies</p>
+                <p class="cookie-warning-message" data-i18n="cookie.message">
                     This website uses cookies to store your preferences (such as font size and color tone) 
                     and to improve your browsing experience. Cookies are stored only locally in your browser.
                 </p>
             </div>
             <div class="cookie-warning-actions">
-                <button id="cookieAccept" class="cookie-btn cookie-btn-accept" aria-label="Accept cookie notice">
+                <button id="cookieAccept" class="cookie-btn cookie-btn-accept" aria-label="Accept cookie notice" data-i18n="cookie.accept" data-i18n-aria-label="cookie.accept">
                     <i class="fas fa-check"></i> Accept
                 </button>
             </div>
@@ -248,7 +263,7 @@
                 </div>
                 <div class="nav-brand-text">
                     <span class="nav-brand-title">jWebIRC</span>
-                    <span class="nav-brand-subtitle">Channels</span>
+                    <span class="nav-brand-subtitle" data-i18n="nav.channels">Channels</span>
                 </div>
             </div>
             
@@ -265,11 +280,29 @@
             
             <!-- Actions Section -->
             <div class="nav-actions">
-                <button class="nav-action-btn" id="navNotifications" title="Notifications" aria-label="Notifications">
+                <button class="nav-action-btn" id="navNotifications" title="Notifications" aria-label="Notifications" data-i18n-title="nav.notifications" data-i18n-aria-label="nav.notifications">
                     <i class="fas fa-bell"></i>
                     <span class="nav-badge" id="notificationBadge" style="display: none;">0</span>
                 </button>
-                <button class="nav-action-btn" id="navOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Settings">
+                <button class="nav-action-btn lang-btn" id="navLanguageToggle" aria-haspopup="true" aria-expanded="false" title="Language" data-i18n-title="lang.menu">
+                    <i class="fas fa-language"></i>
+                    <span id="navLanguageLabel"><%= uiLang.toUpperCase() %></span>
+                </button>
+                <div class="nav-dropdown" id="navLanguageMenu" role="menu">
+                    <div class="nav-dropdown-header">
+                        <i class="fas fa-language"></i>
+                        <span data-i18n="lang.menu">Language</span>
+                    </div>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="en" data-i18n="lang.english">English</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="de" data-i18n="lang.german">Deutsch</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="fr" data-i18n="lang.french">Français</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="it" data-i18n="lang.italian">Italiano</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="es" data-i18n="lang.spanish">Español</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="sv" data-i18n="lang.swedish">Svenska</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="pt" data-i18n="lang.portuguese">Português</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="tr" data-i18n="lang.turkish">Türkçe</button>
+                </div>
+                <button class="nav-action-btn" id="navOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Settings" data-i18n-title="nav.settings">
                     <i class="fas fa-cog"></i>
                 </button>
                 
@@ -277,20 +310,20 @@
                 <div class="nav-dropdown" id="navOptionsMenu" role="menu">
                     <div class="nav-dropdown-header">
                         <i class="fas fa-sliders-h"></i>
-                        <span>View Options</span>
+                        <span data-i18n="nav.viewOptions">View Options</span>
                     </div>
                     <div class="nav-dropdown-content">
                         <label class="nav-dropdown-item" for="optHideTopic">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-eye-slash"></i>
-                                <span>Hide Topic</span>
+                                <span data-i18n="nav.hideTopic">Hide Topic</span>
                             </div>
                             <input type="checkbox" id="optHideTopic" class="nav-toggle">
                         </label>
                         <label class="nav-dropdown-item" for="optHideNicklist">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-users"></i>
-                                <span>Hide Nicklist</span>
+                                <span data-i18n="nav.hideNicklist">Hide Nicklist</span>
                             </div>
                             <input type="checkbox" id="optHideNicklist" class="nav-toggle">
                         </label>
@@ -298,7 +331,7 @@
                         <label class="nav-dropdown-item" for="optNavLeft">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-align-left"></i>
-                                <span>Sidebar Mode</span>
+                                <span data-i18n="nav.sidebarMode">Sidebar Mode</span>
                             </div>
                             <input type="checkbox" id="optNavLeft" class="nav-toggle">
                         </label>
@@ -306,14 +339,14 @@
                         <label class="nav-dropdown-item" for="optNotifications">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-bell"></i>
-                                <span>Browser Notifications</span>
+                                <span data-i18n="nav.browserNotifications">Browser Notifications</span>
                             </div>
                             <input type="checkbox" id="optNotifications" class="nav-toggle" checked>
                         </label>
                         <label class="nav-dropdown-item" for="optNotificationSound">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-volume-up"></i>
-                                <span>Notification Sound</span>
+                                <span data-i18n="nav.notificationSound">Notification Sound</span>
                             </div>
                             <input type="checkbox" id="optNotificationSound" class="nav-toggle" checked>
                         </label>
@@ -321,7 +354,7 @@
                         <div class="nav-dropdown-item slider-item">
                             <div class="nav-dropdown-item-header">
                                 <i class="fas fa-text-height"></i>
-                                <span>Font Size</span>
+                                <span data-i18n="nav.fontSize">Font Size</span>
                                 <span class="nav-slider-value" id="fontSizeValue">14px</span>
                             </div>
                             <div class="nav-slider-wrapper">
@@ -333,7 +366,7 @@
                         <div class="nav-dropdown-item slider-item">
                             <div class="nav-dropdown-item-header">
                                 <i class="fas fa-palette"></i>
-                                <span>Hue</span>
+                                <span data-i18n="nav.hue">Hue</span>
                                 <span class="nav-slider-value" id="hueValue">0°</span>
                             </div>
                             <div class="nav-slider-wrapper">
@@ -346,6 +379,39 @@
             </div>
         </div>
     </nav>
+    <script>
+        (function() {
+            const langToggle = document.getElementById('navLanguageToggle');
+            const langMenu = document.getElementById('navLanguageMenu');
+            const langOptions = langMenu ? langMenu.querySelectorAll('.lang-option') : [];
+            
+            function closeMenu(e) {
+                if (!langMenu || !langToggle) return;
+                if (e && (langMenu.contains(e.target) || langToggle.contains(e.target))) return;
+                langMenu.classList.remove('open');
+                langToggle.setAttribute('aria-expanded', 'false');
+            }
+            
+            if (langToggle && langMenu) {
+                langToggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const willOpen = !langMenu.classList.contains('open');
+                    langMenu.classList.toggle('open', willOpen);
+                    langToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                });
+                document.addEventListener('click', closeMenu);
+            }
+            
+            if (langOptions && langOptions.length && window.jwebircSetLanguage) {
+                langOptions.forEach((btn) => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.jwebircSetLanguage(btn.dataset.lang || 'en');
+                    });
+                });
+            }
+        })();
+    </script>
     
     <!-- Topic Bar -->
     <div class="topic_frame" id="topic_window" role="complementary" aria-label="Channel Topic">
@@ -372,7 +438,7 @@
     <!-- User List -->
     <div class="right_frame" id="right" role="complementary" aria-label="User List">
         <div class="user-list-header">
-            <i class="fas fa-users"></i> <span class="user-count">Users</span>
+            <i class="fas fa-users"></i> <span class="user-count" data-i18n="nav.users">Users</span>
         </div>
     </div>
     
@@ -392,42 +458,43 @@
                    maxlength="400" 
                    value="" 
                    placeholder="Type a message..."
+                   data-i18n-placeholder="chat.placeholder"
                    aria-label="Message input"
                    onkeydown="return submitChatInput(event);">
             <button class="btn btn-primary" 
                     type="button" 
                     onclick="sendText();"
                     aria-label="Send message">
-                <i class="fas fa-paper-plane"></i> Send
+                <i class="fas fa-paper-plane"></i> <span data-i18n="chat.send">Send</span>
             </button>
         </div>
         <!-- Format Help Tooltip -->
         <div id="formatHelp" class="format-help" style="display: none;">
             <div class="format-help-header">
-                <span><i class="fas fa-keyboard"></i> IRC Formatting Shortcuts</span>
+                <span><i class="fas fa-keyboard"></i> <span data-i18n="chat.formatHelp.title">IRC Formatting Shortcuts</span></span>
                 <button class="format-help-close" onclick="document.getElementById('formatHelp').style.display='none'">×</button>
             </div>
             <div class="format-help-content">
-                <div class="format-help-item"><kbd>Ctrl+B</kbd> <span style="color: white;"><strong>Bold</strong></span></div>
-                <div class="format-help-item"><kbd>Ctrl+I</kbd> <span style="color: white;"><em>Italic</em></span></div>
-                <div class="format-help-item"><kbd>Ctrl+U</kbd> <span style="color: white;"><u>Underline</u></span></div>
-                <div class="format-help-item"><kbd>Ctrl+L</kbd> <span style="color: white;"><s>Strikethrough</s></span></div>
-                <div class="format-help-item"><kbd>Ctrl+M</kbd> <span style="color: white;"><code>Monospace</code></span></div>
-                <div class="format-help-item"><kbd>Ctrl+R</kbd> <span style="color: white; filter: invert(1);">Reverse</span></div>
-                <div class="format-help-item"><kbd>Ctrl+K</kbd> <span style="color: #00aaff;">Color</span> <span style="color: white;">(then type numbers)</span></div>
-                <div class="format-help-item"><kbd>Ctrl+O</kbd> <span style="color: white;">Reset all formatting</span></div>
+                    <div class="format-help-item"><kbd>Ctrl+B</kbd> <span style="color: white;"><strong data-i18n="chat.formatHelp.bold">Bold</strong></span></div>
+                    <div class="format-help-item"><kbd>Ctrl+I</kbd> <span style="color: white;"><em data-i18n="chat.formatHelp.italic">Italic</em></span></div>
+                    <div class="format-help-item"><kbd>Ctrl+U</kbd> <span style="color: white;"><u data-i18n="chat.formatHelp.underline">Underline</u></span></div>
+                    <div class="format-help-item"><kbd>Ctrl+L</kbd> <span style="color: white;"><s data-i18n="chat.formatHelp.strike">Strikethrough</s></span></div>
+                    <div class="format-help-item"><kbd>Ctrl+M</kbd> <span style="color: white;"><code data-i18n="chat.formatHelp.mono">Monospace</code></span></div>
+                    <div class="format-help-item"><kbd>Ctrl+R</kbd> <span style="color: white; filter: invert(1);" data-i18n="chat.formatHelp.reverse">Reverse</span></div>
+                    <div class="format-help-item"><kbd>Ctrl+K</kbd> <span style="color: #00aaff;" data-i18n="chat.formatHelp.color">Color (then type numbers)</span></div>
+                    <div class="format-help-item"><kbd>Ctrl+O</kbd> <span style="color: white;" data-i18n="chat.formatHelp.reset">Reset all formatting</span></div>
             </div>
         </div>
 
         <!-- Color Picker (Ctrl+K) -->
         <div id="colorPicker" class="color-picker" style="display: none;" aria-label="IRC color picker">
             <div class="color-picker-header">
-                <span><i class="fas fa-palette"></i> Colors (Ctrl+K)</span>
+                <span><i class="fas fa-palette"></i> <span data-i18n="chat.colorPicker.title">Colors (Ctrl+K)</span></span>
                 <button id="colorPickerClose" class="color-picker-close" type="button" aria-label="Close color picker">×</button>
             </div>
             <div class="color-picker-body">
                 <div class="color-picker-section" data-color-role="fg">
-                    <div class="color-picker-label">Foreground</div>
+                    <div class="color-picker-label" data-i18n="chat.colorPicker.foreground">Foreground</div>
                     <div class="color-grid">
                         <button type="button" data-color-code="00" style="background:#ffffff;"></button>
                         <button type="button" data-color-code="01" style="background:#000000;"></button>
@@ -448,7 +515,7 @@
                     </div>
                 </div>
                 <div class="color-picker-section" data-color-role="bg">
-                    <div class="color-picker-label">Background</div>
+                    <div class="color-picker-label" data-i18n="chat.colorPicker.background">Background</div>
                     <div class="color-grid">
                         <button type="button" data-color-code="00" style="background:#ffffff;"></button>
                         <button type="button" data-color-code="01" style="background:#000000;"></button>
@@ -467,17 +534,18 @@
                         <button type="button" data-color-code="14" style="background:#7f7f7f;"></button>
                         <button type="button" data-color-code="15" style="background:#d2d2d2;"></button>
                     </div>
-                    <button type="button" id="colorPickerClearBg" class="color-picker-clear">No background</button>
+                        <button type="button" id="colorPickerClearBg" class="color-picker-clear" data-i18n="chat.colorPicker.clearBg">No background</button>
                 </div>
             </div>
             <div class="color-picker-actions">
-                <button type="button" id="colorPickerApply" class="btn btn-primary btn-sm">Insert</button>
+                    <button type="button" id="colorPickerApply" class="btn btn-primary btn-sm" data-i18n="chat.colorPicker.insert">Insert</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+    window.jwebircLang = "<%= uiLang %>";
     window.user = "<% out.print(paramNick); %>";
     window.chan = "<% out.print(paramChannel); %>";
     // Robust parsing to avoid JS errors if values are not literal booleans/numbers
@@ -521,6 +589,10 @@
 %>
 <jsp:include page="header.jsp"/>
 
+<script>
+    window.jwebircLang = "<%= uiLang %>";
+</script>
+
 <!-- CAPTCHA Scripts -->
 <% 
     String activeCaptchaType = (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true") && captchaError == null) ? captchaType : "NONE";
@@ -556,14 +628,14 @@
         <div class="login-header">
             <i class="fas fa-comments fa-3x" style="color: var(--primary-color); margin-bottom: 1rem;"></i>
             <h2><%= session.getAttribute("irc_network_name") != null ? session.getAttribute("irc_network_name") : "IRC" %></h2>
-            <p class="text-muted">Join the conversation</p>
+            <p class="text-muted" data-i18n="login.subtitle">Join the conversation</p>
         </div>
         <% if (captchaError != null) { %>
         <div class="captcha-error-card" style="filter: hue-rotate(<%= userHue %>deg); font-size: <%= userFontSize %>px; text-align: center; padding: 1.5rem 1rem;">
             <div style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary-color);">⚠️</div>
-            <h3 style="margin-bottom: 0.75rem; color: #fff; font-weight: 700;">CAPTCHA Verification Failed</h3>
-            <p style="color: #b5b5b5; margin-bottom: 1.25rem; line-height: 1.6;"><%= captchaError %></p>
-            <button class="btn btn-primary w-100" onclick="window.history.back();">Back</button>
+            <h3 style="margin-bottom: 0.75rem; color: #fff; font-weight: 700;" data-i18n="login.captchaFailed">CAPTCHA Verification Failed</h3>
+            <p style="color: #b5b5b5; margin-bottom: 1.25rem; line-height: 1.6;" data-i18n="login.captchaFailedDetail"><%= captchaError %></p>
+            <button class="btn btn-primary w-100" onclick="window.history.back();" data-i18n="login.back">Back</button>
         </div>
         <%
             return;
@@ -659,6 +731,7 @@
         <form method="POST" name="login" action="" target="_top" accept-charset="utf-8" class="login-form" id="loginForm">
             <input name="connect" value="true" type="hidden">
             <input type="hidden" id="captchaToken" name="captchaToken" value="">
+            <input type="hidden" id="uiLang" name="lang" value="<%= uiLang %>">
             
             <!-- Basic Information -->
             <div class="form-section">
@@ -673,7 +746,7 @@
                            pattern="[a-zA-Z0-9_\-\[\]\{\}\\\|]+"
                            placeholder=" ">
                     <label for="nickInput">
-                        <i class="fas fa-user"></i> Nickname
+                        <i class="fas fa-user"></i> <span data-i18n="login.nickname">Nickname</span>
                     </label>
                 </div>
                 
@@ -686,11 +759,11 @@
                            autocomplete="off"
                            placeholder=" ">
                     <label for="channelInput">
-                        <i class="fas fa-hashtag"></i> Channel
+                        <i class="fas fa-hashtag"></i> <span data-i18n="login.channel">Channel</span>
                     </label>
                 </div>
                 <div class="form-text" style="margin-top: -0.75rem; margin-bottom: 1rem; font-size: 0.75rem; color: #999;">
-                    <i class="fas fa-info-circle"></i> Optional - leave empty to join no channel
+                    <i class="fas fa-info-circle"></i> <span data-i18n="login.channelHint">Optional - leave empty to join no channel</span>
                 </div>
             </div>
             
@@ -709,8 +782,8 @@
                         <label class="form-check-label" for="useSaslAuth" style="cursor: pointer; margin: 0; flex: 1; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-key" style="color: var(--primary-color); font-size: 1.1rem;"></i>
                             <div style="flex: 1;">
-                                <span style="font-size: 0.95rem; font-weight: 500; color: #ffffff;">I have an account</span>
-                                <span style="margin-left: 8px; font-size: 0.8rem; color: rgba(255, 255, 255, 0.65);">(Use SASL authentication)</span>
+                                <span style="font-size: 0.95rem; font-weight: 500; color: #ffffff;" data-i18n="login.sasl.title">I have an account</span>
+                                <span style="margin-left: 8px; font-size: 0.8rem; color: rgba(255, 255, 255, 0.65);" data-i18n="login.sasl.subtitle">(Use SASL authentication)</span>
                             </div>
                         </label>
                     </div>
@@ -725,7 +798,7 @@
                                autocomplete="username"
                                placeholder=" ">
                         <label for="saslUsername">
-                            <i class="fas fa-user-shield"></i> Account name
+                            <i class="fas fa-user-shield"></i> <span data-i18n="login.sasl.username">Account name</span>
                         </label>
                     </div>
                     
@@ -738,7 +811,7 @@
                                autocomplete="current-password"
                                placeholder=" ">
                         <label for="saslPassword">
-                            <i class="fas fa-lock"></i> Password
+                            <i class="fas fa-lock"></i> <span data-i18n="login.sasl.password">Password</span>
                         </label>
                     </div>
                 </div>
@@ -759,13 +832,13 @@
                         <!-- Google reCAPTCHA v3 (invisible) -->
                         <input type="hidden" id="recaptchaV3Token" name="recaptchaV3Token">
                         <small class="text-muted" style="display: block; margin-top: -0.5rem;">
-                            <i class="fas fa-shield-alt"></i> Protected by reCAPTCHA v3
+                            <i class="fas fa-shield-alt"></i> <span data-i18n="login.protectedV3">Protected by reCAPTCHA v3</span>
                         </small>
                     <% } else if (captchaType.equalsIgnoreCase("RECAPTCHA_ENTERPRISE")) { %>
                         <!-- Google reCAPTCHA Enterprise (invisible) -->
                         <input type="hidden" id="recaptchaEnterpriseToken" name="recaptchaEnterpriseToken">
                         <small class="text-muted" style="display: block; margin-top: -0.5rem;">
-                            <i class="fas fa-shield-alt"></i> Protected by reCAPTCHA Enterprise
+                            <i class="fas fa-shield-alt"></i> <span data-i18n="login.protectedEnterprise">Protected by reCAPTCHA Enterprise</span>
                         </small>
                     <% } %>
                 </div>
@@ -774,13 +847,13 @@
             
             <div style="margin-top: 2rem;">
                 <button class="btn btn-primary btn-lg w-100" type="submit" id="submitBtn">
-                    <i class="fas fa-sign-in-alt"></i> Join Chat
+                    <i class="fas fa-sign-in-alt"></i> <span data-i18n="login.join">Join Chat</span>
                 </button>
                 
                 <% if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) { %>
                 <!-- Chatnapping Link Button -->
                 <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="generateChatnappingLink()" style="font-size: 0.85rem;">
-                    <i class="fas fa-link"></i> Generate Embed Link
+                    <i class="fas fa-link"></i> <span data-i18n="login.embed">Generate Embed Link</span>
                 </button>
                 <% } %>
             </div>
@@ -788,9 +861,9 @@
         
         <div class="login-footer">
             <small class="text-muted">
-                    <i class="fas fa-shield-alt"></i> Secure connection &bull; 
-                    <i class="fas fa-globe"></i> WebSocket supported &bull;
-                    <a href="about.jsp" style="color: var(--primary-color); text-decoration: none;"><i class="fas fa-info-circle"></i> About</a>
+                    <i class="fas fa-shield-alt"></i> <span data-i18n="login.secure">Secure connection</span> &bull; 
+                    <i class="fas fa-globe"></i> <span data-i18n="login.websocket">WebSocket supported</span> &bull;
+                    <a href="about.jsp" style="color: var(--primary-color); text-decoration: none;"><i class="fas fa-info-circle"></i> <span data-i18n="login.about">About</span></a>
             </small>
         </div>
     </div>
@@ -801,6 +874,27 @@
     const captchaEnabled = <%= (captchaEnabled != null && captchaEnabled.equalsIgnoreCase("true")) ? "true" : "false" %>;
     const captchaType = "<%= activeCaptchaType %>";
     const captchaSiteKey = "<%= activeSiteKey %>";
+
+    function getCaptchaTokenValue() {
+        const tokenField = document.getElementById('captchaToken');
+        if (!tokenField) return '';
+        if (tokenField.value) return tokenField.value;
+
+        // Fallback to provider default fields in case callbacks were skipped
+        const recaptchaField = document.querySelector('textarea[name="g-recaptcha-response"]');
+        if (recaptchaField && recaptchaField.value) {
+            tokenField.value = recaptchaField.value;
+            return recaptchaField.value;
+        }
+
+        const turnstileField = document.querySelector('input[name="cf-turnstile-response"]');
+        if (turnstileField && turnstileField.value) {
+            tokenField.value = turnstileField.value;
+            return turnstileField.value;
+        }
+
+        return '';
+    }
     
     // CAPTCHA success callback
     function onCaptchaSuccess(token) {
@@ -833,9 +927,10 @@
             return false;
         } else {
             // For TURNSTILE and RECAPTCHA_V2, check if token is set
-            const token = document.getElementById('captchaToken').value;
+            const token = getCaptchaTokenValue();
             if (!token) {
-                alert('Please complete the CAPTCHA verification.');
+                    const translate = window.jwebircTranslate || function() { return 'Please complete the CAPTCHA verification.'; };
+                    alert(translate('login.captchaComplete'));
                 e.preventDefault();
                 return false;
             }
@@ -844,6 +939,22 @@
         return true;
     });
     
+    // =============== CHATNAPPING FEATURE ===============
+    function tEmbed(key, fallback, replacements) {
+        const translate = window.jwebircTranslate;
+        if (typeof translate === 'function') {
+            const res = translate(key, replacements);
+            if (res && res !== key) return res;
+        }
+        let text = fallback || key;
+        if (replacements) {
+            Object.keys(replacements).forEach((rk) => {
+                text = text.replace('{' + rk + '}', replacements[rk]);
+            });
+        }
+        return text;
+    }
+
     // =============== CHATNAPPING FEATURE ===============
     function generateChatnappingLink() {
         // Get current or default values
@@ -890,51 +1001,54 @@
         const configContent = document.createElement('div');
         configContent.style.cssText = 'background: #2d2d3d; color: #ffffff; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5);';
         
-        configContent.innerHTML = `
-            <h3 style="margin-top: 0; color: ` + primaryColor + `;"><i class="fas fa-cog"></i> Configure Embed Link</h3>
-            <p style="color: #d0d0d0; margin-bottom: 20px;">Customize the nickname and channel for the embed link:</p>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #ffffff;">
-                    <i class="fas fa-user"></i> Nickname:
-                </label>
-                <input type="text" id="embedNick" value="" 
-                       style="width: 100%; padding: 10px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 14px;"
-                       placeholder="Enter nickname">
-                <small style="display: block; margin-top: 5px; color: #a0a0a0;">
-                    Use * for random digit (e.g., Guest* becomes Guest7)
-                </small>
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #ffffff;">
-                    <i class="fas fa-hashtag"></i> Channel:
-                </label>
-                <input type="text" id="embedChannel" value="" 
-                       style="width: 100%; padding: 10px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 14px;"
-                       placeholder="Enter channel (e.g., #lobby)">
-                <small style="display: block; margin-top: 5px; color: #a0a0a0;">
-                    Leave empty to skip auto-join. Multiple channels: #channel1,#channel2
-                </small>
-            </div>
-            
-            <div style="background: rgba(88, 101, 242, 0.1); border-left: 4px solid ` + primaryColor + `; padding: 12px; border-radius: 4px; margin-top: 20px; margin-bottom: 20px;">
-                <small style="color: #d0d0d0;">
-                    <i class="fas fa-info-circle" style="color: ` + primaryColor + `;"></i> <strong>Display Settings:</strong><br>
-                    Font size and color theme will be taken from your current login options settings.<br>
-                    Current: <strong>` + defaultFontSize + `px</strong> font, <strong>` + defaultHue + `°</strong> hue
-                </small>
-            </div>
-            
-            <div style="text-align: right;">
-                <button id="btnGenerateLink" style="padding: 10px 24px; background: ` + primaryColor + `; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px; transition: background 0.2s;">
-                    <i class="fas fa-check"></i> Generate Link
-                </button>
-                <button id="btnCancelConfig" style="padding: 10px 24px; background: #555565; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.2s;">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-            </div>
-        `;
+        const displayCurrent = tEmbed('embed.displayCurrent', 'Current: {font}px font, {hue}° hue', { font: defaultFontSize, hue: defaultHue });
+        const nickLabel = tEmbed('embed.nickname', 'Nickname:');
+        const channelLabel = tEmbed('embed.channel', 'Channel:');
+        const nicknamePlaceholder = tEmbed('embed.nicknamePlaceholder', 'Enter nickname');
+        const channelPlaceholder = tEmbed('embed.channelPlaceholder', 'Enter channel (e.g., #lobby)');
+        const nicknameHint = tEmbed('embed.nicknameHint', 'Use * for random digit (e.g., Guest* becomes Guest7)');
+        const channelHint = tEmbed('embed.channelHint', 'Leave empty to skip auto-join. Multiple channels: #channel1,#channel2');
+
+        configContent.innerHTML = '' +
+            '<h3 style="margin-top: 0; color: ' + primaryColor + ';"><i class="fas fa-cog"></i> ' + tEmbed('embed.title', 'Configure Embed Link') + '</h3>' +
+            '<p style="color: #d0d0d0; margin-bottom: 20px;">' + tEmbed('embed.subtitle', 'Customize the nickname and channel for the embed link:') + '</p>' +
+            '<div style="margin-bottom: 20px;">' +
+                '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #ffffff;">' +
+                    '<i class="fas fa-user"></i> ' + nickLabel +
+                '</label>' +
+                '<input type="text" id="embedNick" value="" ' +
+                       'style="width: 100%; padding: 10px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 14px;" ' +
+                       'placeholder="' + nicknamePlaceholder + '">' +
+                '<small style="display: block; margin-top: 5px; color: #a0a0a0;">' +
+                    nicknameHint +
+                '</small>' +
+            '</div>' +
+            '<div style="margin-bottom: 20px;">' +
+                '<label style="display: block; font-weight: bold; margin-bottom: 5px; color: #ffffff;">' +
+                    '<i class="fas fa-hashtag"></i> ' + channelLabel +
+                '</label>' +
+                '<input type="text" id="embedChannel" value="" ' +
+                       'style="width: 100%; padding: 10px; border: 1px solid #555; background: #404050; color: #ffffff; border-radius: 4px; font-size: 14px;" ' +
+                       'placeholder="' + channelPlaceholder + '">' +
+                '<small style="display: block; margin-top: 5px; color: #a0a0a0;">' +
+                    channelHint +
+                '</small>' +
+            '</div>' +
+            '<div style="background: rgba(88, 101, 242, 0.1); border-left: 4px solid ' + primaryColor + '; padding: 12px; border-radius: 4px; margin-top: 20px; margin-bottom: 20px;">' +
+                '<small style="color: #d0d0d0;">' +
+                    '<i class="fas fa-info-circle" style="color: ' + primaryColor + ';"></i> <strong>' + tEmbed('embed.displaySettings', 'Display Settings:') + '</strong><br>' +
+                    tEmbed('embed.displayNote', 'Font size and color theme will be taken from your current login options settings.') + '<br>' +
+                    displayCurrent +
+                '</small>' +
+            '</div>' +
+            '<div style="text-align: right;">' +
+                '<button id="btnGenerateLink" style="padding: 10px 24px; background: ' + primaryColor + '; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px; transition: background 0.2s;">' +
+                    '<i class="fas fa-check"></i> ' + tEmbed('embed.generate', 'Generate Link') +
+                '</button>' +
+                '<button id="btnCancelConfig" style="padding: 10px 24px; background: #555565; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.2s;">' +
+                    '<i class="fas fa-times"></i> ' + tEmbed('embed.cancel', 'Cancel') +
+                '</button>' +
+            '</div>';
         
         configModal.appendChild(configContent);
         document.body.appendChild(configModal);
@@ -967,6 +1081,8 @@
     
     function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft, overrideNotifications, overrideNotificationSound) {
         const baseUrl = window.location.origin + window.location.pathname;
+        const currentLangInput = document.getElementById('uiLang');
+        const currentLang = (currentLangInput && currentLangInput.value) || (typeof window.jwebircLang === 'string' ? window.jwebircLang : 'en');
         
         // Use provided values or get defaults
         const fontSize = overrideFontSize !== undefined ? overrideFontSize : 14;
@@ -978,6 +1094,9 @@
         const notificationSound = overrideNotificationSound !== false;
         
         let url = baseUrl + '?connect=1';
+        if (currentLang) {
+            url += '&lang=' + encodeURIComponent(currentLang);
+        }
         if (nickname && nickname.trim()) {
             url += '&name=' + encodeURIComponent(nickname);
         }
@@ -1018,17 +1137,17 @@
         
         const title = document.createElement('h3');
         title.style.cssText = 'margin-top: 0; color: ' + primaryColor + ';';
-        title.innerHTML = '<i class="fas fa-link"></i> Chatnapping Link Generated';
+        title.innerHTML = '<i class="fas fa-link"></i> ' + tEmbed('embed.generatedTitle', 'Chatnapping Link Generated');
         
         const description = document.createElement('p');
         description.style.cssText = 'color: #d0d0d0; margin-bottom: 20px;';
-        description.textContent = 'Share this link or embed the chat on your website:';
+        description.textContent = tEmbed('embed.generatedSubtitle', 'Share this link or embed the chat on your website:');
         
         // Nickname display
         if (nickname && nickname.trim()) {
             const nickInfo = document.createElement('div');
             nickInfo.style.cssText = 'background: rgba(88, 101, 242, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';
-            nickInfo.innerHTML = '<i class="fas fa-user"></i> <strong>Nickname:</strong> ' + nickname.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            nickInfo.innerHTML = '<i class="fas fa-user"></i> <strong>' + tEmbed('embed.nicknameLabel', 'Nickname:') + '</strong> ' + nickname.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             modalContent.appendChild(nickInfo);
         }
         
@@ -1036,7 +1155,7 @@
         if (channels && channels.trim()) {
             const channelInfo = document.createElement('div');
             channelInfo.style.cssText = 'background: rgba(0, 184, 148, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';
-            channelInfo.innerHTML = '<i class="fas fa-hashtag"></i> <strong>Channel:</strong> ' + channels.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            channelInfo.innerHTML = '<i class="fas fa-hashtag"></i> <strong>' + tEmbed('embed.channelLabel', 'Channel:') + '</strong> ' + channels.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             modalContent.appendChild(channelInfo);
         }
         
@@ -1049,11 +1168,11 @@
         if (notifications) uiDisplay += ', Notifications: ✓';
         if (notificationSound) uiDisplay += ', Sound: ✓';
         uiInfo.style.cssText = 'background: rgba(243, 156, 18, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';
-        uiInfo.innerHTML = '<i class="fas fa-sliders-h"></i> <strong>Display Options:</strong> ' + uiDisplay;
+        uiInfo.innerHTML = '<i class="fas fa-sliders-h"></i> <strong>' + tEmbed('embed.displayLabel', 'Display Options:') + '</strong> ' + uiDisplay;
         modalContent.appendChild(uiInfo);
         
         const linkLabel = document.createElement('p');
-        linkLabel.innerHTML = '<strong>Direct Link:</strong>';
+        linkLabel.innerHTML = '<strong>' + tEmbed('embed.directLink', 'Direct Link:') + '</strong>';
         linkLabel.style.marginBottom = '5px';
         linkLabel.style.color = '#ffffff';
         
@@ -1065,7 +1184,7 @@
         linkInput.onclick = function() { this.select(); };
         
         const embedLabel = document.createElement('p');
-        embedLabel.innerHTML = '<strong>Embed Code (iframe):</strong>';
+        embedLabel.innerHTML = '<strong>' + tEmbed('embed.embedCode', 'Embed Code (iframe):') + '</strong>';
         embedLabel.style.marginBottom = '5px';
         embedLabel.style.color = '#ffffff';
         
@@ -1077,55 +1196,55 @@
         
         const tipBox = document.createElement('div');
         tipBox.style.cssText = 'background: rgba(243, 156, 18, 0.2); border-left: 4px solid #f39c12; padding: 12px; border-radius: 4px; margin-bottom: 15px;';
-        tipBox.innerHTML = '<small style="color: #d0d0d0;"><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> The link includes your current display settings (font size, hue). Users can change these after joining. Test the link before embedding it on your website to ensure it works correctly.</small>';
+        tipBox.innerHTML = '<small style="color: #d0d0d0;"><i class="fas fa-lightbulb"></i> <strong>' + tEmbed('embed.tip', 'The link includes your current display settings (font size, hue). Users can change these after joining. Test the link before embedding it on your website to ensure it works correctly.') + '</strong></small>';
         
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = 'text-align: right;';
         
         const copyLinkButton = document.createElement('button');
-        copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+        copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> ' + tEmbed('embed.copyLink', 'Copy Link');
         copyLinkButton.style.cssText = 'padding: 8px 20px; background: ' + primaryColor + '; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; transition: opacity 0.2s;';
         copyLinkButton.onmouseover = function() { this.style.opacity = '0.8'; };
         copyLinkButton.onmouseout = function() { this.style.opacity = '1'; };
         copyLinkButton.onclick = function() {
             navigator.clipboard.writeText(url).then(function() {
-                copyLinkButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                copyLinkButton.innerHTML = '<i class="fas fa-check"></i> ' + tEmbed('embed.copied', 'Copied!');
                 setTimeout(function() {
-                    copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                    copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> ' + tEmbed('embed.copyLink', 'Copy Link');
                 }, 2000);
             }).catch(function() {
                 linkInput.select();
                 document.execCommand('copy');
-                copyLinkButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                copyLinkButton.innerHTML = '<i class="fas fa-check"></i> ' + tEmbed('embed.copied', 'Copied!');
                 setTimeout(function() {
-                    copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                    copyLinkButton.innerHTML = '<i class="fas fa-copy"></i> ' + tEmbed('embed.copyLink', 'Copy Link');
                 }, 2000);
             });
         };
         
         const copyCodeButton = document.createElement('button');
-        copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
+        copyCodeButton.innerHTML = '<i class="fas fa-code"></i> ' + tEmbed('embed.copyCode', 'Copy Code');
         copyCodeButton.style.cssText = 'padding: 8px 20px; background: #00b894; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; transition: opacity 0.2s;';
         copyCodeButton.onmouseover = function() { this.style.opacity = '0.8'; };
         copyCodeButton.onmouseout = function() { this.style.opacity = '1'; };
         copyCodeButton.onclick = function() {
             navigator.clipboard.writeText(embedCode).then(function() {
-                copyCodeButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                copyCodeButton.innerHTML = '<i class="fas fa-check"></i> ' + tEmbed('embed.copied', 'Copied!');
                 setTimeout(function() {
-                    copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
+                    copyCodeButton.innerHTML = '<i class="fas fa-code"></i> ' + tEmbed('embed.copyCode', 'Copy Code');
                 }, 2000);
             }).catch(function() {
                 embedTextarea.select();
                 document.execCommand('copy');
-                copyCodeButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                copyCodeButton.innerHTML = '<i class="fas fa-check"></i> ' + tEmbed('embed.copied', 'Copied!');
                 setTimeout(function() {
-                    copyCodeButton.innerHTML = '<i class="fas fa-code"></i> Copy Code';
+                    copyCodeButton.innerHTML = '<i class="fas fa-code"></i> ' + tEmbed('embed.copyCode', 'Copy Code');
                 }, 2000);
             });
         };
         
         const closeButton = document.createElement('button');
-        closeButton.innerHTML = '<i class="fas fa-times"></i> Close';
+        closeButton.innerHTML = '<i class="fas fa-times"></i> ' + tEmbed('embed.close', 'Close');
         closeButton.style.cssText = 'padding: 8px 20px; background: #555565; color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s;';
         closeButton.onmouseover = function() { this.style.opacity = '0.8'; };
         closeButton.onmouseout = function() { this.style.opacity = '1'; };

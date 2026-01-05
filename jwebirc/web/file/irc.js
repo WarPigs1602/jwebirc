@@ -33,6 +33,24 @@ class IRCParser {
         // Track capabilities (as reported by backend negotiation)
         this.availableCaps = new Set();
         this.enabledCaps = new Set();
+
+        // i18n helper
+        this.t = (key, fallback, replacements) => {
+            if (this.chatManager && typeof this.chatManager.t === 'function') {
+                return this.chatManager.t(key, fallback, replacements);
+            }
+            if (replacements && fallback) {
+                return Object.keys(replacements).reduce((acc, rKey) => acc.replace(`{${rKey}}`, replacements[rKey]), fallback);
+            }
+            return fallback || key;
+        };
+
+        this.i18nSpan = (key, fallback, replacements) => {
+            if (this.chatManager && typeof this.chatManager.buildI18nSpan === 'function') {
+                return this.chatManager.buildI18nSpan(key, fallback, replacements);
+            }
+            return this.t(key, fallback, replacements);
+        };
     }
     
     /**
@@ -162,7 +180,8 @@ class IRCParser {
             this.output = "Status";
             
             if (this.isHostnameLookupMessage(parsed.trim())) {
-                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + parsed.trim() + "\n");
+                const msg = this.formatHostnameMessage(parsed.trim());
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + msg + "\n");
                 return null;
             }
             return " <span style=\"color: #ff0000\">==</span> " + parsed.trim();
@@ -179,37 +198,144 @@ class IRCParser {
 
     handleNumericReply(ircMsg, text) {
         const { prefix, command: code, params } = ircMsg;
+        const channelTarget = this.findKnownChannel(params);
         let parsed = "";
 
         switch (code) {
             case "903": { // SASL authentication successful
-                this.output = "Status";
+                this.output = channelTarget || "Status";
                 this.hideLoadingScreen();
-                return " <span style=\"color: #00aa00\">==</span> SASL authentication successful.";
+                const span = this.i18nSpan('chat.sasl.success', 'SASL authentication successful.');
+                return " <span style=\"color: #00aa00\">==</span> " + span;
             }
 
             case "904": { // SASL authentication failed (bad credentials)
-                this.output = "Status";
+                this.output = channelTarget || "Status";
                 this.hideLoadingScreen();
-                return " <span style=\"color: #ff0000\">==</span> SASL authentication failed: invalid username or password.";
+                const span = this.i18nSpan('chat.sasl.failed', 'SASL authentication failed: invalid username or password.');
+                return " <span style=\"color: #ff0000\">==</span> " + span;
             }
 
             case "905": { // SASL authentication failed (message too long)
-                this.output = "Status";
+                this.output = channelTarget || "Status";
                 this.hideLoadingScreen();
-                return " <span style=\"color: #ff0000\">==</span> SASL authentication failed: authentication data too long.";
+                const span = this.i18nSpan('chat.sasl.toolong', 'SASL authentication failed: authentication data too long.');
+                return " <span style=\"color: #ff0000\">==</span> " + span;
+            }
+            case "251": { // LUSERCLIENT
+                this.output = channelTarget || "Status";
+                const text = (params.slice(1).join(' ') || '').replace(/^:/, '').trim();
+                const match = text.match(/there are (\d+) users and (\d+) invisible on (\d+) servers/i);
+                const span = match
+                    ? this.i18nSpan('chat.rpl.luserClient', 'There are {users} users and {invisible} invisible on {servers} servers', { users: match[1], invisible: match[2], servers: match[3] })
+                    : this.i18nSpan('chat.rpl.generic', '{text}', { text });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "252": { // LUSEROP
+                this.output = channelTarget || "Status";
+                const count = params[1] || '0';
+                const span = this.i18nSpan('chat.rpl.luserOp', 'Operators online: {count}', { count });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "253": { // LUSERUNKNOWN
+                this.output = channelTarget || "Status";
+                const count = params[1] || '0';
+                const span = this.i18nSpan('chat.rpl.luserUnknown', 'Unknown connections: {count}', { count });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "254": { // LUSERCHANNELS
+                this.output = channelTarget || "Status";
+                const count = params[1] || '0';
+                const span = this.i18nSpan('chat.rpl.luserChannels', 'Channels formed: {count}', { count });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "255": { // LUSERME
+                this.output = channelTarget || "Status";
+                const clients = params[1] || '0';
+                const servers = params[2] || '0';
+                const tail = (params.slice(3).join(' ') || '').replace(/^:/, '').trim();
+                const extra = tail ? ` (${tail})` : '';
+                const span = this.i18nSpan('chat.rpl.luserMe', 'I have {clients} clients and {servers} servers', { clients, servers });
+                return ` <span style="color: #00aaff">==</span> ${span}${extra}`;
+            }
+
+            case "265": { // LOCALUSERS
+                this.output = channelTarget || "Status";
+                const current = params[1] || '0';
+                const max = params[2] || '0';
+                const span = this.i18nSpan('chat.rpl.localUsers', 'Local users: {current} (max {max})', { current, max });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "266": { // GLOBALUSERS
+                this.output = channelTarget || "Status";
+                const current = params[1] || '0';
+                const max = params[2] || '0';
+                const span = this.i18nSpan('chat.rpl.globalUsers', 'Global users: {current} (max {max})', { current, max });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "321": { // LIST start
+                this.output = channelTarget || "Status";
+                const span = this.i18nSpan('chat.rpl.listStart', 'Channel list:');
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "322": { // LIST entry
+                this.output = channelTarget || "Status";
+                const channel = params[1] || '';
+                const users = params[2] || '0';
+                const topic = (params.slice(3).join(' ') || '').replace(/^:/, '').trim();
+                const span = this.i18nSpan('chat.rpl.listEntry', '{channel} ({users}) {topic}', { channel, users, topic });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "323": { // LIST end
+                this.output = channelTarget || "Status";
+                const span = this.i18nSpan('chat.rpl.listEnd', 'End of channel list');
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "324": { // CHANNELMODEIS
+                this.output = params[1] || "Status";
+                const channel = params[1] || '';
+                const modes = params[2] || '';
+                const args = params.slice(3).join(' ');
+                const span = this.i18nSpan('chat.rpl.channelMode', 'Channel modes for {channel}: {modes} {args}', { channel, modes, args });
+                return ` <span style="color: #ff0000">==</span> ${span}`;
+            }
+
+            case "329": { // Channel creation time
+                this.output = params[1] || "Status";
+                const channel = params[1] || '';
+                const ts = parseInt(params[2] || '0', 10) * 1000;
+                const date = ts > 0 ? new Date(ts).toLocaleString() : params[2] || '';
+                const span = this.i18nSpan('chat.rpl.channelCreated', '{channel} created on {date}', { channel, date });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "331": { // No topic set
+                this.output = params[1] || "Status";
+                const channel = params[1] || '';
+                const span = this.i18nSpan('chat.rpl.noTopic', 'No topic is set for {channel}', { channel });
+                return ` <span style="color: #ff0000">==</span> ${span}`;
             }
 
             case "906": { // SASL authentication aborted
-                this.output = "Status";
+                this.output = channelTarget || "Status";
                 this.hideLoadingScreen();
-                return " <span style=\"color: #ff0000\">==</span> SASL authentication aborted by server.";
+                const span = this.i18nSpan('chat.sasl.aborted', 'SASL authentication aborted by server.');
+                return " <span style=\"color: #ff0000\">==</span> " + span;
             }
 
             case "907": { // Already authenticated
-                this.output = "Status";
+                this.output = channelTarget || "Status";
                 this.hideLoadingScreen();
-                return " <span style=\"color: #00aa00\">==</span> SASL already authenticated.";
+                return " <span style=\"color: #00aa00\">==</span> " + this.t('chat.sasl.already', 'SASL already authenticated.');
             }
 
             case "005": // Server features (ISUPPORT)
@@ -245,6 +371,13 @@ class IRCParser {
                 // params: [nick, channel, setter, timestamp]
                 this.chatManager.updateTopic(params[1], params[2], params[3]);
                 return null;
+            case "341": { // RPL_INVITING
+                this.output = channelTarget || "Status";
+                const nick = params[1] || '';
+                const channel = params[2] || '';
+                const span = this.i18nSpan('chat.rpl.inviting', 'Inviting {nick} to {channel}', { nick, channel });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
                 
             case "366": // End of names
             case "315": // End of WHO
@@ -271,14 +404,17 @@ class IRCParser {
                 this.output = this.chatManager.getActiveWindow();
                 const server = params[2];
                 const info = params[3] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">server</span> : ${server}${info ? ' (' + info + ')' : ''}`;
+                const infoSuffix = info ? ' (' + info + ')' : '';
+                const span = this.i18nSpan('chat.whois.server', 'server: {server}{info}', { server, info: infoSuffix });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "313": { // WHOIS operator
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';
                 const suffix = info ? ` (${info})` : '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${params[1]}${suffix}`;
+                const span = this.i18nSpan('chat.whois.operator', 'operator: {nick}{info}', { nick: params[1], info: suffix });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "317": { // WHOIS idle / signon
@@ -288,52 +424,63 @@ class IRCParser {
                 const idleText = isNaN(idleSeconds) ? '-' : `${idleSeconds}s`;
                 const signonText = signonTs > 0 ? new Date(signonTs).toLocaleString() : '-';
                 const timestamp = this.chatManager ? this.chatManager.getTimestamp() : '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">idle</span> : ${idleText}\n${timestamp} <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">signon</span> : ${signonText}`;
+                const idleSpan = this.i18nSpan('chat.whois.idle', 'idle: {idle}', { idle: idleText });
+                const signonSpan = this.i18nSpan('chat.whois.signon', 'signon: {signon}', { signon: signonText });
+                return ` <span style=\"color: #ff0000\">==</span> ${idleSpan}\n${timestamp} <span style=\"color: #ff0000\">==</span> ${signonSpan}`;
             }
 
             case "330": { // WHOIS logged in as (authname)
                 this.output = this.chatManager.getActiveWindow();
                 const authAs = params[2];
                 const info = params[3] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">auth</span> : ${params[1]} is logged in as ${authAs}${info ? ' (' + info + ')' : ''}`;
+                const infoSuffix = info ? ' (' + info + ')' : '';
+                const span = this.i18nSpan('chat.whois.auth', '{nick} is logged in as {auth}{info}', { nick: params[1], auth: authAs, info: infoSuffix });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "307": { // WHOIS registered nick (often 307)
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">registered</span> : ${params[1]}${info ? ' (' + info + ')' : ''}`;
+                const suffix = info ? ' (' + info + ')' : '';
+                const span = this.i18nSpan('chat.whois.registered', 'registered: {nick}{info}', { nick: params[1], info: suffix });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "320": { // WHOIS additional info (identified, etc.)
                 this.output = this.chatManager.getActiveWindow();
                 const nick = params[1];
                 const info = params[2] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">info</span> : ${nick} ${info}`;
+                const span = this.i18nSpan('chat.whois.info', 'info: {nick} {info}', { nick, info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "343": { // WHOIS oper type (RPL_WHOISOPERNAME)
                 this.output = this.chatManager.getActiveWindow();
                 const nick = params[1];
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">operator</span> : ${nick}`;
+                const span = this.i18nSpan('chat.whois.operType', 'operator: {nick}', { nick });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "327": { // WHOIS real host/vhost
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">vhost</span> : ${info}`;
+                const span = this.i18nSpan('chat.whois.vhost', 'vhost: {host}', { host: info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "275": // Certificate fingerprint
             case "276": { // Client certificate
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">certificate</span> : ${info}`;
+                const span = this.i18nSpan('chat.whois.certificate', 'certificate: {info}', { info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "318": { // End of WHOIS
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                return ` <span style=\"color: #ff0000\">==</span> ${info}`;
+                const span = this.i18nSpan('chat.whois.end', '{text}', { text: info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "301": { // WHOIS away
@@ -349,41 +496,148 @@ class IRCParser {
             case "338": { // WHOIS actual host/IP
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">actual host</span> : ${info}`;
+                const span = this.i18nSpan('chat.whois.actualHost', 'actual host: {host}', { host: info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+            }
+            case "351": { // RPL_VERSION
+                this.output = channelTarget || "Status";
+                const version = params[1] || '';
+                const server = params[2] || '';
+                const info = (params.slice(3).join(' ') || '').replace(/^:/, '').trim();
+                const infoSuffix = info ? ` (${info})` : '';
+                const span = this.i18nSpan('chat.rpl.version', 'Server version {version} on {server}{info}', { version, server, info: infoSuffix });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "391": { // RPL_TIME
+                 this.output = channelTarget || "Status";
+                const server = params[1] || '';
+                const time = (params.slice(2).join(' ') || '').replace(/^:/, '').trim();
+                const span = this.i18nSpan('chat.rpl.time', 'Server time for {server}: {time}', { server, time });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
+            }
+
+            case "396": { // RPL_HOSTHIDDEN
+                 this.output = channelTarget || "Status";
+                const host = params[1] || '';
+                const span = this.i18nSpan('chat.rpl.hostHidden', 'Your hostname is now hidden as {host}', { host });
+                return ` <span style="color: #00aaff">==</span> ${span}`;
             }
 
             case "378": { // WHOIS connecting from
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">connecting</span> : ${info}`;
+                const span = this.i18nSpan('chat.whois.connectingFrom', 'connecting: {info}', { info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "379": { // WHOIS modes
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">modes</span> : ${info}`;
+                const span = this.i18nSpan('chat.whois.modes', 'modes: {info}', { info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
 
             case "671": { // WHOIS secure connection (SSL/TLS)
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">secure</span> : ${info}`;
+                const span = this.i18nSpan('chat.whois.secure', 'secure: {info}', { info });
+                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
             }
             
-            case "710": { // KNOCK - User has knocked on channel
-                // Format: :server 710 yournick #channel knocker :has knocked on channel
-                // params: [yournick, #channel, knocker, has knocked on channel]
-                // Display as: knocker has knocked on channel #channel
+            case "710": { // KNOCK - notification / acknowledgement
+                // Two shapes observed:
+                // 1) For channel operators: :server 710 <you> <#channel> <knocker> :has knocked on channel
+                // 2) For the knocker:      :server 710 <you> <#channel> :Your knock has been delivered
+                this.output = channelTarget || "Status";
                 const channel = params[1] || '';
-                const knocker = params[2] || '';
-                const message = params[3] || 'has knocked on channel';
-                this.output = "Status";
-                return ` <span style=\"color: #ff0000\">==</span> ${knocker} ${message} ${channel}`;
+                const trailing = (params.slice(2).join(' ') || '').replace(/^:/, '').trim();
+
+                // Channel notification (has knocker + trailing reason)
+                if (params.length >= 4) {
+                    const knocker = params[2] || '';
+                    const message = params[3] ? trailing : '';
+                    const knockMsg = this.i18nSpan('chat.knock', '{nick} has knocked on {channel}{message}', {
+                        nick: knocker,
+                        channel,
+                        message: message ? ` (${message})` : ''
+                    });
+                    return ` <span style=\"color: #ff0000\">==</span> ${knockMsg}`;
+                }
+
+                // Acknowledgement to knocker
+                const info = trailing;
+                const span = this.i18nSpan('chat.rpl.knockDelivered', 'Your knock to {channel} was delivered{extra}', {
+                    channel,
+                    extra: info ? ` (${info})` : ''
+                });
+                return ` <span style=\"color: #00aaff\">==</span> ${span}`;
+            }
+
+            case "711": { // KNOCK delivered or forwarded
+                this.output = channelTarget || "Status";
+                const channel = params[1] || '';
+                const maybeNick = params[2] || '';
+                const message = (params.slice(3).join(' ') || '').replace(/^:/, '').trim();
+
+                // If a nick is present, treat as incoming knock info for operators
+                if (maybeNick) {
+                    const isDefault = /has knocked on channel/i.test(message);
+                    const msg = !isDefault && message ? ` (${message})` : '';
+                    const knockMsg = this.i18nSpan('chat.knock', '{nick} has knocked on {channel}{message}', { nick: maybeNick, channel, message: msg });
+                    return ` <span style=\"color: #ff0000\">==</span> ${knockMsg}`;
+                }
+
+                // Otherwise it's the knocker acknowledgement
+                const isDefaultPhrase = /has knocked on channel/i.test(message);
+                const extra = message && !isDefaultPhrase ? ` (${message})` : '';
+                const span = this.i18nSpan('chat.rpl.knockDelivered', 'Your knock to {channel} was delivered{extra}', { channel, extra: extra ? extra : '' });
+                return ` <span style=\"color: #00aaff\">==</span> ${span}`;
+            }
+
+            case "401":
+            case "402":
+            case "403":
+            case "404":
+            case "405":
+            case "407":
+            case "409":
+            case "410":
+            case "421":
+            case "423":
+            case "431":
+            case "432":
+            case "441":
+            case "442":
+            case "443":
+            case "451":
+            case "461":
+            case "462":
+            case "464":
+            case "471":
+            case "473":
+            case "474":
+            case "475":
+            case "476":
+            case "477":
+            case "481":
+            case "482":
+            case "484":
+            case "490":
+            case "492":
+            case "502":
+            case "512":
+            case "712":
+            case "713":
+            case "714": {
+                const formatted = this.formatErrorNumeric(code, params);
+                if (formatted) return formatted;
+                break;
             }
                 
             case "001": // Welcome
                 this.output = "Status";
-                return " <span style=\"color: #ff0000\">==</span> Signed on!";
+                return " <span style=\"color: #ff0000\">==</span> " + this.i18nSpan('chat.signedOn', 'Signed on!');
                 
             case "375": // MOTD start
                 this.output = "Status";
@@ -483,13 +737,16 @@ class IRCParser {
         this.output = "Status";
 
         if (sub === "LS") {
-            return " <span style=\"color: #00aaff\">==</span> Available capabilities: " + joined;
+            const span = this.i18nSpan('chat.capabilitiesAvailable', 'Available capabilities');
+            return " <span style=\"color: #00aaff\">==</span> " + span + ": " + joined;
         }
         if (sub === "ACK") {
-            return " <span style=\"color: #00aaff\">==</span> Enabled capabilities: " + joined;
+            const span = this.i18nSpan('chat.capabilitiesEnabled', 'Enabled capabilities');
+            return " <span style=\"color: #00aaff\">==</span> " + span + ": " + joined;
         }
         if (sub === "NAK") {
-            return " <span style=\"color: #ff6600\">==</span> Rejected capabilities: " + joined;
+            const span = this.i18nSpan('chat.capabilitiesRejected', 'Rejected capabilities');
+            return " <span style=\"color: #ff6600\">==</span> " + span + ": " + joined;
         }
 
         return null;
@@ -592,7 +849,26 @@ class IRCParser {
         }
 
         // Display normal NOTICE message
+        const trustMatch = message.match(/TrustCheck OK - Open Connections: (\d+) - Max Connections: (\d+)/i);
+        if (trustMatch) {
+            message = this.i18nSpan('chat.trustCheck', 'TrustCheck OK - Open Connections: {open} - Max Connections: {max}', { open: trustMatch[1], max: trustMatch[2] });
+        }
         return `-${nick}- ${message}`;
+    }
+
+    formatHostnameMessage(message) {
+        const lower = message.toLowerCase();
+        if (lower.includes('looking up your hostname')) {
+            return this.i18nSpan('chat.hostname.lookup', '*** Looking up your hostname...');
+        }
+        if (lower.includes('found your hostname')) {
+            const host = message.includes(':') ? message.split(':').pop().trim() : '';
+            return this.i18nSpan('chat.hostname.found', '*** Found your hostname: {host}', { host });
+        }
+        if (lower.includes('no hostname found')) {
+            return this.i18nSpan('chat.hostname.notfound', '*** No hostname found.');
+        }
+        return message;
     }
     
     autoJoinAfterLogin() {
@@ -637,13 +913,15 @@ class IRCParser {
         
         if (target === nick) {
             this.output = "Status";
-            return " <span style=\"color: #ff0000\">==</span> Usermode change: " + message.trim();
+            const modeMsg = this.i18nSpan('chat.mode.user', 'Usermode change: {modes}', { modes: message.trim() });
+            return " <span style=\"color: #ff0000\">==</span> " + modeMsg;
         } else {
             this.output = target;
             const status = this.chatManager.getStatus(target, nick);
             const color = this.chatManager.getColor(target, nick);
             this.chatManager.setMode(target, message.trim());
-            return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> sets mode: ${message.trim()}`;
+            const modeMsg = this.i18nSpan('chat.mode.set', 'sets mode: {modes}', { modes: message.trim() });
+            return ` <span style=\"color: #ff0000\">==</span> <span style=\"color: ${color};\">${status}${nick}</span> ${modeMsg}`;
         }
     }
     
@@ -657,8 +935,8 @@ class IRCParser {
         
         this.output = channel;
         this.chatManager.setTopic(this.output, message);
-        // Return raw message - parsePages will handle control codes and URLs
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> sets topic: ${message.trim()}`;
+        const topicMsg = this.i18nSpan('chat.topicSet', 'sets topic: {topic}', { topic: message.trim() });
+        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> ${topicMsg}`;
     }
     
     handleQuit(ircMsg) {
@@ -683,9 +961,11 @@ class IRCParser {
         this.output = this.chatManager.getActiveWindow();
         
         if (window.user.toLowerCase() === invitedNick.toLowerCase()) {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style="color: #ff0000">==</span> ${nick} has you invited to: ${channel}\n`);
+            const inviteMsg = this.i18nSpan('chat.invite.received', '{nick} has invited you to {channel}', { nick, channel });
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style=\"color: #ff0000\">==</span> ${inviteMsg}\n`);
         } else {
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style="color: #ff0000">==</span> You have ${invitedNick} invited to: ${channel}\n`);
+            const inviteMsg = this.i18nSpan('chat.invite.sent', 'You have invited {nick} to {channel}', { nick: invitedNick, channel });
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style=\"color: #ff0000\">==</span> ${inviteMsg}\n`);
         }
     }
     
@@ -695,6 +975,7 @@ class IRCParser {
         const nick = this.parseNick(prefix);
         const channel = params[0];
         const message = params[1] || '';
+        const host = this.parseHost(prefix);
         
         // Set output to the channel being knocked on
         this.output = channel;
@@ -703,8 +984,6 @@ class IRCParser {
         if (!this.chatManager.isPage(channel)) {
             this.chatManager.addPage(channel, 'channel', false);
         }
-        
-        // Trigger notification/highlight
         this.chatManager.setHighlight(true);
         
         // Trigger browser notification for knock
@@ -713,7 +992,9 @@ class IRCParser {
         }
         
         const messageText = message ? ` (${message})` : '';
-        return ` <span style="color: #ff0000">==</span> ${nick} has knocked on ${channel}${messageText}`;
+        const knockMsg = this.i18nSpan('chat.knock', '{nick} has knocked on {channel}{message}', { nick, channel, message: messageText });
+        const hostText = host ? `[${host}] ` : '';
+        return ` <span style="color: #ff0000">==</span> ${hostText}${knockMsg}`;
     }
     
     handleJoin(ircMsg) {
@@ -748,7 +1029,8 @@ class IRCParser {
             this.chatManager.addNick(channel, nick, host, color);
         }
         
-        return ` <span style="color: #ff0000">==</span> <span class="message-nick" data-nick="${nick}" style="color: ${color};">${nick}</span> [${host}] has joined ${channel}`;
+        const joinMsg = this.i18nSpan('chat.join', '[{host}] has joined {channel}', { host, channel });
+        return ` <span style="color: #ff0000">==</span> <span class="message-nick" data-nick="${nick}" style="color: ${color};">${nick}</span> ${joinMsg}`;
     }
     
     handlePart(ircMsg) {
@@ -773,7 +1055,8 @@ class IRCParser {
         
         this.chatManager.delNick(channel, nick);
         const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> [${host}] has left ${channel}${reasonText}`;
+        const partMsg = this.i18nSpan('chat.part', '[{host}] has left {channel}{reason}', { host, channel, reason: reasonText });
+        return ` <span style="color: #ff0000">==</span> <span style="color: ${color};">${status}${nick}</span> ${partMsg}`;
     }
     
     handleKick(ircMsg) {
@@ -799,7 +1082,8 @@ class IRCParser {
         this.chatManager.delNick(channel, kickedNick);
         
         const reasonText = reason.trim().length !== 0 ? " (" + reason.trim() + ")" : "";
-        return ` <span style="color: #ff0000">==</span> <span style="color: ${this.chatManager.getColor(channel, nick)};">${this.chatManager.getStatus(channel, nick)}${nick}</span> [${host}] has kicked <span style="color: ${color};">${status}${kickedNick}</span>${reasonText}`;
+        const kickMsg = this.i18nSpan('chat.kick', '[{host}] has kicked {target}{reason}', { host, target: kickedNick, reason: reasonText });
+        return ` <span style="color: #ff0000">==</span> <span style="color: ${this.chatManager.getColor(channel, nick)};">${this.chatManager.getStatus(channel, nick)}${nick}</span> ${kickMsg}`;
     }
     
     handleAway(ircMsg) {
@@ -851,7 +1135,8 @@ class IRCParser {
             const stamp = this.chatManager.getTimestamp();
             for (const channelName of channelsWithNick) {
                 const nickColor = this.chatManager.getColor(channelName, nick);
-                const msg = ` <span style=\"color: #ff0000\">==</span> <span style=\"color: ${nickColor};\">${nick}</span> has changed host to ${newUser}@${newHost}`;
+                const hostChange = this.i18nSpan('chat.hostChange', 'has changed host to {mask}', { mask: newUser + '@' + newHost });
+                const msg = ` <span style=\"color: #ff0000\">==</span> <span style=\"color: ${nickColor};\">${nick}</span> ${hostChange}`;
                 this.chatManager.parsePages(`${stamp} ${msg}\n`, channelName);
             }
         }
@@ -914,10 +1199,140 @@ class IRCParser {
         
         return `&lt;<span class="message-nick" data-nick="${nick}" style="color: ${this.chatManager.getColor(target, nick)};">${this.chatManager.getStatus(target, nick)}${nick}</span>&gt; ${message}`;
     }
+
+    formatErrorNumeric(code, params) {
+        const channelTarget = this.findKnownChannel(params);
+        this.output = channelTarget || "Status";
+        this.hideLoadingScreen();
+
+        const getParam = (idx) => {
+            const value = params[idx] || '';
+            return value.startsWith(':') ? value.substring(1) : value;
+        };
+
+        let span = null;
+        switch (code) {
+            case "401":
+                span = this.i18nSpan('chat.err.401', 'No such nick: {target}', { target: getParam(1) });
+                break;
+            case "402":
+                span = this.i18nSpan('chat.err.402', 'No such server: {target}', { target: getParam(1) });
+                break;
+            case "403":
+                span = this.i18nSpan('chat.err.403', 'No such channel: {target}', { target: getParam(1) });
+                break;
+            case "404":
+                span = this.i18nSpan('chat.err.404', 'Cannot send to channel: {target}', { target: getParam(1) });
+                break;
+            case "405":
+                span = this.i18nSpan('chat.err.405', 'You have joined too many channels: {target}', { target: getParam(1) });
+                break;
+            case "407":
+                span = this.i18nSpan('chat.err.407', 'Duplicate recipients. No message delivered: {target}', { target: getParam(1) });
+                break;
+            case "409":
+                span = this.i18nSpan('chat.err.409', 'No origin specified');
+                break;
+            case "410":
+                span = this.i18nSpan('chat.err.410', 'Unknown CAP subcommand: {target}', { target: getParam(1) });
+                break;
+            case "421":
+                span = this.i18nSpan('chat.err.421', 'Unknown command: {command}', { command: getParam(1) });
+                break;
+            case "423":
+                span = this.i18nSpan('chat.err.423', 'No administrative info available: {target}', { target: getParam(1) });
+                break;
+            case "431":
+                span = this.i18nSpan('chat.err.431', 'No nickname given');
+                break;
+            case "432":
+                span = this.i18nSpan('chat.err.432', 'Erroneous nickname: {nick}', { nick: getParam(1) });
+                break;
+            case "441":
+                span = this.i18nSpan('chat.err.441', '{nick} is not on channel {channel}', { nick: getParam(1), channel: getParam(2) });
+                break;
+            case "442":
+                span = this.i18nSpan('chat.err.442', 'You are not on that channel: {channel}', { channel: getParam(1) });
+                break;
+            case "443":
+                span = this.i18nSpan('chat.err.443', '{nick} is already on channel {channel}', { nick: getParam(1), channel: getParam(2) });
+                break;
+            case "451":
+                span = this.i18nSpan('chat.err.451', 'You have not registered');
+                break;
+            case "461":
+                span = this.i18nSpan('chat.err.461', 'Not enough parameters for {command}', { command: getParam(1) });
+                break;
+            case "462":
+                span = this.i18nSpan('chat.err.462', 'You may not reregister');
+                break;
+            case "464":
+                span = this.i18nSpan('chat.err.464', 'Password incorrect');
+                break;
+            case "471":
+                span = this.i18nSpan('chat.err.471', 'Channel is full: {channel}', { channel: getParam(1) });
+                break;
+            case "473":
+                span = this.i18nSpan('chat.err.473', 'Cannot join channel; invite only: {channel}', { channel: getParam(1) });
+                break;
+            case "474":
+                span = this.i18nSpan('chat.err.474', 'Cannot join channel; you are banned: {channel}', { channel: getParam(1) });
+                break;
+            case "475":
+                span = this.i18nSpan('chat.err.475', 'Bad channel key for {channel}', { channel: getParam(1) });
+                break;
+            case "476":
+                span = this.i18nSpan('chat.err.476', 'Bad channel mask: {channel}', { channel: getParam(1) });
+                break;
+            case "477":
+                span = this.i18nSpan('chat.err.477', 'Channel requires authentication: {channel}', { channel: getParam(1) });
+                break;
+            case "481":
+                span = this.i18nSpan('chat.err.481', 'Permission denied: insufficient privileges');
+                break;
+            case "482":
+                span = this.i18nSpan('chat.err.482', 'You are not channel operator: {channel}', { channel: getParam(1) });
+                break;
+            case "484":
+                span = this.i18nSpan('chat.err.484', 'Cannot act on an IRC operator');
+                break;
+            case "490":
+                span = this.i18nSpan('chat.err.490', 'Channel requires secure (TLS/SSL) connection: {channel}', { channel: getParam(1) });
+                break;
+            case "492":
+                span = this.i18nSpan('chat.err.492', 'No operator block for your host');
+                break;
+            case "502":
+                span = this.i18nSpan('chat.err.502', 'Cannot change mode for other users');
+                break;
+            case "512":
+                span = this.i18nSpan('chat.err.512', 'No such gline: {target}', { target: getParam(1) });
+                break;
+            case "712":
+                span = this.i18nSpan('chat.err.712', 'Too many knocks');
+                break;
+            case "713":
+                span = this.i18nSpan('chat.err.713', 'Channel is not invite-only or restricted');
+                break;
+            case "714":
+                span = this.i18nSpan('chat.err.714', 'You are already on that channel');
+                break;
+            default:
+                break;
+        }
+
+        const text = params.slice(1).join(' ').replace(/^:/, '').trim();
+        if (!span && (code.startsWith('4') || code.startsWith('5') || code.startsWith('7'))) {
+            span = this.i18nSpan('chat.err.unknown', 'Error {code}: {text}', { code, text });
+        }
+
+        return span ? ` <span style="color: #ff0000">==</span> ${span}` : null;
+    }
     
     handleGenericNumeric(ircMsg, code, text) {
         const { params } = ircMsg;
-        this.output = "Status";
+        const channelTarget = this.findKnownChannel(params);
+        this.output = channelTarget || "Status";
         
         const numCode = parseInt(code);
         
@@ -962,9 +1377,11 @@ class IRCParser {
         const realname = params[5] || '';
         const stamp = this.chatManager ? this.chatManager.getTimestamp() : '';
 
+        const header = this.i18nSpan('chat.whois.header', 'whois: {nick} [{user}@{host}]', { nick, user, host });
+        const real = this.i18nSpan('chat.whois.realname', 'realname: {realname}', { realname: realname || '(none)' });
         const lines = [
-            ` <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block; font-weight: bold;">whois</span> : ${nick} [${user}@${host}]`,
-            `${stamp} <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block;">realname</span> : ${realname || '(none)'} `
+            ` <span style="color: #ff0000">==</span> ${header}`,
+            `${stamp} <span style="color: #ff0000">==</span> ${real}`
         ];
         return lines.join("\n");
     }
@@ -973,14 +1390,13 @@ class IRCParser {
         const { params } = ircMsg;
         // params: [nick, target-nick, channels...]
         const channels = params.slice(2).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-        return ` <span style="color: #ff0000">==</span> <span style="width: 90px; display: inline-block;">channels</span> : ${channels.join(" ")}`;
+        const span = this.i18nSpan('chat.whois.channels', 'channels: {channels}', { channels: channels.join(' ') });
+        return ` <span style="color: #ff0000">==</span> ${span}`;
     }
     
     isHostnameLookupMessage(message) {
-        return message === "*** (jwebirc) Found your hostname." || 
-               message === "*** (jwebirc) No hostname found." ||
-               message === "*** (mwebirc) Found your hostname." || 
-               message === "*** (mwebirc) No hostname found.";
+        const lower = message.toLowerCase();
+        return lower.includes('hostname') && (lower.includes('looking up') || lower.includes('found') || lower.includes('no hostname'));
     }
     
     parseNick(nick) {
@@ -993,6 +1409,19 @@ class IRCParser {
     
     parseHost(nick) {
         return nick.includes("!") ? nick.split("!", 2)[1] : nick;
+    }
+
+    findKnownChannel(params = []) {
+        if (!this.chatManager || !this.chatManager.isPage) return null;
+        for (const p of params) {
+            if (typeof p === 'string' && p.startsWith('#')) {
+                const ch = p.toLowerCase();
+                if (this.chatManager.isPage(ch)) {
+                    return ch;
+                }
+            }
+        }
+        return null;
     }
     
     /**
