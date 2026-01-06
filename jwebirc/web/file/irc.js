@@ -39,6 +39,35 @@ class IRCParser {
         this.availableCaps = new Set();
         this.enabledCaps = new Set();
 
+        // Width used to align WHOIS labels when a colon is present
+        this.whoisPadWidth = 14;
+        // Minimum label width (ch) used for localized WHOIS labels so they align cleanly
+        this.whoisLabelWidth = 16;
+
+        // Normalize WHOIS text so localized labels keep a consistent column
+        this.normalizeWhoisText = (text) => {
+            if (typeof text !== 'string') return text;
+            // Skip HTML-containing strings to avoid breaking markup
+            if (text.includes('<')) return text;
+            const colonIdx = text.indexOf(':');
+            if (colonIdx === -1) return text;
+            const label = text.slice(0, colonIdx).trim();
+            const value = text.slice(colonIdx + 1).trimStart();
+            const padded = `${label}:`.padEnd(this.whoisPadWidth, ' ');
+            return `${padded}${value}`;
+        };
+
+        // Split a WHOIS string into label/value parts if possible
+        this.splitWhoisLabelValue = (text) => {
+            if (typeof text !== 'string') return null;
+            if (text.includes('<')) return null; // avoid touching HTML markup
+            const colonIdx = text.indexOf(':');
+            if (colonIdx === -1) return null;
+            const label = text.slice(0, colonIdx).trim();
+            const value = text.slice(colonIdx + 1).trimStart();
+            return { label, value };
+        };
+
         // i18n helper
         this.t = (key, fallback, replacements) => {
             if (this.chatManager && typeof this.chatManager.t === 'function') {
@@ -55,6 +84,22 @@ class IRCParser {
                 return this.chatManager.buildI18nSpan(key, fallback, replacements);
             }
             return this.t(key, fallback, replacements);
+        };
+
+        // Unified WHOIS line formatter to keep spacing consistent across locales
+        this.whoisLine = (key, fallback, replacements, options = {}) => {
+            const translated = this.i18nSpan(key, fallback, replacements);
+            const labelValue = this.splitWhoisLabelValue(translated);
+            const ts = options.timestamp && this.chatManager ? `${this.chatManager.getTimestamp()} ` : '';
+            if (labelValue) {
+                const label = `${labelValue.label}:`;
+                const labelSpan = `<span class="whois-label" style="display: inline-block; min-width: ${this.whoisLabelWidth}ch; font-weight: 600;">${label}</span>`;
+                const valueSpan = `<span class="whois-value" style="white-space: pre-wrap;">${labelValue.value}</span>`;
+                return `${ts}<span style="color: #ff0000">==</span> <span class="whois-line" style="font-family: monospace;">&nbsp;${labelSpan} ${valueSpan}</span>`;
+            }
+
+            const span = this.normalizeWhoisText(translated);
+            return `${ts}<span style="color: #ff0000">==</span> <span class="whois-line" style="font-family: monospace; white-space: pre;">&nbsp;${span}</span>`;
         };
     }
     
@@ -410,16 +455,14 @@ class IRCParser {
                 const server = params[2];
                 const info = params[3] || '';
                 const infoSuffix = info ? ' (' + info + ')' : '';
-                const span = this.i18nSpan('chat.whois.server', 'server: {server}{info}', { server, info: infoSuffix });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.server', 'server: {server}{info}', { server, info: infoSuffix });
             }
 
             case "313": { // WHOIS operator
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';
                 const suffix = info ? ` (${info})` : '';
-                const span = this.i18nSpan('chat.whois.operator', 'operator: {nick}{info}', { nick: params[1], info: suffix });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.operator', 'operator: {nick}{info}', { nick: params[1], info: suffix });
             }
 
             case "317": { // WHOIS idle / signon
@@ -428,10 +471,9 @@ class IRCParser {
                 const signonTs = parseInt(params[3] || '0', 10) * 1000;
                 const idleText = isNaN(idleSeconds) ? '-' : `${idleSeconds}s`;
                 const signonText = signonTs > 0 ? new Date(signonTs).toLocaleString() : '-';
-                const timestamp = this.chatManager ? this.chatManager.getTimestamp() : '';
-                const idleSpan = this.i18nSpan('chat.whois.idle', 'idle: {idle}', { idle: idleText });
-                const signonSpan = this.i18nSpan('chat.whois.signon', 'signon: {signon}', { signon: signonText });
-                return ` <span style=\"color: #ff0000\">==</span> ${idleSpan}\n${timestamp} <span style=\"color: #ff0000\">==</span> ${signonSpan}`;
+                const idleLine = this.whoisLine('chat.whois.idle', 'idle: {idle}', { idle: idleText });
+                const signonLine = this.whoisLine('chat.whois.signon', 'signon: {signon}', { signon: signonText }, { timestamp: true });
+                return `${idleLine}\n${signonLine}`;
             }
 
             case "330": { // WHOIS logged in as (authname)
@@ -439,53 +481,46 @@ class IRCParser {
                 const authAs = params[2];
                 const info = params[3] || '';
                 const infoSuffix = info ? ' (' + info + ')' : '';
-                const span = this.i18nSpan('chat.whois.auth', '{nick} is logged in as {auth}{info}', { nick: params[1], auth: authAs, info: infoSuffix });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.auth', 'account: {auth}{info}', { nick: params[1], auth: authAs, info: infoSuffix });
             }
 
             case "307": { // WHOIS registered nick (often 307)
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';
                 const suffix = info ? ' (' + info + ')' : '';
-                const span = this.i18nSpan('chat.whois.registered', 'registered: {nick}{info}', { nick: params[1], info: suffix });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.registered', 'registered: {nick}{info}', { nick: params[1], info: suffix });
             }
 
             case "320": { // WHOIS additional info (identified, etc.)
                 this.output = this.chatManager.getActiveWindow();
                 const nick = params[1];
                 const info = params[2] || '';
-                const span = this.i18nSpan('chat.whois.info', 'info: {nick} {info}', { nick, info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.info', 'info: {nick} {info}', { nick, info });
             }
 
             case "343": { // WHOIS oper type (RPL_WHOISOPERNAME)
                 this.output = this.chatManager.getActiveWindow();
                 const nick = params[1];
-                const span = this.i18nSpan('chat.whois.operType', 'operator: {nick}', { nick });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.operType', 'operator: {nick}', { nick });
             }
 
             case "327": { // WHOIS real host/vhost
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                const span = this.i18nSpan('chat.whois.vhost', 'vhost: {host}', { host: info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.vhost', 'vhost: {host}', { host: info });
             }
 
             case "275": // Certificate fingerprint
             case "276": { // Client certificate
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                const span = this.i18nSpan('chat.whois.certificate', 'certificate: {info}', { info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.certificate', 'certificate: {info}', { info });
             }
 
             case "318": { // End of WHOIS
                 this.output = this.chatManager.getActiveWindow();
-                const info = params[1] || '';
-                const span = this.i18nSpan('chat.whois.end', '{text}', { text: info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                const nick = params[1] || '';
+                return this.whoisLine('chat.whois.end', 'End of /WHOIS for {nick}', { nick });
             }
 
             case "301": { // WHOIS away
@@ -495,14 +530,14 @@ class IRCParser {
                 if (this.chatManager) {
                     this.chatManager.setAwayStatus(nick, true, awayMsg);
                 }
-                return ` <span style=\"color: #ff0000\">==</span> <span style=\"width: 90px; display: inline-block;\">away</span> : ${nick}${awayMsg ? ' (' + awayMsg + ')' : ''}`;
+                const reasonSuffix = awayMsg ? ` (${awayMsg})` : '';
+                return this.whoisLine('chat.whois.away', 'away: {nick}{reason}', { nick, reason: reasonSuffix });
             }
 
             case "338": { // WHOIS actual host/IP
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';
-                const span = this.i18nSpan('chat.whois.actualHost', 'actual host: {host}', { host: info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.actualHost', 'actual host: {host}', { host: info });
             }
             case "351": { // RPL_VERSION
                 this.output = channelTarget || "Status";
@@ -532,22 +567,19 @@ class IRCParser {
             case "378": { // WHOIS connecting from
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                const span = this.i18nSpan('chat.whois.connectingFrom', 'connecting: {info}', { info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.connectingFrom', 'connecting: {info}', { info });
             }
 
             case "379": { // WHOIS modes
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                const span = this.i18nSpan('chat.whois.modes', 'modes: {info}', { info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.modes', 'modes: {info}', { info });
             }
 
             case "671": { // WHOIS secure connection (SSL/TLS)
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[1] || '';
-                const span = this.i18nSpan('chat.whois.secure', 'secure: {info}', { info });
-                return ` <span style=\"color: #ff0000\">==</span> ${span}`;
+                return this.whoisLine('chat.whois.secure', 'secure: {info}', { info });
             }
             
             case "710": { // KNOCK - notification / acknowledgement
@@ -1393,13 +1425,9 @@ class IRCParser {
         const user = params[2];
         const host = params[3];
         const realname = params[5] || '';
-        const stamp = this.chatManager ? this.chatManager.getTimestamp() : '';
-
-        const header = this.i18nSpan('chat.whois.header', 'whois: {nick} [{user}@{host}]', { nick, user, host });
-        const real = this.i18nSpan('chat.whois.realname', 'realname: {realname}', { realname: realname || '(none)' });
         const lines = [
-            ` <span style="color: #ff0000">==</span> ${header}`,
-            `${stamp} <span style="color: #ff0000">==</span> ${real}`
+            this.whoisLine('chat.whois.header', 'whois: {nick} [{user}@{host}]', { nick, user, host }),
+            this.whoisLine('chat.whois.realname', 'realname: {realname}', { realname: realname || '(none)' }, { timestamp: true })
         ];
         return lines.join("\n");
     }
@@ -1408,8 +1436,7 @@ class IRCParser {
         const { params } = ircMsg;
         // params: [nick, target-nick, channels...]
         const channels = params.slice(2).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-        const span = this.i18nSpan('chat.whois.channels', 'channels: {channels}', { channels: channels.join(' ') });
-        return ` <span style="color: #ff0000">==</span> ${span}`;
+        return this.whoisLine('chat.whois.channels', 'channels: {channels}', { channels: channels.join(' ') });
     }
     
     isHostnameLookupMessage(message) {
