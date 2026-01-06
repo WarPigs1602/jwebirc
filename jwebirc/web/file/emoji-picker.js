@@ -15,20 +15,11 @@ class EmojiPickerHandler {
         this.allEmojisFlat = [];
         this.selectedSkinTone = ''; // No modifier by default
         this.skinTonePicker = null;
+        this.t = (key) => (window.jwebircTranslate ? window.jwebircTranslate(key) : key);
         
         // Load recently used emojis from localStorage
         this.loadRecentEmojis();
         this.loadSkinTonePreference();
-        
-        // Skin tone modifiers
-        this.skinTones = [
-            { name: 'Default', modifier: '' },
-            { name: 'Light', modifier: '🏻' },
-            { name: 'Medium-Light', modifier: '🏼' },
-            { name: 'Medium', modifier: '🏽' },
-            { name: 'Medium-Dark', modifier: '🏾' },
-            { name: 'Dark', modifier: '🏿' }
-        ];
         
         // Emojis that support skin tone modifiers
         this.skinToneSupportingEmojis = new Set([
@@ -66,18 +57,6 @@ class EmojiPickerHandler {
             '🤝', '🦻', '🦾', '🦿', '🙏'
         ]);
         
-        // Emoji categories with icons for better visual hierarchy
-        this.categories = [
-            { key: 'Recent', label: 'Recently Used', icon: '⏱️' },
-            { key: 'Smileys', label: 'Smileys & Faces', icon: '😀' },
-            { key: 'Gestures', label: 'Gestures & Hands', icon: '👋' },
-            { key: 'Hearts', label: 'Hearts & Love', icon: '❤️' },
-            { key: 'Food', label: 'Food & Drink', icon: '🍕' },
-            { key: 'Nature', label: 'Nature & Weather', icon: '🌸' },
-            { key: 'Activities', label: 'Activities & Sports', icon: '⚽' },
-            { key: 'Travel', label: 'Travel & Places', icon: '✈️' }
-        ];
-        
         // Comprehensive emoji list organized by category
         this.emojis = {
             'Smileys': ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '🥲', '😋', '😛', '😜', '🤪', '😌', '😔', '😑', '😐', '😶', '🙁', '☹️', '🤨', '🤓', '😎', '🥸', '😕', '😟', '🥺', '😮', '😯', '😲', '😳', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖'],
@@ -92,6 +71,36 @@ class EmojiPickerHandler {
         
         // Build flat list of all emojis for search
         this.buildFlatEmojiList();
+
+        // Re-render texts when language changes
+        window.addEventListener('jwebirc:languageChanged', () => {
+            if (this.isOpen) this.closePicker();
+            this.createModal();
+        });
+    }
+
+    getSkinTones() {
+        return [
+            { name: this.t('emoji.skinTone.default'), modifier: '' },
+            { name: this.t('emoji.skinTone.light'), modifier: '🏻' },
+            { name: this.t('emoji.skinTone.mediumLight'), modifier: '🏼' },
+            { name: this.t('emoji.skinTone.medium'), modifier: '🏽' },
+            { name: this.t('emoji.skinTone.mediumDark'), modifier: '🏾' },
+            { name: this.t('emoji.skinTone.dark'), modifier: '🏿' }
+        ];
+    }
+
+    getCategories() {
+        return [
+            { key: 'Recent', label: this.t('emoji.category.recent'), icon: '⏱️' },
+            { key: 'Smileys', label: this.t('emoji.category.smileys'), icon: '😀' },
+            { key: 'Gestures', label: this.t('emoji.category.gestures'), icon: '👋' },
+            { key: 'Hearts', label: this.t('emoji.category.hearts'), icon: '❤️' },
+            { key: 'Food', label: this.t('emoji.category.food'), icon: '🍕' },
+            { key: 'Nature', label: this.t('emoji.category.nature'), icon: '🌸' },
+            { key: 'Activities', label: this.t('emoji.category.activities'), icon: '⚽' },
+            { key: 'Travel', label: this.t('emoji.category.travel'), icon: '✈️' }
+        ];
     }
     
     buildFlatEmojiList() {
@@ -223,10 +232,13 @@ class EmojiPickerHandler {
         if (existingModal) {
             existingModal.remove();
         }
+
+        const categories = this.getCategories();
+        const skinTones = this.getSkinTones();
         
         // Create category buttons HTML
         let categoriesHtml = '';
-        this.categories.forEach(cat => {
+        categories.forEach(cat => {
             const isDisabled = cat.key === 'Recent' && this.recentEmojis.length === 0 ? 'disabled' : '';
             categoriesHtml += `
                 <button class="emoji-category-btn ${isDisabled}" 
@@ -240,13 +252,13 @@ class EmojiPickerHandler {
         
         // Create skin tone buttons HTML
         let skinTonesHtml = '';
-        this.skinTones.forEach(tone => {
+        skinTones.forEach(tone => {
             const isActive = tone.modifier === this.selectedSkinTone ? 'active' : '';
             skinTonesHtml += `
                 <button class="skin-tone-btn ${isActive}" 
                         data-modifier="${tone.modifier}" 
                         title="${tone.name}"
-                        aria-label="Skin tone: ${tone.name}"
+                        aria-label="${this.t('emoji.skinTone')}: ${tone.name}"
                         type="button">
                     ${tone.modifier ? tone.modifier : '⭐'}
                 </button>`;
@@ -257,12 +269,12 @@ class EmojiPickerHandler {
             <div id="emoji-picker-modal" class="emoji-picker-modal">
                 <div class="emoji-picker-container">
                     <div class="emoji-picker-header">
-                        <h2 class="emoji-picker-title">Emoji Picker</h2>
-                        <button class="emoji-close-btn" aria-label="Close emoji picker" title="Close (ESC)">&times;</button>
+                        <h2 class="emoji-picker-title">${this.t('emoji.title')}</h2>
+                        <button class="emoji-close-btn" aria-label="${this.t('emoji.close')}" title="${this.t('emoji.closeHint')}">&times;</button>
                     </div>
                     
                     <div class="emoji-skin-tones">
-                        <span class="skin-tone-label">Skin Tone:</span>
+                        <span class="skin-tone-label">${this.t('emoji.skinTone')}:</span>
                         <div class="skin-tone-buttons">
                             ${skinTonesHtml}
                         </div>
@@ -272,8 +284,8 @@ class EmojiPickerHandler {
                         <input type="text" 
                                class="emoji-search-input" 
                                id="emojiSearchInput" 
-                               placeholder="Search emojis..."
-                               aria-label="Search emojis">
+                               placeholder="${this.t('emoji.searchPlaceholder')}"
+                               aria-label="${this.t('emoji.searchPlaceholder')}">
                     </div>
                     
                     <div class="emoji-categories">
@@ -283,7 +295,7 @@ class EmojiPickerHandler {
                     <div class="emoji-content">
                         <div class="emoji-grid" id="emojiGrid"></div>
                         <div class="emoji-no-results" id="emojiNoResults" style="display:none;">
-                            <p>No emojis found. Try a different search term.</p>
+                            <p>${this.t('emoji.noResults')}</p>
                         </div>
                     </div>
                 </div>
@@ -372,7 +384,7 @@ class EmojiPickerHandler {
             const emojis = this.emojis[category];
             
             if (emojis.length === 0 && category === 'Recent') {
-                noResults.innerHTML = '<p>No recently used emojis yet.</p>';
+                noResults.innerHTML = `<p>${this.t('emoji.noRecent')}</p>`;
                 noResults.style.display = 'block';
             } else {
                 emojis.forEach(emoji => {

@@ -336,6 +336,18 @@ class ChatManager {
         return emojiMap[mode] || symbol;
     }
     
+    getStatusLabel(symbol) {
+        const mode = this.getSymbolMode(symbol);
+        const labelMap = {
+            'q': this.t('nicklist.role.owner', 'Owner'),
+            'a': this.t('nicklist.role.admin', 'Admin'),
+            'o': this.t('nicklist.role.op', 'Operator'),
+            'h': this.t('nicklist.role.halfop', 'Half-op'),
+            'v': this.t('nicklist.role.voice', 'Voice')
+        };
+        return labelMap[mode] || symbol;
+    }
+    
     /**
      * Processes typing notification (tagmsg)
      * @param {string} channel - The channel
@@ -1967,12 +1979,21 @@ class ChatManager {
                     let statusHtml = '';
                     if (statusSymbol) {
                         const emoji = this.getStatusEmoji(statusSymbol);
-                        statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusSymbol}">${emoji}</span>`;
+                        const statusLabel = this.getStatusLabel(statusSymbol);
+                        const statusTitle = this.escapeAttribute(statusLabel);
+                        statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusTitle}">${emoji}</span>`;
                     }
                     
                     // Add away indicator - show as transparent and italic, with away reason in title
                     const awayClass = nick.away ? ' away' : '';
-                    const awayTitle = nick.away && nick.awayReason ? ` title="Away: ${nick.awayReason}"` : '';
+                    let awayTitle = '';
+                    if (nick.away) {
+                        const reason = nick.awayReason ? nick.awayReason : '';
+                        const awayText = reason
+                            ? this.t('nicklist.awayWithReason', 'Away: {reason}', { reason })
+                            : this.t('nicklist.away', 'Away');
+                        awayTitle = ` title="${this.escapeAttribute(awayText)}"`;
+                    }
                     
                     doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};"${awayTitle}>${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
                 });
@@ -2246,22 +2267,33 @@ class ChatManager {
         this.refreshNav();
         this.setWindow("Status");
     }
+
+    sortChannelsForNav() {
+        const priority = { status: 0, channel: 1, query: 2 };
+        return [...this.channels].sort((a, b) => {
+            const pa = priority[a.type] ?? 3;
+            const pb = priority[b.type] ?? 3;
+            if (pa !== pb) return pa - pb;
+            return a.page.toLowerCase().localeCompare(b.page.toLowerCase());
+        });
+    }
     
     refreshNav() {
-        for (let i = 0; i < this.channels.length; i++) {
-            const isActive = this.channels[i].page === this.activeWindow ? ' active' : '';
-            const isUnread = this.unreadCounts.has(this.channels[i].page) ? ' unread' : '';
-            const isHighlighted = this.highlightedTabs.has(this.channels[i].page) ? ' highlighted' : '';
+        const sortedChannels = this.sortChannelsForNav();
+        for (let i = 0; i < sortedChannels.length; i++) {
+            const isActive = sortedChannels[i].page === this.activeWindow ? ' active' : '';
+            const isUnread = this.unreadCounts.has(sortedChannels[i].page) ? ' unread' : '';
+            const isHighlighted = this.highlightedTabs.has(sortedChannels[i].page) ? ' highlighted' : '';
             const classes = isActive + isUnread + isHighlighted;
-            const safePage = this.channels[i].page.replace(/'/g, "\\'");
+            const safePage = sortedChannels[i].page.replace(/'/g, "\\'");
             
             if (i === 0) {
-                this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;">${this.channels[i].page}</nv> `;
+                this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;">${sortedChannels[i].page}</nv> `;
             } else {
-                if (this.channels[i].page.startsWith("#") || this.channels[i].page.startsWith("&")) {
-                    this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${safePage} Closed tab!');">✕</span></nv> `;
+                if (sortedChannels[i].page.startsWith("#") || sortedChannels[i].page.startsWith("&")) {
+                    this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${sortedChannels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${safePage} Closed tab!');">✕</span></nv> `;
                 } else {
-                    this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${this.channels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${safePage}');">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${sortedChannels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${safePage}');">✕</span></nv> `;
                 }
             }
         }
@@ -2547,7 +2579,9 @@ class ChatManager {
         if (awayInfo.away) {
             menuItems.push({
                 icon: '⏸️',
-                label: awayInfo.reason || 'Away',
+                label: awayInfo.reason
+                    ? this.t('nicklist.awayWithReason', 'Away: {reason}', { reason: awayInfo.reason })
+                    : this.t('nicklist.away', 'Away'),
                 action: 'none',
                 isInfo: true
             });
@@ -2556,9 +2590,9 @@ class ChatManager {
         
         // Always available: Query, WHOIS, Version
         menuItems.push(
-            { icon: '💬', label: 'Private Message', action: 'query' },
-            { icon: 'ℹ️', label: 'WHOIS', action: 'whois' },
-            { icon: '🔍', label: 'Version', action: 'version' }
+            { icon: '💬', label: this.t('nickmenu.query', 'Private Message'), action: 'query' },
+            { icon: 'ℹ️', label: this.t('nickmenu.whois', 'WHOIS'), action: 'whois' },
+            { icon: '🔍', label: this.t('nickmenu.version', 'Version'), action: 'version' }
         );
         
         // Channel operations (only if in a channel)
@@ -2578,11 +2612,11 @@ class ChatManager {
                 };
                 
                 const modeLabels = {
-                    'q': 'Owner',
-                    'a': 'Admin',
-                    'o': 'Op',
-                    'h': 'Half-Op',
-                    'v': 'Voice'
+                    'q': this.t('nickmenu.role.owner', 'Owner'),
+                    'a': this.t('nickmenu.role.admin', 'Admin'),
+                    'o': this.t('nickmenu.role.op', 'Op'),
+                    'h': this.t('nickmenu.role.halfop', 'Half-Op'),
+                    'v': this.t('nickmenu.role.voice', 'Voice')
                 };
                 
                 // Add give/take mode options for each available mode
@@ -2604,7 +2638,7 @@ class ChatManager {
                         if (hasMode) {
                             menuItems.push({
                                 icon: '⚫',
-                                label: `Remove ${label}`,
+                                label: this.t('nickmenu.remove', 'Remove {role}', { role: label }),
                                 action: 'mode',
                                 mode: `-${mode}`,
                                 emoji: emoji
@@ -2612,7 +2646,7 @@ class ChatManager {
                         } else {
                             menuItems.push({
                                 icon: emoji,
-                                label: `Give ${label}`,
+                                label: this.t('nickmenu.give', 'Give {role}', { role: label }),
                                 action: 'mode',
                                 mode: `+${mode}`,
                                 emoji: emoji
@@ -2629,9 +2663,9 @@ class ChatManager {
                 if (hasOpOrHigher) {
                     menuItems.push({ separator: true });
                     menuItems.push(
-                        { icon: '👢', label: 'Kick', action: 'kick' },
-                        { icon: '🚫', label: 'Ban', action: 'ban' },
-                        { icon: '⛔', label: 'Kick + Ban', action: 'kickban' }
+                        { icon: '👢', label: this.t('nickmenu.kick', 'Kick'), action: 'kick' },
+                        { icon: '🚫', label: this.t('nickmenu.ban', 'Ban'), action: 'ban' },
+                        { icon: '⛔', label: this.t('nickmenu.kickban', 'Kick + Ban'), action: 'kickban' }
                     );
                 }
             }

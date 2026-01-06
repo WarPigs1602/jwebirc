@@ -17,15 +17,20 @@ class IRCParser {
 
         // WHO command queue to avoid flooding the server
         this.whoQueue = [];
-        this.whoTimer = null;
-        this.whoDelay = this.commandDelay;
-        
+
         // History command queue to avoid flooding the server
         this.historyQueue = [];
-        this.historyTimer = null;
         this.historyDelay = this.commandDelay;
         this.historyCommandEnabled = window.historyCommandEnabled === true || window.historyCommandEnabled === 'true';
         this.historyCommand = window.historyCommand || '/msg HistServ HISTORY %CHANNEL% 50';
+
+        // MODE command queue to avoid flooding the server
+        this.modeQueue = [];
+        this.modeDelay = this.commandDelay;
+
+        // Shared send queue so every command uses the same delay and is not bundled
+        this.commandQueue = [];
+        this.commandTimer = null;
 
         // Cache last shown capabilities to avoid duplicate CAP lines
         this.capDisplayLast = { ls: null, ack: null, nak: null };
@@ -853,6 +858,16 @@ class IRCParser {
         if (trustMatch) {
             message = this.i18nSpan('chat.trustCheck', 'TrustCheck OK - Open Connections: {open} - Max Connections: {max}', { open: trustMatch[1], max: trustMatch[2] });
         }
+
+        const historyNoneMatch = message.match(/No message history available for (#[^\s]+)/i);
+        if (historyNoneMatch) {
+            message = this.i18nSpan('chat.history.none', 'No message history available for {channel}', { channel: historyNoneMatch[1] });
+        }
+
+        const historyEndMatch = message.match(/End of HISTORY for (#[^\s]+) \((\d+) messages\)/i);
+        if (historyEndMatch) {
+            message = this.i18nSpan('chat.history.end', 'End of history for {channel} ({count} messages)', { channel: historyEndMatch[1], count: historyEndMatch[2] });
+        }
         return `-${nick}- ${message}`;
     }
 
@@ -1018,11 +1033,14 @@ class IRCParser {
             // Queue WHO command with delay to avoid flooding the server
             if (window.postManager) {
                 this.queueWhoCommand(channel);
-                
+
                 // Queue history command if enabled
                 if (this.historyCommandEnabled) {
                     this.queueHistoryCommand(channel);
                 }
+
+                // Queue channel mode check to avoid flooding
+                this.queueModeCommand(channel);
             }
         } else {
             this.output = channel;
@@ -1523,85 +1541,67 @@ class IRCParser {
     }
     
     /**
-     * Queue a WHO command to be executed with delay
-     * This prevents flooding the server with multiple WHO commands at once
+     * Queue a WHO command; each command is sent one-by-one via the shared command queue
      */
     queueWhoCommand(target) {
-        // Add to queue if not already queued
         if (!this.whoQueue.includes(target)) {
             this.whoQueue.push(target);
-        }
-        
-        // Start processing if not already running
-        if (!this.whoTimer) {
-            this.processWhoQueue();
+            this.enqueueCommand("/who " + target);
         }
     }
-    
+
     /**
-     * Process the WHO command queue with delays
-     */
-    processWhoQueue() {
-        if (this.whoQueue.length === 0) {
-            this.whoTimer = null;
-            return;
-        }
-        
-        // Get and send the next WHO command
-        const target = this.whoQueue.shift();
-        window.postManager.submitTextMessage("/who " + target);
-        
-        // Schedule next WHO command if queue is not empty
-        if (this.whoQueue.length > 0) {
-            this.whoTimer = setTimeout(() => {
-                this.processWhoQueue();
-            }, this.whoDelay);
-        } else {
-            this.whoTimer = null;
-        }
-    }
-    
-    /**
-     * Queue a history command to be executed with delay
-     * This prevents flooding the server with multiple history commands at once
+     * Queue a history command; each command is sent one-by-one via the shared command queue
      */
     queueHistoryCommand(channel) {
-        // Add to queue if not already queued
         if (!this.historyQueue.includes(channel)) {
             this.historyQueue.push(channel);
-        }
-        
-        // Start processing if not already running
-        if (!this.historyTimer) {
-            this.processHistoryQueue();
+            const command = this.historyCommand.replace(/%CHANNEL%/g, channel);
+            this.enqueueCommand(command);
         }
     }
-    
+
     /**
-     * Process the history command queue with delays
+     * Queue a MODE command; each command is sent one-by-one via the shared command queue
      */
-    processHistoryQueue() {
-        if (this.historyQueue.length === 0) {
-            this.historyTimer = null;
+    queueModeCommand(channel) {
+        if (!this.modeQueue.includes(channel)) {
+            this.modeQueue.push(channel);
+            this.enqueueCommand("/mode " + channel);
+        }
+    }
+
+    /**
+     * Add an IRC command to the shared queue; every send is spaced by commandDelay
+     */
+    enqueueCommand(commandText) {
+        this.commandQueue.push(commandText);
+
+        if (!this.commandTimer) {
+            this.commandTimer = setTimeout(() => {
+                this.processCommandQueue();
+            }, this.commandDelay);
+        }
+    }
+
+    /**
+     * Process the shared command queue with a fixed delay between sends
+     */
+    processCommandQueue() {
+        if (this.commandQueue.length === 0) {
+            this.commandTimer = null;
             return;
         }
-        
-        // Get and send the next history command
-        const channel = this.historyQueue.shift();
-        
-        // Replace %CHANNEL% placeholder with actual channel name
-        const command = this.historyCommand.replace(/%CHANNEL%/g, channel);
-        
-        // Send the history command
+
+        const command = this.commandQueue.shift();
         window.postManager.submitTextMessage(command);
-        
-        // Schedule next history command if queue is not empty
-        if (this.historyQueue.length > 0) {
-            this.historyTimer = setTimeout(() => {
-                this.processHistoryQueue();
-            }, this.historyDelay);
+
+        if (this.commandQueue.length > 0) {
+            this.commandTimer = setTimeout(() => {
+                this.processCommandQueue();
+            }, this.commandDelay);
         } else {
-            this.historyTimer = null;
+            this.commandTimer = null;
         }
     }
     
