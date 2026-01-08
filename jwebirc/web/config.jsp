@@ -46,6 +46,18 @@
     String recaptchaV3SecretKey = param(ctx, "jwebirc.recaptchaV3SecretKey", "6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k");
     String recaptchaV3MinScore = param(ctx, "jwebirc.recaptchaV3MinScore", "0.5");
     String recaptchaEnterpriseEnabled = param(ctx, "jwebirc.recaptchaEnterpriseEnabled", "false");
+
+    // Template System Configuration
+    // Enable/disable custom template system
+    String templateEnabled = param(ctx, "jwebirc.templateEnabled", "true");
+    // Default template name (must match directory name in templates/)
+    String templateDefault = param(ctx, "jwebirc.templateDefault", "dark-theme");
+    // Allow users to switch templates
+    String templateUserSelectable = param(ctx, "jwebirc.templateUserSelectable", "true");
+    // Available templates (comma-separated list)
+    String templateAvailable = param(ctx, "jwebirc.templateAvailable", "dark-theme,light-theme");
+    // Template path prefix
+    String templatePath = param(ctx, "jwebirc.templatePath", "templates/");
     String recaptchaEnterpriseProjectId = param(ctx, "jwebirc.recaptchaEnterpriseProjectId", "your-project-id");
     String recaptchaEnterpriseSiteKey = param(ctx, "jwebirc.recaptchaEnterpriseSiteKey", "your-site-key");
     String recaptchaEnterpriseApiKey = param(ctx, "jwebirc.recaptchaEnterpriseApiKey", "your-api-key");

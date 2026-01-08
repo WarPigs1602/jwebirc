@@ -20,6 +20,7 @@ class ChatManager {
         this.activeWindow = 'Status';
         this.output = 'Status';
         this.userColor = null;
+        this.activeTemplate = null;
         this.socket = null;
         this.login = true;
         this.highlight = false;
@@ -48,6 +49,20 @@ class ChatManager {
             enabled: []
         };
         this.capNegotiationActive = false;
+
+        // Nick color palettes (theme-aware)
+        this.lightNickColors = [
+            '#7c3aed', '#9333ea', '#a855f7', '#c026d3', '#db2777',
+            '#e11d48', '#dc2626', '#ea580c', '#d97706', '#ca8a04',
+            '#65a30d', '#16a34a', '#059669', '#0d9488', '#0891b2',
+            '#0284c7', '#2563eb', '#4f46e5', '#6366f1', '#7c3aed'
+        ];
+        this.darkNickColors = [
+            '#a78bfa', '#c084fc', '#e879f9', '#f0abfc', '#fb7185',
+            '#fda4af', '#fdba74', '#fcd34d', '#fde047', '#bef264',
+            '#86efac', '#6ee7b7', '#5eead4', '#7dd3fc', '#93c5fd',
+            '#a5b4fc', '#c4b5fd', '#d8b4fe', '#f9a8d4', '#fbcfe8'
+        ];
 
         // UI preferences
         this.uiPrefs = {
@@ -495,6 +510,13 @@ class ChatManager {
         this.loadUiPreferences();
         this.bindUiControls();
         this.applyLayoutPreferences();
+
+        // Track current template for color recalculation
+        this.activeTemplate = this.detectActiveTemplate();
+        document.addEventListener('templateChanged', (event) => {
+            this.activeTemplate = (event && event.detail && event.detail.template) ? event.detail.template : this.detectActiveTemplate();
+            this.reapplyNickColorsForTheme();
+        });
         
         // Setup notification button
         if (this.notificationButton) {
@@ -1641,14 +1663,118 @@ class ChatManager {
         this.renderUserlist(channel);
     }
     
-    getRandomColor() {
-        const pastelColors = [
-            '#a78bfa', '#c084fc', '#e879f9', '#f0abfc', '#fb7185',
-            '#fda4af', '#fdba74', '#fcd34d', '#fde047', '#bef264',
-            '#86efac', '#6ee7b7', '#5eead4', '#7dd3fc', '#93c5fd',
-            '#a5b4fc', '#c4b5fd', '#d8b4fe', '#f9a8d4', '#fbcfe8'
-        ];
-        return pastelColors[Math.floor(Math.random() * pastelColors.length)];
+    getNickColor(nick) {
+        const palette = this.isLightTheme() ? this.lightNickColors : this.darkNickColors;
+        const key = (nick || '').toLowerCase();
+        if (palette.length === 0) return '#5865f2';
+
+        // Simple deterministic hash for stable color assignment per nick
+        let hash = 0;
+        for (let i = 0; i < key.length; i++) {
+            hash = ((hash << 5) - hash) + key.charCodeAt(i);
+            hash |= 0; // Keep in 32-bit space
+        }
+        const index = Math.abs(hash) % palette.length;
+        return palette[index];
+    }
+
+    // Backwards compatible wrapper
+    getRandomColor(nick = '') {
+        return this.getNickColor(nick || window.user || '');
+    }
+
+    detectActiveTemplate() {
+        // Prefer template system config if available
+        if (window.templateSystemConfig && window.templateSystemConfig.current) {
+            return window.templateSystemConfig.current;
+        }
+
+        // Check current template link element
+        const templateLink = document.querySelector('link[data-template="custom"]');
+        if (templateLink) {
+            const href = templateLink.getAttribute('href') || '';
+            const match = href.match(/templates\/([^/]+)\//);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+
+        // Fallback to cookie
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'jwebirc_template') {
+                return value;
+            }
+        }
+
+        return null;
+    }
+    
+    /**
+     * Check if light theme is currently active
+     * @returns {boolean}
+     */
+    isLightTheme() {
+        // Use cached template name when available (updated on template change event)
+        if (this.activeTemplate) {
+            return this.activeTemplate.includes('light');
+        }
+
+        // Check template system
+        if (window.templateSystemConfig && window.templateSystemConfig.current) {
+            return window.templateSystemConfig.current.includes('light');
+        }
+        
+        // Check link element
+        const templateLink = document.querySelector('link[data-template="custom"]');
+        if (templateLink) {
+            const href = templateLink.getAttribute('href');
+            return href && href.includes('light-theme');
+        }
+        
+        // Check cookie as fallback
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'jwebirc_template') {
+                return value.includes('light');
+            }
+        }
+        
+        // Default to dark theme
+        return false;
+    }
+
+    reapplyNickColorsForTheme() {
+        // Recompute stored nick colors
+        const activeWindow = this.getActiveWindow();
+
+        this.channels.forEach(channel => {
+            channel.nicks = channel.nicks.map(entry => {
+                const hasStatus = entry.nick && this.isStatusSymbol(entry.nick[0]);
+                const baseNick = hasStatus ? entry.nick.substring(1) : entry.nick;
+                return {
+                    ...entry,
+                    color: this.getNickColor(baseNick)
+                };
+            });
+        });
+
+        if (window.user) {
+            this.userColor = this.getNickColor(window.user);
+        }
+
+        if (activeWindow) {
+            this.renderUserlist(activeWindow);
+        }
+
+        // Update already-rendered message nick colors in chat log
+        const messageNicks = document.querySelectorAll('.message-nick[data-nick]');
+        messageNicks.forEach(span => {
+            const nick = span.getAttribute('data-nick') || span.textContent.trim();
+            span.style.color = this.getNickColor(nick);
+        });
     }
     
     parseChannels(channel) {

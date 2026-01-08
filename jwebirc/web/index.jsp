@@ -1084,6 +1084,24 @@
         const currentLangInput = document.getElementById('uiLang');
         const currentLang = (currentLangInput && currentLangInput.value) || (typeof window.jwebircLang === 'string' ? window.jwebircLang : 'en');
         
+        // Get current template
+        let currentTemplate = null;
+        try {
+            if (window.TemplateSystem && window.TemplateSystem.currentTemplate) {
+                currentTemplate = window.TemplateSystem.currentTemplate;
+            }
+        } catch (e) {
+            // Fallback: Try to get from cookie
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'jwebirc_template') {
+                    currentTemplate = value;
+                    break;
+                }
+            }
+        }
+        
         // Use provided values or get defaults
         const fontSize = overrideFontSize !== undefined ? overrideFontSize : 14;
         const hue = overrideHue !== undefined ? overrideHue : 0;
@@ -1093,18 +1111,29 @@
         const notifications = overrideNotifications !== false;
         const notificationSound = overrideNotificationSound !== false;
         
-        let url = baseUrl + '?connect=1';
+        let url = baseUrl + '?';
+        let hasParams = false;
+        
         if (currentLang) {
-            url += '&lang=' + encodeURIComponent(currentLang);
+            url += 'lang=' + encodeURIComponent(currentLang);
+            hasParams = true;
         }
         if (nickname && nickname.trim()) {
-            url += '&name=' + encodeURIComponent(nickname);
+            url += (hasParams ? '&' : '') + 'name=' + encodeURIComponent(nickname);
+            hasParams = true;
         }
         if (channels && channels.trim()) {
-            url += '&channels=' + encodeURIComponent(channels);
+            url += (hasParams ? '&' : '') + 'channels=' + encodeURIComponent(channels);
+            hasParams = true;
+        }
+        // Add template preference
+        if (currentTemplate) {
+            url += (hasParams ? '&' : '') + 'template=' + encodeURIComponent(currentTemplate);
+            hasParams = true;
         }
         // Add UI preferences to URL
-        url += '&fontSize=' + fontSize;
+        url += (hasParams ? '&' : '') + 'fontSize=' + fontSize;
+        hasParams = true;
         url += '&hue=' + hue;
         if (hideTopic) {
             url += '&hideTopic=true';

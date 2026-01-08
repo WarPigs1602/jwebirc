@@ -15,5 +15,30 @@
             }
             // Loading screen will be hidden by IRC parser when MOTD is received or on error
         </script>
+        
+        <!-- Template System -->
+        <% if ("true".equalsIgnoreCase((String) session.getAttribute("template_enabled"))) { %>
+        <script src="file/template-system.js"></script>
+        <script>
+            // Configure template system for chat
+            window.templateSystemConfig = {
+                enabled: true,
+                userSelectable: <%= "true".equalsIgnoreCase((String) session.getAttribute("template_user_selectable")) %>,
+                current: '<%= session.getAttribute("user_template") %>',
+                available: '<%= session.getAttribute("template_available") %>'.split(',')
+            };
+            
+            // Initialize template system when DOM is ready
+            if (window.TemplateSystem) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        window.TemplateSystem.init();
+                    });
+                } else {
+                    window.TemplateSystem.init();
+                }
+            }
+        </script>
+        <% } %>
     </body>
 </html>

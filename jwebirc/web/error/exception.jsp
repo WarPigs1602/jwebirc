@@ -10,6 +10,7 @@
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@page isErrorPage="true"%>
+<%@include file="../init.jsp"%>
 <%@include file="error-config.jsp" %>
 <%
     // Use configuration from error-config.jsp
@@ -24,6 +25,9 @@
         <title>Error - <%= exception != null ? exception.getClass().getSimpleName() : "Application Error" %></title>
         <link rel="stylesheet" href="<%= request.getContextPath() %>/file/bootstrap/css/bootstrap.min.css">
         <link rel="stylesheet" href="<%= request.getContextPath() %>/file/style.css">
+        <% if ("true".equalsIgnoreCase((String) session.getAttribute("template_enabled"))) { %>
+        <link rel="stylesheet" href="<%= request.getContextPath() %>/<%= session.getAttribute("template_css_path") %>" type="text/css" data-template="custom">
+        <% } %>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
         <style>
             .error-container {

@@ -407,7 +407,7 @@ class IRCParser {
                 const nicks = nickList.trim().split(/\s+/);
                 for (const nick of nicks) {
                     if (nick.length > 0) {
-                        this.chatManager.addNick(channel, nick, "", this.chatManager.getRandomColor());
+                        this.chatManager.addNick(channel, nick, "", this.chatManager.getNickColor(nick));
                     }
                 }
                 return null;
@@ -1049,7 +1049,7 @@ class IRCParser {
         const nick = this.parseNick(prefix);
         const host = this.parseHost(prefix);
         const channel = params[0];
-        const color = this.chatManager.getRandomColor();
+        const color = this.chatManager.getNickColor(nick);
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
             if (this.chatManager.isPage(channel)) {

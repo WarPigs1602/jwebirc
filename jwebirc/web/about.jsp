@@ -40,6 +40,9 @@
         <!-- Stylesheets -->
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
         <link rel="stylesheet" href="file/style.css" type="text/css">
+        <% if ("true".equalsIgnoreCase((String) session.getAttribute("template_enabled"))) { %>
+        <link rel="stylesheet" href="<%= session.getAttribute("template_css_path") %>" type="text/css" data-template="custom">
+        <% } %>
         
         <!-- Icons -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">

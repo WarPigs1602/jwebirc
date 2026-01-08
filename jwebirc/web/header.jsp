@@ -15,6 +15,11 @@
         uiLang = "en";
     }
     
+    // Get template configuration
+    String templateCss = (String) session.getAttribute("template_css_path");
+    String templateEnabledHeader = (String) session.getAttribute("template_enabled");
+    boolean useTemplate = templateEnabledHeader != null && templateEnabledHeader.equalsIgnoreCase("true") && templateCss != null;
+    
     if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
         if (allowedDomains != null && !allowedDomains.equals("*")) {
             // If specific domains are configured, set Content-Security-Policy
@@ -50,6 +55,10 @@
         <!-- Stylesheets -->
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
         <link rel="stylesheet" href="file/style.css" type="text/css">
+        <% if (useTemplate) { %>
+        <!-- Template System: Custom Theme -->
+        <link rel="stylesheet" href="<%= templateCss %>" type="text/css" data-template="custom">
+        <% } %>
         
         <!-- Icons -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
@@ -58,6 +67,16 @@
         <script src="file/jquery.js"></script>
         <script src="file/i18n.js"></script>
         <script src="file/login-options.js"></script>
+        <script>
+            // Template System Configuration
+            window.templateSystemConfig = {
+                enabled: <%= useTemplate ? "true" : "false" %>,
+                userSelectable: <%= session.getAttribute("template_user_selectable") != null && session.getAttribute("template_user_selectable").toString().equalsIgnoreCase("true") ? "true" : "false" %>,
+                current: "<%= session.getAttribute("user_template") != null ? session.getAttribute("user_template") : "dark-theme" %>",
+                available: "<%= session.getAttribute("template_available") != null ? session.getAttribute("template_available") : "dark-theme,light-theme" %>".split(",")
+            };
+        </script>
+        <script src="file/template-system.js"></script>
     </head>
     <body>
         <!-- Language + Login Options -->
@@ -135,6 +154,19 @@
                                 <div class="nav-slider-track hue-track"></div>
                             </div>
                         </div>
+                        <% if (useTemplate && session.getAttribute("template_user_selectable") != null && session.getAttribute("template_user_selectable").toString().equalsIgnoreCase("true")) { %>
+                        <!-- Template Selector -->
+                        <div class="nav-dropdown-divider"></div>
+                        <div class="nav-dropdown-item slider-item">
+                            <div class="nav-dropdown-item-header">
+                                <i class="fas fa-palette"></i>
+                                <span data-i18n="template.theme">Theme</span>
+                            </div>
+                            <div class="template-selector" id="loginTemplateSelector">
+                                <!-- Template options will be populated by JavaScript -->
+                            </div>
+                        </div>
+                        <% } %>
                     </div>
                 </div>
             </div>
