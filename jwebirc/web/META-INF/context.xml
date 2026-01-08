@@ -1,82 +1,189 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- ============================================
+     jWebIRC Context Configuration Example
+     This file should be placed in:
+     - META-INF/context.xml (inside WAR)
+     - OR $CATALINA_BASE/conf/[enginename]/[hostname]/[appname].xml
+     ============================================ -->
 <Context path="/jwebirc" reloadable="false">
-    
-    <!-- Session Manager Configuration -->
+    <!-- Prevent session persistence across restarts -->
     <Manager pathname="" />
-
-       <!-- Application Configuration (migrated from config.jsp) -->
-       <Parameter name="jwebirc.webchatSessionTimeout" value="300000" override="false" />
-       <Parameter name="jwebirc.sessionTimeout" value="500" override="false" />
-       <Parameter name="jwebirc.webchatHost" value="localhost" override="false" />
-       <Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false" />
-       <Parameter name="jwebirc.webchatPort" value="6669" override="false" />
-       <Parameter name="jwebirc.webchatSsl" value="false" override="false" />
-       <Parameter name="jwebirc.webchatServerPassword" value="" override="false" />
-       <Parameter name="jwebirc.webchatIdent" value="webchat" override="false" />
-       <Parameter name="jwebirc.webchatUser" value="jwebirc" override="false" />
-       <Parameter name="jwebirc.webchatPassword" value="password" override="false" />
-       <Parameter name="jwebirc.webchatRealname" value="https://irc.midiandmore.net/" override="false" />
-       <Parameter name="jwebirc.webchatName" value="jWebIRC" override="false" />
-       <Parameter name="jwebirc.webchatTitle" value="jWebIRC - IRC Web Client" override="false" />
-       <Parameter name="jwebirc.ircNetworkName" value="jWebIRC" override="false" />
-       <Parameter name="jwebirc.ircNetworkDescription" value="Modern web-based IRC client" override="false" />
-       <Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat, jWebIRC" override="false" />
-       <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
-       <Parameter name="jwebirc.forwardedForIps" value="127.0.0.1" override="false" />
-       <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false" />
-       <Parameter name="jwebirc.webircCgi" value="CGIIRC" override="false" />
-       <Parameter name="jwebirc.hmacTemporal" value="1337" override="false" />
-       <Parameter name="jwebirc.saslEnabled" value="true" override="false" />
-       <Parameter name="jwebirc.captchaEnabled" value="false" override="false" />
-       <Parameter name="jwebirc.captchaType" value="TURNSTILE" override="false" />
-       <Parameter name="jwebirc.turnstileSiteKey" value="1x00000000000000000000AA" override="false" />
-       <Parameter name="jwebirc.turnstileSecretKey" value="1x0000000000000000000000000000000AA" override="false" />
-       <Parameter name="jwebirc.recaptchaV2SiteKey" value="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" override="false" />
-       <Parameter name="jwebirc.recaptchaV2SecretKey" value="6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe" override="false" />
-       <Parameter name="jwebirc.recaptchaV3SiteKey" value="6LdqmCAqAAAAAJLpfQv9hGgYmHl8xT5qT3l6v8Z7" override="false" />
-       <Parameter name="jwebirc.recaptchaV3SecretKey" value="6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k" override="false" />
-       <Parameter name="jwebirc.recaptchaV3MinScore" value="0.5" override="false" />
-       <Parameter name="jwebirc.recaptchaEnterpriseEnabled" value="false" override="false" />
-       <Parameter name="jwebirc.recaptchaEnterpriseProjectId" value="your-project-id" override="false" />
-       <Parameter name="jwebirc.recaptchaEnterpriseSiteKey" value="your-site-key" override="false" />
-       <Parameter name="jwebirc.recaptchaEnterpriseApiKey" value="your-api-key" override="false" />
-       <Parameter name="jwebirc.recaptchaEnterpriseMinScore" value="0.5" override="false" />
-       <Parameter name="jwebirc.chatnappingEnabled" value="true" override="false" />
-       <Parameter name="jwebirc.chatnappingAllowedDomains" value="*" override="false" />
-       <Parameter name="jwebirc.chatnappingDefaultNick" value="Guest*" override="false" />
-       <Parameter name="jwebirc.chatnappingDefaultChannel" value="#lobby" override="false" />
-       <Parameter name="jwebirc.historyCommandEnabled" value="false" override="false" />
-       <Parameter name="jwebirc.historyCommand" value="/msg HistServ HISTORY %CHANNEL% 50" override="false" />
-       <Parameter name="jwebirc.commandDelayOnJoin" value="2000" override="false" />
-       <Parameter name="jwebirc.showStackTrace" value="true" override="false" />
-       <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false" />
     
-    <!-- Resource Configuration -->
-    <!-- Uncomment and configure for database connection pooling
-    <Resource name="jdbc/jwebircDB" 
-              auth="Container"
-              type="javax.sql.DataSource"
-              maxTotal="20" 
-              maxIdle="10"
-              maxWaitMillis="10000"
-              username="dbuser" 
-              password="dbpass"
-              driverClassName="org.postgresql.Driver"
-              url="jdbc:postgresql://localhost:5432/jwebirc"
-              validationQuery="SELECT 1"
-              testOnBorrow="true"/>
-    -->
+    <!-- ============================================
+         BASIC CONFIGURATION
+         ============================================ -->
     
-    <!-- Security Configuration -->
-    <Valve className="org.apache.catalina.valves.RemoteAddrValve"
-           allow=".*" />
+    <!-- Session Timeouts (milliseconds) -->
+    <Parameter name="jwebirc.webchatSessionTimeout" value="300000" override="false"/>
+    <Parameter name="jwebirc.sessionTimeout" value="500" override="false"/>
     
-    <!-- Access Log Configuration -->
-    <Valve className="org.apache.catalina.valves.AccessLogValve"
-           directory="logs"
-           prefix="jwebirc_access_log"
-           suffix=".txt"
-           pattern="%h %l %u %t &quot;%r&quot; %s %b %D"
-           resolveHosts="false" />
-           
+    <!-- IRC Server Connection -->
+    <Parameter name="jwebirc.webchatHost" value="localhost" override="false"/>
+    <Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false"/>
+    <Parameter name="jwebirc.webchatPort" value="6669" override="false"/>
+    <Parameter name="jwebirc.webchatSsl" value="false" override="false"/>
+    <Parameter name="jwebirc.webchatServerPassword" value="" override="false"/>
+    
+    <!-- IRC Connection Identity -->
+    <Parameter name="jwebirc.webchatIdent" value="webchat" override="false"/>
+    <Parameter name="jwebirc.webchatUser" value="jwebirc" override="false"/>
+    <Parameter name="jwebirc.webchatPassword" value="password" override="false"/>
+    <Parameter name="jwebirc.webchatRealname" value="https://irc.midiandmore.net/" override="false"/>
+    
+    <!-- Branding -->
+    <Parameter name="jwebirc.webchatName" value="jWebIRC" override="false"/>
+    <Parameter name="jwebirc.webchatTitle" value="jWebIRC - IRC Web Client" override="false"/>
+    <Parameter name="jwebirc.ircNetworkName" value="jWebIRC" override="false"/>
+    <Parameter name="jwebirc.ircNetworkDescription" value="Modern web-based IRC client" override="false"/>
+    <Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat, jWebIRC" override="false"/>
+    
+    <!-- ============================================
+         PROXY / REVERSE PROXY CONFIGURATION
+         ============================================ -->
+    
+    <!-- X-Forwarded-For header handling -->
+    <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false"/>
+    <Parameter name="jwebirc.forwardedForIps" value="127.0.0.1" override="false"/>
+    
+    <!-- WEBIRC / CGI:IRC modes -->
+    <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false"/>
+    <Parameter name="jwebirc.webircCgi" value="CGIIRC" override="false"/>
+    <Parameter name="jwebirc.hmacTemporal" value="1337" override="false"/>
+    
+    <!-- ============================================
+         AUTHENTICATION
+         ============================================ -->
+    
+    <!-- SASL Authentication -->
+    <Parameter name="jwebirc.saslEnabled" value="true" override="false"/>
+    
+    <!-- ============================================
+         CAPTCHA CONFIGURATION
+         ============================================ -->
+    
+    <!-- Enable/Disable CAPTCHA -->
+    <Parameter name="jwebirc.captchaEnabled" value="false" override="false"/>
+    
+    <!-- CAPTCHA Type: TURNSTILE, RECAPTCHA_V2, RECAPTCHA_V3, RECAPTCHA_ENTERPRISE -->
+    <Parameter name="jwebirc.captchaType" value="TURNSTILE" override="false"/>
+    
+    <!-- Cloudflare Turnstile -->
+    <Parameter name="jwebirc.turnstileSiteKey" value="1x00000000000000000000AA" override="false"/>
+    <Parameter name="jwebirc.turnstileSecretKey" value="1x0000000000000000000000000000000AA" override="false"/>
+    
+    <!-- Google reCAPTCHA v2 -->
+    <Parameter name="jwebirc.recaptchaV2SiteKey" value="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" override="false"/>
+    <Parameter name="jwebirc.recaptchaV2SecretKey" value="6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe" override="false"/>
+    
+    <!-- Google reCAPTCHA v3 -->
+    <Parameter name="jwebirc.recaptchaV3SiteKey" value="6LdqmCAqAAAAAJLpfQv9hGgYmHl8xT5qT3l6v8Z7" override="false"/>
+    <Parameter name="jwebirc.recaptchaV3SecretKey" value="6LdqmCAqAAAAAI5qX5gT7pY8xC2fV9hN4mR6wL3k" override="false"/>
+    <Parameter name="jwebirc.recaptchaV3MinScore" value="0.5" override="false"/>
+    
+    <!-- Google reCAPTCHA Enterprise -->
+    <Parameter name="jwebirc.recaptchaEnterpriseEnabled" value="false" override="false"/>
+    <Parameter name="jwebirc.recaptchaEnterpriseProjectId" value="your-project-id" override="false"/>
+    <Parameter name="jwebirc.recaptchaEnterpriseSiteKey" value="your-site-key" override="false"/>
+    <Parameter name="jwebirc.recaptchaEnterpriseApiKey" value="your-api-key" override="false"/>
+    <Parameter name="jwebirc.recaptchaEnterpriseMinScore" value="0.5" override="false"/>
+    
+    <!-- ============================================
+         TEMPLATE SYSTEM
+         ============================================ -->
+    
+    <!-- Enable/Disable Template System -->
+    <Parameter name="jwebirc.templateEnabled" value="true" override="false"/>
+    
+    <!-- Default Template (must match directory in templates/) -->
+    <Parameter name="jwebirc.templateDefault" value="dark-theme" override="false"/>
+    
+    <!-- Allow Users to Switch Templates -->
+    <Parameter name="jwebirc.templateUserSelectable" value="true" override="false"/>
+    
+    <!-- Available Templates (comma-separated) -->
+    <Parameter name="jwebirc.templateAvailable" value="dark-theme,light-theme" override="false"/>
+    
+    <!-- Template Path Prefix -->
+    <Parameter name="jwebirc.templatePath" value="templates/" override="false"/>
+    
+    <!-- ============================================
+         CHATNAPPING (IFRAME EMBEDDING)
+         ============================================ -->
+    
+    <!-- Enable/Disable Chatnapping -->
+    <Parameter name="jwebirc.chatnappingEnabled" value="true" override="false"/>
+    
+    <!-- Allowed Domains (comma-separated or '*' for all) -->
+    <Parameter name="jwebirc.chatnappingAllowedDomains" value="*" override="false"/>
+    
+    <!-- Default Nick Pattern (* will be replaced with random digit) -->
+    <Parameter name="jwebirc.chatnappingDefaultNick" value="Guest*" override="false"/>
+    
+    <!-- Default Channel -->
+    <Parameter name="jwebirc.chatnappingDefaultChannel" value="#lobby" override="false"/>
+    
+    <!-- ============================================
+         HISTORY COMMAND
+         ============================================ -->
+    
+    <!-- Enable History Command on Channel Join -->
+    <Parameter name="jwebirc.historyCommandEnabled" value="false" override="false"/>
+    
+    <!-- History Command (%CHANNEL% will be replaced with channel name) -->
+    <Parameter name="jwebirc.historyCommand" value="/msg HistServ HISTORY %CHANNEL% 50" override="false"/>
+    
+    <!-- Delay before executing history command (milliseconds) -->
+    <Parameter name="jwebirc.historyCommandDelay" value="2000" override="false"/>
+    
+    <!-- General command delay after join (milliseconds) -->
+    <Parameter name="jwebirc.commandDelayOnJoin" value="2000" override="false"/>
+    
+    <!-- ============================================
+         ERROR HANDLING
+         ============================================ -->
+    
+    <!-- Show Stack Traces in Error Pages -->
+    <Parameter name="jwebirc.showStackTrace" value="true" override="false"/>
+    
+    <!-- Error Page Style: 'detailed' or 'simple' -->
+    <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false"/>
+    
 </Context>
+
+<!-- ============================================
+     CONFIGURATION EXAMPLES
+     ============================================
+     
+     PRODUCTION SETUP:
+     - Set showStackTrace to 'false'
+     - Enable CAPTCHA with real keys
+     - Configure proper IRC server settings
+     - Set templateEnabled to 'true' with corporate theme
+     - Restrict chatnappingAllowedDomains to specific domains
+     
+     DEVELOPMENT SETUP:
+     - Set showStackTrace to 'true'
+     - Disable CAPTCHA
+     - Use test IRC server
+     - Enable templateUserSelectable for testing themes
+     - Allow chatnappingAllowedDomains '*'
+     
+     CORPORATE BRANDING:
+     - Set templateDefault to your custom theme
+     - Set templateUserSelectable to 'false' to enforce branding
+     - Configure webchatName and webchatTitle with company name
+     - Update ircNetworkName and ircNetworkDescription
+     
+     PUBLIC SERVER WITH USER CHOICE:
+     - Set templateUserSelectable to 'true'
+     - List all available templates in templateAvailable
+     - Enable SASL: saslEnabled 'true'
+     - Configure CAPTCHA to prevent spam
+     
+     PRIVATE/INTERNAL IRC:
+     - Disable CAPTCHA
+     - Enable SASL authentication
+     - Set chatnappingEnabled 'false' if no embedding needed
+     - Configure forwardedForIps for reverse proxy
+     
+     ============================================ -->

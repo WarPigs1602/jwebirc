@@ -16,7 +16,7 @@ The Template System allows you to customize the visual appearance of jWebIRC by 
 
 ### 1. Enable Template System
 
-Add to your `web.xml` or `context.xml`:
+Add to your `web.xml` (values below match the shipped light and dark themes). For a Tomcat `context.xml` example see the dedicated snippet further below.
 
 ```xml
 <context-param>
@@ -38,6 +38,11 @@ Add to your `web.xml` or `context.xml`:
     <param-name>jwebirc.templateAvailable</param-name>
     <param-value>dark-theme,light-theme</param-value>
 </context-param>
+
+<context-param>
+    <param-name>jwebirc.templatePath</param-name>
+    <param-value>templates/</param-value>
+</context-param>
 ```
 
 ### 2. Restart Application
@@ -49,19 +54,18 @@ Restart your servlet container (Tomcat, etc.) to apply the configuration.
 1. Open jWebIRC in your browser
 2. Click the **gear icon** (⚙️) in the top-right corner
 3. Find the **Theme** section in the dropdown
-4. Select your preferred theme
+4. Select your preferred theme (dark-theme or light-theme by default)
 
 ## File Structure
 
 ```
 web/
 ├── templates/                    # Template directory
-│   ├── dark-theme/              # Dark theme
-│   │   └── style.css           # Dark theme styles
-│   ├── light-theme/             # Light theme
-│   │   └── style.css           # Light theme styles
-│   ├── README.md                # Full documentation
-│   └── web.xml.example          # Configuration example
+│   ├── dark-theme/               # Built-in dark theme
+│   │   └── style.css             # Dark theme styles
+│   ├── light-theme/              # Built-in light theme
+│   │   └── style.css             # Light theme styles
+│   └── README.md                 # Full template documentation
 ├── file/
 │   └── template-system.js       # Template switcher JavaScript
 ├── template.jsp                  # Template management logic
@@ -87,7 +91,7 @@ Create `web/templates/my-theme/style.css`:
     --primary-color: #your-color;
     --background-main: #your-background;
     --text-primary: #your-text-color;
-    
+
     /* Add more variables as needed */
 }
 
@@ -127,11 +131,28 @@ Restart application and select your theme from the dropdown.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `templateEnabled` | `false` | Enable/disable template system |
-| `templateDefault` | `dark-theme` | Default template to load |
-| `templateUserSelectable` | `false` | Allow users to switch themes |
-| `templateAvailable` | `dark-theme,light-theme` | Comma-separated list of available themes |
-| `templatePath` | `templates/` | Base path for template directories |
+| `jwebirc.templateEnabled` | `false` | Enable/disable the template system |
+| `jwebirc.templateDefault` | `dark-theme` | Default theme loaded on first visit |
+| `jwebirc.templateUserSelectable` | `false` | Allow users to switch themes via UI |
+| `jwebirc.templateAvailable` | `dark-theme,light-theme` | Comma-separated list of allowed theme directory names |
+| `jwebirc.templatePath` | `templates/` | Base path for theme directories under `web/` |
+
+### Tomcat context.xml example (META-INF)
+
+Place a minimal theme configuration in `META-INF/context.xml` (see [jwebirc/web/META-INF/context.xml](jwebirc/web/META-INF/context.xml)):
+
+```xml
+<Context>
+    <!-- Template System -->
+    <Parameter name="jwebirc.templateEnabled" value="true" override="false"/>
+    <Parameter name="jwebirc.templateDefault" value="dark-theme" override="false"/>
+    <Parameter name="jwebirc.templateUserSelectable" value="true" override="false"/>
+    <Parameter name="jwebirc.templateAvailable" value="dark-theme,light-theme" override="false"/>
+    <Parameter name="jwebirc.templatePath" value="templates/" override="false"/>
+</Context>
+```
+
+Keep the values in `context.xml` and `web.xml` in sync so the theme selector shows only available directories under `web/templates/`.
 
 ## Use Cases
 
@@ -179,7 +200,7 @@ Use only base styling:
 - ✓ Check browser console for errors
 
 ### Theme Selector Not Visible
-- ✓ Confirm `templateUserSelectable` is `true`
+- ✓ Confirm `jwebirc.templateUserSelectable` is `true`
 - ✓ Verify `template-system.js` is loaded
 - ✓ Check that you're on a page with the Display Options menu
 
@@ -205,9 +226,9 @@ document.addEventListener('templateChanged', (e) => {
 
 ## Support & Documentation
 
-- **Full Documentation**: See `templates/README.md`
-- **Example Configuration**: See `templates/web.xml.example`
-- **Built-in Themes**: See `templates/dark-theme/` and `templates/light-theme/`
+- **Full Documentation**: See [jwebirc/web/templates/README.md](jwebirc/web/templates/README.md)
+- **Configuration Snippets**: Use the examples in this guide or [jwebirc/web/templates/README.md](jwebirc/web/templates/README.md)
+- **Built-in Themes**: See [jwebirc/web/templates/dark-theme](jwebirc/web/templates/dark-theme) and [jwebirc/web/templates/light-theme](jwebirc/web/templates/light-theme)
 
 ## Version
 
