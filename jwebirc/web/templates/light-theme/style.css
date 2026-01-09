@@ -20,14 +20,17 @@
     --info-color: #0ea5e9;
     
     /* Backgrounds - Light Mode */
-    --background-main: #ffffff;
-    --background-secondary: #fafbfc;
-    --background-tertiary: #f5f7fa;
-    --background-hover: #eff2f6;
-    --background-active: #e5e9f0;
-    --background-gradient: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-    --background-modal: #ffffff;
-    --background-input: #ffffff;
+    --background-main: #eef5ff;
+    --background-secondary: #e8f1ff;
+    --background-tertiary: #e0ebff;
+    --background-hover: #d7e5ff;
+    --background-active: #c9dcff;
+    --background-gradient: linear-gradient(135deg, #eef5ff 0%, #e3efff 100%);
+    --background-modal: #e2ecff;
+    --background-input: #f6f9ff;
+    --surface: #e1ebff;
+    --surface-strong: #d7e5ff;
+    --surface-soft: #eaf2ff;
     
     /* Text Colors */
     --text-primary: #000000;
@@ -86,7 +89,7 @@
 
 /* Body and Main Layout */
 body {
-    background: #f0f4f8;
+    background: var(--background-main);
     color: var(--text-primary);
     font-family: var(--font-family);
     font-size: var(--font-size-base);
@@ -104,7 +107,7 @@ body {
 
 /* Card Components */
 .card {
-    background: #ffffff;
+    background: var(--surface);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-md);
@@ -117,14 +120,14 @@ body {
 }
 
 .card-header {
-    background: #f8fafb;
+    background: var(--surface-soft);
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
     font-weight: 600;
 }
 
 .card-body {
-    background: #ffffff;
+    background: var(--surface);
 }
 
 /* Button Styles */
@@ -180,7 +183,7 @@ body {
 /* Form Controls */
 .form-control,
 .form-select {
-    background: #ffffff;
+    background: var(--background-input);
     border: 1.5px solid #d1d5db;
     color: #000000;
     border-radius: var(--border-radius-sm);
@@ -189,7 +192,7 @@ body {
 
 .form-control:focus,
 .form-select:focus {
-    background: #ffffff;
+    background: var(--background-input);
     border-color: var(--primary-color);
     box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
     color: #000000;
@@ -201,7 +204,7 @@ body {
 
 .form-control:disabled,
 .form-control[readonly] {
-    background: #f3f4f6 !important;
+    background: var(--background-tertiary) !important;
     color: #1f2937 !important;
     border-color: #d1d5db !important;
     opacity: 1;
@@ -216,18 +219,18 @@ body {
 
 /* Modal Overrides */
 .modal-content {
-    background: #ffffff;
+    background: var(--surface);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
-    background: #f8fafb;
+    background: var(--surface-strong);
     border-bottom: 1px solid var(--border-color);
 }
 
 .modal-footer {
-    background: #f8fafb;
+    background: var(--surface-strong);
     border-top: 1px solid var(--border-color);
 }
 
@@ -244,7 +247,7 @@ body > div[style*="position: fixed"][style*="z-index: 9999"] {
 }
 
 body > div[style*="position: fixed"][style*="z-index: 9999"] > div {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     color: #000000 !important;
     border: 1px solid var(--border-color) !important;
 }
@@ -261,14 +264,14 @@ body > div[style*="position: fixed"][style*="z-index: 9999"] label {
 
 body > div[style*="position: fixed"][style*="z-index: 9999"] input[type="text"],
 body > div[style*="position: fixed"][style*="z-index: 9999"] textarea {
-    background: #ffffff !important;
+    background: var(--background-input) !important;
     color: #000000 !important;
     border: 1.5px solid #d1d5db !important;
 }
 
 body > div[style*="position: fixed"][style*="z-index: 9999"] input[readonly],
 body > div[style*="position: fixed"][style*="z-index: 9999"] textarea[readonly] {
-    background: #f3f4f6 !important;
+    background: var(--background-tertiary) !important;
     color: #1f2937 !important;
 }
 
@@ -596,7 +599,7 @@ pre {
 }
 
 .login-card {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border-radius: var(--border-radius-lg);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     padding: var(--spacing-xl);
@@ -620,7 +623,7 @@ pre {
 }
 
 .login-form .form-control {
-    background: #ffffff !important;
+    background: var(--background-input) !important;
     border: 1.5px solid #d1d5db !important;
     color: #000000 !important;
     padding: var(--spacing-md);
@@ -628,7 +631,7 @@ pre {
 }
 
 .login-form .form-control:focus {
-    background: #ffffff !important;
+    background: var(--background-input) !important;
     border-color: var(--primary-color) !important;
     box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15) !important;
     outline: none;
@@ -667,7 +670,7 @@ pre {
     width: 1.2em;
     height: 1.2em;
     margin-top: 0.25em;
-    background-color: #ffffff;
+    background-color: var(--background-input);
     border: 1.5px solid #d1d5db;
     border-radius: var(--border-radius-sm);
     cursor: pointer;
@@ -706,22 +709,22 @@ pre {
 
 /* Password Input */
 input[type="password"].form-control {
-    background: #ffffff;
+    background: var(--background-input);
     color: #000000;
 }
 
 input[type="password"].form-control:focus {
-    background: #ffffff;
+    background: var(--background-input);
 }
 
 /* Text Input */
 input[type="text"].form-control {
-    background: #ffffff;
+    background: var(--background-input);
     color: #000000;
 }
 
 input[type="text"].form-control:focus {
-    background: #ffffff;
+    background: var(--background-input);
 }
 
 /* Submit Button */
@@ -769,7 +772,7 @@ small a {
 }
 
 .captcha-error-card {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #fca5a5 !important;
     border-radius: var(--border-radius);
     color: #991b1b !important;
@@ -797,7 +800,7 @@ hr {
 /* Select Dropdown */
 select.form-control,
 select.form-select {
-    background: #ffffff;
+    background: var(--background-input);
     color: #000000;
     border: 1.5px solid #d1d5db;
     cursor: pointer;
@@ -805,13 +808,13 @@ select.form-select {
 
 select.form-control:focus,
 select.form-select:focus {
-    background: #ffffff;
+    background: var(--background-input);
     border-color: var(--primary-color);
 }
 
 select.form-control option,
 select.form-select option {
-    background: #ffffff;
+    background: var(--background-input);
     color: #000000;
 }
 
@@ -832,21 +835,21 @@ select.form-select option {
 
 /* Chat Page Specific */
 .chat-container {
-    background: #f0f4f8 !important;
+    background: var(--background-main) !important;
 }
 
 .chat_frame {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     color: #1f2937 !important;
 }
 
 .top_frame {
-    background: #ffffff !important;
+    background: var(--surface-strong) !important;
     border-bottom: 1px solid #e5e7eb !important;
 }
 
 .topic_frame {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     border-bottom: 1px solid #e5e7eb !important;
     color: #111827 !important;
 }
@@ -864,17 +867,17 @@ select.form-select option {
 }
 
 .post_frame {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border-top: 1px solid #e5e7eb !important;
 }
 
 .right_frame {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     border-left: 1px solid #e5e7eb !important;
 }
 
 .user-list-header {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     color: #1f2937 !important;
     border-bottom: 1px solid #e5e7eb !important;
 }
@@ -887,14 +890,14 @@ select.form-select option {
 
 #message-input,
 .post_field {
-    background: #ffffff !important;
+    background: var(--background-input) !important;
     color: #000000 !important;
     border: 1.5px solid #d1d5db !important;
 }
 
 #message-input:focus,
 .post_field:focus {
-    background: #ffffff !important;
+    background: var(--background-input) !important;
     border-color: var(--primary-color) !important;
     box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15) !important;
 }
@@ -911,7 +914,7 @@ select.form-select option {
 }
 
 .user-item:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
 }
 
 /* Nav elements */
@@ -925,18 +928,18 @@ select.form-select option {
 }
 
 .nav-action-btn:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
 }
 
 /* Tab Elements (nv) - Status and Channel Tabs */
 nv {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #d1d5db !important;
     color: #1f2937 !important;
 }
 
 nv:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
     border-color: #9ca3af !important;
     color: #111827 !important;
 }
@@ -958,7 +961,7 @@ nv.highlighted:not(.unread) {
 }
 
 .nav-tabs-wrapper {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #e5e7eb !important;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
@@ -966,7 +969,7 @@ nv.highlighted:not(.unread) {
 
 .nav-tab {
     color: #1f2937 !important;
-    background: #ffffff !important;
+    background: var(--surface-soft) !important;
     border: 1px solid #d1d5db !important;
     font-weight: 500 !important;
     transition: all var(--transition-fast) !important;
@@ -981,7 +984,7 @@ nv.highlighted:not(.unread) {
 }
 
 .nav-tab:hover:not(.active) {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
     border-color: #9ca3af !important;
     color: #111827 !important;
 }
@@ -989,21 +992,21 @@ nv.highlighted:not(.unread) {
 /* Collapsible sections */
 .collapse,
 .collapsing {
-    background: #ffffff !important;
+    background: var(--surface) !important;
 }
 
 .collapse .card-body,
 .collapsing .card-body {
-    background: #ffffff !important;
+    background: var(--surface) !important;
 }
 
 /* SASL Auth Section */
 #saslAuthSection {
-    background: #ffffff !important;
+    background: var(--surface) !important;
 }
 
 #saslAuthSection .form-control {
-    background: #ffffff !important;
+    background: var(--background-input) !important;
     color: #000000 !important;
     font-weight: 500;
     border: 1.5px solid #d1d5db !important;
@@ -1050,7 +1053,7 @@ nv.highlighted:not(.unread) {
 
 /* SASL Checkbox itself */
 #useSaslAuth {
-    background-color: #ffffff !important;
+    background-color: var(--surface) !important;
     border: 2px solid var(--primary-color) !important;
 }
 
@@ -1066,12 +1069,12 @@ nv.highlighted:not(.unread) {
 
 #languageToggle {
     color: #000000 !important;
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     border: 1px solid #e5e7eb !important;
 }
 
 #languageToggle:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
 }
 
 #languageToggleLabel {
@@ -1080,7 +1083,7 @@ nv.highlighted:not(.unread) {
 }
 
 #languageMenu {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     color: #000000 !important;
 }
 
@@ -1094,18 +1097,18 @@ nv.highlighted:not(.unread) {
 }
 
 #languageMenu button:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
     color: #000000 !important;
 }
 
 .lang-btn {
     color: #000000 !important;
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     border: 1px solid #e5e7eb !important;
 }
 
 .lang-btn:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
 }
 
 .lang-btn i {
@@ -1119,7 +1122,7 @@ nv.highlighted:not(.unread) {
 }
 
 .nav-dropdown {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     color: #000000 !important;
 }
 
@@ -1128,7 +1131,7 @@ nv.highlighted:not(.unread) {
 }
 
 .nav-dropdown button:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
 }
 
 .nav-dropdown-header {
@@ -1237,11 +1240,11 @@ p {
 
 /* Error Pages Overrides */
 .error-container {
-    background: #f0f4f8 !important;
+    background: var(--background-main) !important;
 }
 
 .error-card {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #d1d5db !important;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
 }
@@ -1273,7 +1276,7 @@ p {
 }
 
 .error-details {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     color: #1f2937 !important;
     border: 1px solid #e5e7eb !important;
 }
@@ -1285,14 +1288,14 @@ p {
 
 .error-details pre,
 .error-details code {
-    background: #f3f4f6 !important;
+    background: var(--background-tertiary) !important;
     color: #1f2937 !important;
     border: 1px solid #d1d5db !important;
 }
 
 /* About Page Overrides */
 .about-container {
-    background: #f0f4f8 !important;
+    background: var(--background-main) !important;
 }
 
 .about-header {
@@ -1300,7 +1303,7 @@ p {
 }
 
 .about-section {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #e5e7eb !important;
     color: #1f2937 !important;
 }
@@ -1324,7 +1327,7 @@ p {
 }
 
 .feature-card {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #e5e7eb !important;
 }
 
@@ -1391,7 +1394,7 @@ p {
 
 /* Color Picker - Light Theme Overrides */
 .color-picker {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 2px solid var(--primary-color) !important;
 }
 
@@ -1409,11 +1412,11 @@ p {
 }
 
 .color-picker-body {
-    background: #ffffff !important;
+    background: var(--surface) !important;
 }
 
 .color-picker-section {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     box-shadow: inset 0 0 0 1px #e5e7eb !important;
 }
 
@@ -1443,12 +1446,12 @@ p {
 
 .color-picker-actions {
     border-top: 1px solid #e5e7eb !important;
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
 }
 
 /* Format Help - Light Theme */
 .format-help {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 2px solid var(--primary-color) !important;
 }
 
@@ -1466,20 +1469,20 @@ p {
 }
 
 .format-help-content {
-    background: #ffffff !important;
+    background: var(--surface) !important;
 }
 
 .format-help-item {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     color: #1f2937 !important;
 }
 
 .format-help-item:hover {
-    background: #f3f4f6 !important;
+    background: var(--background-hover) !important;
 }
 
 .format-help-item kbd {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 1px solid #d1d5db !important;
     color: var(--primary-color) !important;
 }
@@ -1493,7 +1496,7 @@ p {
 }
 
 .format-help-item code {
-    background: #f3f4f6 !important;
+    background: var(--background-tertiary) !important;
 }
 
 /* Override inline styles für bessere Lesbarkeit im Light-Theme */
@@ -1515,38 +1518,38 @@ p {
 
 /* Post Frame Buttons - Light Theme */
 .post_frame .btn-outline-secondary {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border: 2px solid #d1d5db !important;
     color: #1f2937 !important;
 }
 
 .post_frame .btn-outline-secondary:hover {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     border-color: var(--primary-color) !important;
     color: var(--primary-color) !important;
 }
 
 #emojiBtn, #formatHelpBtn {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     color: #1f2937 !important;
     border: 2px solid #d1d5db !important;
 }
 
 #emojiBtn:hover, #formatHelpBtn:hover {
-    background: #f9fafb !important;
+    background: var(--surface-soft) !important;
     border-color: var(--primary-color) !important;
     color: var(--primary-color) !important;
 }
 
 /* Button General Overrides */
 button:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning) {
-    background: #ffffff !important;
+    background: var(--surface-soft) !important;
     color: #1f2937 !important;
     border: 1.5px solid #d1d5db !important;
 }
 
 button:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):hover {
-    background: #f9fafb !important;
+    background: var(--background-hover) !important;
     border-color: var(--primary-color) !important;
     color: var(--primary-color) !important;
 }
