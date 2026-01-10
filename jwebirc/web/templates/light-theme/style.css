@@ -848,10 +848,16 @@ select.form-select option {
     border-bottom: 1px solid #e5e7eb !important;
 }
 
+
 .topic_frame {
-    background: var(--surface-soft) !important;
-    border-bottom: 1px solid #e5e7eb !important;
+    background: var(--surface-strong) !important;
+    border-bottom: 1px solid var(--border-color) !important;
     color: #111827 !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+.topic_frame .topic-icon {
+    color: var(--primary-color) !important;
 }
 
 .topic_frame .topic-text,
@@ -863,7 +869,23 @@ select.form-select option {
 .topic_frame a:visited,
 .topic_frame a:hover,
 .topic_frame a:active {
-    color: #111827 !important;
+    color: inherit !important;
+    text-decoration: none;
+}
+
+.topic_frame .topic-empty,
+.topic_frame .topic-empty a {
+    text-decoration: none !important;
+}
+
+/* Chat content links inherit surrounding text color */
+.chat_frame a,
+.chat_frame a:link,
+.chat_frame a:visited,
+.chat_frame a:hover,
+.chat_frame a:active {
+    color: inherit !important;
+    text-decoration: underline;
 }
 
 .post_frame {
@@ -872,14 +894,16 @@ select.form-select option {
 }
 
 .right_frame {
-    background: var(--surface-soft) !important;
-    border-left: 1px solid #e5e7eb !important;
+    background: var(--surface) !important;
+    border-left: 1px solid var(--border-color) !important;
+    color: #111827 !important;
+    box-shadow: var(--shadow-sm) !important;
 }
 
 .user-list-header {
-    background: var(--surface) !important;
-    color: #1f2937 !important;
-    border-bottom: 1px solid #e5e7eb !important;
+    background: var(--surface-soft) !important;
+    color: #111827 !important;
+    border-bottom: 1px solid var(--border-color) !important;
 }
 
 #chat-container {
@@ -900,6 +924,53 @@ select.form-select option {
     background: var(--background-input) !important;
     border-color: var(--primary-color) !important;
     box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15) !important;
+}
+
+/* User list + topic scrollbars in light colors */
+.topic_frame::-webkit-scrollbar,
+.right_frame::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.topic_frame::-webkit-scrollbar-track,
+.right_frame::-webkit-scrollbar-track {
+    background: var(--background-tertiary);
+}
+
+.topic_frame::-webkit-scrollbar-thumb,
+.right_frame::-webkit-scrollbar-thumb {
+    background: var(--border-color-light);
+    border-radius: var(--border-radius);
+    border: 2px solid var(--background-tertiary);
+}
+
+.topic_frame::-webkit-scrollbar-thumb:hover,
+.right_frame::-webkit-scrollbar-thumb:hover {
+    background: var(--border-color-dark);
+}
+
+/* Chat input text darker for light theme */
+.post_frame {
+    color: #111827 !important;
+}
+
+.post_frame .form-control {
+    background: var(--background-input) !important;
+    color: #111827 !important;
+    border: 1.5px solid #d1d5db !important;
+    box-shadow: none !important;
+}
+
+.post_frame .form-control:focus {
+    background: var(--background-input) !important;
+    color: #0f172a !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 0.15rem rgba(37, 99, 235, 0.12) !important;
+}
+
+.post_frame .form-control::placeholder {
+    color: #4b5563 !important;
 }
 
 #user-list {
