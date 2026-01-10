@@ -1495,14 +1495,33 @@ p {
     color: #374151 !important;
 }
 
-.color-grid button {
-    border: 2px solid #e5e7eb !important;
+#colorPicker .color-grid button {
+    border: 2px solid transparent !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
 }
 
-.color-grid button.selected {
+#colorPicker .color-grid button.selected {
     border-color: var(--primary-color) !important;
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4) !important;
 }
+
+/* Ensure palette swatches always show the IRC mIRC colors in light theme */
+#colorPicker .color-grid button[data-color-code="00"] { background: #ffffff !important; }
+#colorPicker .color-grid button[data-color-code="01"] { background: #000000 !important; }
+#colorPicker .color-grid button[data-color-code="02"] { background: #00007f !important; }
+#colorPicker .color-grid button[data-color-code="03"] { background: #009300 !important; }
+#colorPicker .color-grid button[data-color-code="04"] { background: #ff0000 !important; }
+#colorPicker .color-grid button[data-color-code="05"] { background: #7f0000 !important; }
+#colorPicker .color-grid button[data-color-code="06"] { background: #9c009c !important; }
+#colorPicker .color-grid button[data-color-code="07"] { background: #fc7f00 !important; }
+#colorPicker .color-grid button[data-color-code="08"] { background: #ffff00 !important; }
+#colorPicker .color-grid button[data-color-code="09"] { background: #00fc00 !important; }
+#colorPicker .color-grid button[data-color-code="10"] { background: #009393 !important; }
+#colorPicker .color-grid button[data-color-code="11"] { background: #00ffff !important; }
+#colorPicker .color-grid button[data-color-code="12"] { background: #0000ff !important; }
+#colorPicker .color-grid button[data-color-code="13"] { background: #ff00ff !important; }
+#colorPicker .color-grid button[data-color-code="14"] { background: #7f7f7f !important; }
+#colorPicker .color-grid button[data-color-code="15"] { background: #d2d2d2 !important; }
 
 .color-picker-clear {
     border: 1px dashed #d1d5db !important;
@@ -1624,6 +1643,30 @@ button:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):ho
     border-color: var(--primary-color) !important;
     color: var(--primary-color) !important;
 }
+
+/* Keep color picker swatches visible (override general button styling) */
+#colorPicker.color-picker .color-grid button {
+    background: transparent !important;
+    border: 2px solid transparent !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+}
+
+#colorPicker.color-picker .color-grid button[data-color-code="00"] { background: #ffffff !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="01"] { background: #000000 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="02"] { background: #00007f !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="03"] { background: #009300 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="04"] { background: #ff0000 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="05"] { background: #7f0000 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="06"] { background: #9c009c !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="07"] { background: #fc7f00 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="08"] { background: #ffff00 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="09"] { background: #00fc00 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="10"] { background: #009393 !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="11"] { background: #00ffff !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="12"] { background: #0000ff !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="13"] { background: #ff00ff !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="14"] { background: #7f7f7f !important; }
+#colorPicker.color-picker .color-grid button[data-color-code="15"] { background: #d2d2d2 !important; }
 
 /* Template Identification */
 body::before {
