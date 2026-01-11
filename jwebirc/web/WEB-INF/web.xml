@@ -6,7 +6,7 @@
          https://jakarta.ee/xml/ns/jakartaee/web-app_6_1.xsd">
     
     <display-name>jWebIRC - MidiAndMore IRC Client</display-name>
-    <description>Web-basierter IRC-Client für das MidiAndMore.Net IRC Network</description>
+    <description>Web-based IRC client for the MidiAndMore.Net IRC Network</description>
     
     <!-- Session Configuration -->
     <session-config>

@@ -11,7 +11,7 @@
     <packaging>war</packaging>
     
     <name>jWebIRC</name>
-    <description>Web-based IRC Client für MidiAndMore.Net IRC Network</description>
+    <description>Web-based IRC client for the MidiAndMore.Net IRC Network</description>
     
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -89,14 +89,14 @@
                 </configuration>
             </plugin>
             
-            <!-- Maven Surefire Plugin für Tests -->
+            <!-- Maven Surefire Plugin for tests -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.6.0</version>
             </plugin>
             
-            <!-- Dependency Check Plugin für Sicherheit -->
+            <!-- Dependency Check Plugin for security -->
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>

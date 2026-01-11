@@ -1649,7 +1649,7 @@ p {
     background: var(--background-tertiary) !important;
 }
 
-/* Override inline styles für bessere Lesbarkeit im Light-Theme */
+/* Override inline styles for better readability in the light theme */
 .format-help-item span {
     color: #1f2937 !important;
 }

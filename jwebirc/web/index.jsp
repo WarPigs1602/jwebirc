@@ -642,7 +642,7 @@
         %>
         
         <script>
-            // Cookie-Verwaltung
+            // Cookie management
             function setCookie(name, value, days = 365) {
                 const d = new Date();
                 d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
@@ -661,7 +661,7 @@
                 return null;
             }
             
-            // URL-Parameter auslesen
+            // Read URL parameters
             function getUrlParameter(name) {
                 const urlParams = new URLSearchParams(window.location.search);
                 return urlParams.get(name);
@@ -673,22 +673,22 @@
                 const saslFields = document.getElementById('saslFields');
                 if (checkbox && saslFields) {
                     saslFields.style.display = checkbox.checked ? 'block' : 'none';
-                    // Cookie speichern
+                    // Persist cookie
                     setCookie('jwebirc_useSasl', checkbox.checked ? 'true' : 'false');
                 }
             }
             
-            // Formular-Werte beim Laden wiederherstellen
+            // Restore form values on load
             window.addEventListener('DOMContentLoaded', function() {
                 const nickInput = document.getElementById('nickInput');
                 const channelInput = document.getElementById('channelInput');
                 const useSaslCheckbox = document.getElementById('useSaslAuth');
                 
-                // URL-Parameter haben höchste Priorität
+                // URL parameters take priority
                 const urlChannels = getUrlParameter('channels') || getUrlParameter('channel');
                 const urlName = getUrlParameter('name');
                 
-                // Wenn keine URL-Parameter vorhanden, Cookie-Werte laden
+                // If no URL parameters exist, fall back to cookie values
                 if (nickInput && !urlName && !nickInput.value) {
                     const savedNick = getCookie('jwebirc_nick');
                     if (savedNick) {
@@ -703,7 +703,7 @@
                     }
                 }
                 
-                // SASL-Checkbox aus Cookie laden
+                // Load SASL checkbox state from cookie
                 if (useSaslCheckbox) {
                     const savedUseSasl = getCookie('jwebirc_useSasl');
                     if (savedUseSasl === 'true') {
@@ -712,7 +712,7 @@
                     }
                 }
                 
-                // Event-Listener für das Speichern beim Submit
+                // Save form values to cookies on submit
                 const loginForm = document.forms['login'];
                 if (loginForm) {
                     loginForm.addEventListener('submit', function() {

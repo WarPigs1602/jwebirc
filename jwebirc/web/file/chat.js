@@ -1277,10 +1277,10 @@ class ChatManager {
     }
     
     /**
-     * Extrahiert den aktuellen Control Code State aus einem Text
-     * @param {string} text - Der Text, aus dem der State extrahiert werden soll
-     * @param {object} previousState - Der vorherige State, der aktualisiert werden soll
-     * @returns {object} State-Objekt mit aktuellen Formatierungen
+     * Extract the current control-code formatting state from text.
+     * @param {string} text - The text to parse for formatting state.
+     * @param {object} previousState - The prior state to update while parsing.
+     * @returns {object} State object with the active formatting flags.
      */
     extractControlCodeState(text, previousState = null) {
         const state = previousState ? { ...previousState } : {
