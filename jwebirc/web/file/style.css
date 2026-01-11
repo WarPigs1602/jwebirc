@@ -2432,6 +2432,20 @@ a:hover {
     color: #ffffff !important;
 }
 
+.post_field.preview-enabled {
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+    caret-color: transparent !important;
+    text-shadow: none !important;
+    background-color: #404050 !important;
+    position: relative;
+    z-index: 1;
+}
+
+.post_field.preview-enabled::placeholder {
+    color: transparent !important;
+}
+
 .post_field:focus {
     outline: none !important;
     border-color: var(--primary-color) !important;
@@ -2442,6 +2456,54 @@ a:hover {
 .post_field::placeholder {
     color: #b0b0b0 !important;
     opacity: 1 !important;
+}
+
+.post-input-wrapper {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.input-group .post-input-wrapper {
+    display: flex;
+}
+
+.post-input-wrapper .post_field {
+    width: 100%;
+}
+
+.post-preview {
+    position: absolute;
+    inset: 0;
+    padding: var(--spacing-sm);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    font-family: inherit;
+    color: var(--text-primary);
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    z-index: 2;
+}
+
+.post-preview .preview-placeholder {
+    color: #b0b0b0;
+}
+
+.post-preview .preview-caret {
+    display: inline-block;
+    width: 1px;
+    height: 1.2em;
+    background: #ffffff;
+    vertical-align: middle;
+    animation: preview-caret-blink 1s step-end infinite;
+}
+
+@keyframes preview-caret-blink {
+    0%, 50% { opacity: 1; }
+    50.01%, 100% { opacity: 0; }
 }
 
 .btn {

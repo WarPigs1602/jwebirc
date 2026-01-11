@@ -393,16 +393,19 @@
             <button class="btn btn-outline-secondary" type="button" id="formatHelpBtn" title="IRC Formatting (Ctrl+B, Ctrl+I, Ctrl+U, ...)">
                 <i class="fas fa-question-circle"></i>
             </button>
-            <input type="text" 
-                   class="form-control post_field" 
-                   autocomplete="off" 
-                   id="message" 
-                   maxlength="400" 
-                   value="" 
-                   placeholder="Type a message..."
-                   data-i18n-placeholder="chat.placeholder"
-                   aria-label="Message input"
-                   onkeydown="return submitChatInput(event);">
+                 <div class="post-input-wrapper">
+                  <div class="post-preview" id="messagePreview" aria-hidden="true"></div>
+                  <input type="text" 
+                      class="form-control post_field" 
+                      autocomplete="off" 
+                      id="message" 
+                      maxlength="400" 
+                      value="" 
+                      placeholder="Type a message..."
+                      data-i18n-placeholder="chat.placeholder"
+                      aria-label="Message input"
+                      onkeydown="return submitChatInput(event);">
+                 </div>
             <button class="btn btn-primary" 
                     type="button" 
                     onclick="sendText();"

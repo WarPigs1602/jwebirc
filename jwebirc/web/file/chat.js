@@ -1099,7 +1099,7 @@ class ChatManager {
         }
     }
     
-    parseControl(text) {
+    parseControl(text, options = {}) {
         // State-based parser for proper IRC formatting
         const result = [];
         let pos = 0;
@@ -1257,8 +1257,9 @@ class ChatManager {
         
         // Return result and trim trailing whitespace/newlines
         const output = result.join('');
-        // Remove trailing whitespace including newlines before closing tags
-        return output.replace(/\s+(<\/span>)/g, '$1').trim();
+        const cleaned = output.replace(/\s+(<\/span>)/g, '$1');
+        // Allow callers (e.g. input preview) to preserve trailing whitespace for accurate cursor position
+        return options && options.trim === false ? cleaned : cleaned.trim();
     }
     
     findNextControlCode(text, start) {

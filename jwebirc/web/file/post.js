@@ -11,9 +11,12 @@ class PostManager {
         this.messageCounter = 0;
         this.browser = navigator.appName;
         this.messageInput = null;
+        this.messagePreview = null;
         this.typingTimer = null;
         this.isTyping = false;
         this.typingTimeout = 4000; // 4 seconds between typing notifications
+        this.caretMarker = '\uFFF9';
+        this.previewRaf = null;
 
         // Color picker state
         this.colorPicker = null;
@@ -66,8 +69,19 @@ class PostManager {
     
     initialize() {
         this.messageInput = document.getElementById("message");
+        this.messagePreview = document.getElementById("messagePreview");
+
+        if (this.messageInput && this.messagePreview) {
+            this.messageInput.classList.add('preview-enabled');
+            const update = () => this.schedulePreviewUpdate();
+            ['input', 'keyup', 'click', 'mouseup', 'keydown', 'select', 'focus'].forEach((evt) => {
+                this.messageInput.addEventListener(evt, update, true);
+            });
+        }
+
         this.setupColorPicker();
         this.updateMessagePlaceholder();
+        this.updateInputPreview();
     }
 
     updateMessagePlaceholder() {
@@ -82,6 +96,46 @@ class PostManager {
         if (typeof window.jwebircTranslate === 'function') {
             this.messageInput.placeholder = window.jwebircTranslate('chat.placeholder');
         }
+
+        this.updateInputPreview();
+    }
+
+    schedulePreviewUpdate() {
+        if (!this.messagePreview || !this.messageInput) return;
+        if (this.previewRaf) return;
+
+        this.previewRaf = requestAnimationFrame(() => {
+            this.previewRaf = null;
+            this.updateInputPreview();
+        });
+    }
+
+    updateInputPreview() {
+        if (!this.messagePreview || !this.messageInput) return;
+
+        const rawText = this.messageInput.value || '';
+        const caretPos = this.messageInput.selectionStart ?? rawText.length;
+        const textWithCaret = rawText.slice(0, caretPos) + this.caretMarker + rawText.slice(caretPos);
+
+        let parsed = textWithCaret;
+        if (this.chatManager && typeof this.chatManager.parseControl === 'function') {
+            parsed = this.chatManager.parseControl(textWithCaret, { trim: false });
+        } else {
+            parsed = this.escapeHtml(textWithCaret);
+        }
+
+        const caretHtml = '<span class="preview-caret"></span>';
+        parsed = parsed.split(this.caretMarker).join(caretHtml);
+
+        if (!parsed || parsed.trim() === '') {
+            const placeholder = (this.messageInput.placeholder || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            parsed = placeholder ? `<span class="preview-placeholder">${placeholder}</span>` : '&nbsp;';
+        }
+
+        this.messagePreview.innerHTML = parsed;
     }
     
     clearMessageHistory() {
@@ -156,6 +210,7 @@ class PostManager {
         const newPos = start + 1;
         this.messageInput.setSelectionRange(newPos, newPos);
         this.messageInput.focus();
+        this.updateInputPreview();
     }
 
     setupColorPicker() {
@@ -322,6 +377,7 @@ class PostManager {
         const newPos = start + text.length;
         this.messageInput.setSelectionRange(newPos, newPos);
         this.messageInput.focus();
+        this.updateInputPreview();
     }
     
     sendText() {
@@ -334,6 +390,7 @@ class PostManager {
             this.submitText();
         }
         this.clearMessage();
+        this.updateInputPreview();
     }
     
     submitText() {
@@ -363,6 +420,7 @@ class PostManager {
     setTextMessage(text) {
         this.messageInput.value = text;
         this.messageInput.focus();
+        this.updateInputPreview();
     }
     
     /**
@@ -757,11 +815,13 @@ class PostManager {
     clearMessage() {
         this.messageInput.value = "";
         this.messageInput.focus();
+        this.updateInputPreview();
     }
     
     emoticon(text) {
         this.messageInput.value += text;
         this.messageInput.focus();
+        this.updateInputPreview();
     }
     
     messageUp() {
@@ -772,6 +832,7 @@ class PostManager {
             this.messageInput.selectionStart = this.messageInput.value.length;
             this.messageInput.selectionEnd = this.messageInput.value.length;
             this.messageInput.focus();
+            this.updateInputPreview();
         } else {
             this.messageCounter = this.messageHistory.length - 1;
         }
@@ -789,6 +850,7 @@ class PostManager {
             this.messageInput.selectionEnd = this.messageInput.value.length;
         }
         this.messageInput.focus();
+        this.updateInputPreview();
     }
     
     tab() {
@@ -854,6 +916,7 @@ class PostManager {
         this.messageInput.setSelectionRange(newCursorPos, newCursorPos);
         
         this.tabState.lastTabTime = now;
+        this.updateInputPreview();
     }
     
     resetTabCompletion() {
