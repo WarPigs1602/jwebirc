@@ -89,6 +89,8 @@ public class IrcThread implements Runnable {
         this.runs = runs;
     }
 
+    private static final String HOSTNAME_NOT_FOUND = "NOTICE AUTH *** (jwebirc) No hostname found.";
+    
     private Thread thread;
     private Socket socket;
     private PrintWriter pw;
@@ -102,7 +104,8 @@ public class IrcThread implements Runnable {
         setParser(parser);
         setSession(session);
         setNick(nick);
-        (thread = new Thread(this)).start();
+        thread = new Thread(this);
+        thread.start();
     }
 
     @Override
@@ -110,62 +113,87 @@ public class IrcThread implements Runnable {
         setRuns(true);
         var p = getParser();
         try {
-            // Perform DNS resolution
-            p.sendText("NOTICE AUTH *** (jwebirc) Looking up your hostname...", getSession(), "chat", "");
-            performDnsResolution(p);
-            
-            String line = null;
-            p.handshake(getNick());
-            while ((line = getParser().getIn().readLine()) != null) {
-                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.FINE, "IRC << {0}", line);
-                p.parseCommands(line, getSession());
-            }
+            executeIrcMainLoop(p);
         } catch (IOException ex) {
-            // Log the exception details for better debugging
-            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "IRC connection error: " + ex.getClass().getName(), ex);
-            try {
-                if (getSession() != null && getSession().isOpen()) {
-                    p.sendText("NOTICE AUTH *** (jwebirc) Connection to IRC server lost: %s".formatted(ex.getMessage()), getSession(), "chat", "");
-                }
-            } catch (Exception sendEx) {
-                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Failed to send error message to client", sendEx);
-            }
+            handleIoException(p, ex);
         } catch (Exception ex) {
-            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "Unexpected error in IRC thread", ex);
-            try {
-                if (getSession() != null && getSession().isOpen()) {
-                    String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
-                    p.sendText("NOTICE AUTH *** (jwebirc) Unexpected error: %s".formatted(errorMsg), getSession(), "chat", "");
-                }
-            } catch (Exception sendEx) {
-                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Failed to send exception message to client", sendEx);
-            }
+            handleUnexpectedException(p, ex);
         } finally {
-            // Ensure parser resources are cleaned up BEFORE closing session
-            if (p != null) {
-                try {
-                    p.closeConnection();
-                } catch (Exception ex) {
-                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing parser connection", ex);
-                }
-            }
-            
-            // Ensure session is closed properly
+            cleanupResources(p);
+        }
+    }
+    
+    private void executeIrcMainLoop(IrcParser p) throws IOException {
+        // Perform DNS resolution
+        p.sendText("NOTICE AUTH *** (jwebirc) Looking up your hostname...", getSession(), "chat", "");
+        performDnsResolution(p);
+        
+        String line;
+        p.handshake(getNick());
+        while ((line = getParser().getIn().readLine()) != null) {
+            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.FINE, "IRC << {0}", line);
+            p.parseCommands(line, getSession());
+        }
+    }
+    
+    private void handleIoException(IrcParser p, IOException ex) {
+        java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "IRC connection error: " + ex.getClass().getName(), ex);
+        sendErrorToClient(p, "Connection to IRC server lost: %s".formatted(ex.getMessage()));
+    }
+    
+    private void handleUnexpectedException(IrcParser p, Exception ex) {
+        java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.SEVERE, "Unexpected error in IRC thread", ex);
+        String errorMsg = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
+        sendErrorToClient(p, "Unexpected error: %s".formatted(errorMsg));
+    }
+    
+    private void sendErrorToClient(IrcParser p, String message) {
+        try {
             if (getSession() != null && getSession().isOpen()) {
-                try {
-                    getSession().close();
-                } catch (IOException ex) {
-                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing session", ex);
-                }
+                p.sendText("NOTICE AUTH *** (jwebirc) " + message, getSession(), "chat", "");
             }
-            
-            // Send final message only if session is still open
-            if (getSession() != null && getSession().isOpen() && p != null) {
-                try {
-                    p.sendText("NOTICE AUTH *** (jwebirc) Connection closed.", getSession(), "chat", "");
-                } catch (Exception ex) {
-                    java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error sending final message", ex);
-                }
+        } catch (Exception sendEx) {
+            java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Failed to send error message to client", sendEx);
+        }
+    }
+    
+    private void cleanupResources(IrcParser p) {
+        // Ensure parser resources are cleaned up BEFORE closing session
+        closeParserConnection(p);
+        
+        // Ensure session is closed properly
+        closeSession();
+        
+        // Send final message only if session is still open
+        sendFinalMessage(p);
+    }
+    
+    private void closeParserConnection(IrcParser p) {
+        if (p != null) {
+            try {
+                p.closeConnection();
+            } catch (Exception ex) {
+                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing parser connection", ex);
+            }
+        }
+    }
+    
+    private void closeSession() {
+        if (getSession() != null && getSession().isOpen()) {
+            try {
+                getSession().close();
+            } catch (IOException ex) {
+                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error closing session", ex);
+            }
+        }
+    }
+    
+    private void sendFinalMessage(IrcParser p) {
+        if (getSession() != null && getSession().isOpen() && p != null) {
+            try {
+                p.sendText("NOTICE AUTH *** (jwebirc) Connection closed.", getSession(), "chat", "");
+            } catch (Exception ex) {
+                java.util.logging.Logger.getLogger(IrcThread.class.getName()).log(java.util.logging.Level.WARNING, "Error sending final message", ex);
             }
         }
     }
@@ -182,38 +210,61 @@ public class IrcThread implements Runnable {
             // Only perform reverse DNS lookup if hostname equals IP
             // (meaning no hostname was provided or detected yet)
             if (ip != null && !ip.isBlank() && ip.equalsIgnoreCase(currentHostname)) {
-                try {
-                    // Perform reverse DNS lookup
-                    java.net.InetAddress addr = java.net.InetAddress.getByName(ip);
-                    String resolvedHostname = addr.getCanonicalHostName();
-                    
-                    // Verify the resolved hostname doesn't just return the IP
-                    if (!resolvedHostname.equalsIgnoreCase(ip)) {
-                        // Perform forward DNS lookup to verify
-                        java.net.InetAddress verifyAddr = java.net.InetAddress.getByName(resolvedHostname);
-                        String verifyIp = verifyAddr.getHostAddress();
-                        
-                        // If forward lookup matches the original IP, accept the hostname
-                        if (verifyIp.equalsIgnoreCase(ip) || normalizeIp(verifyIp).equalsIgnoreCase(normalizeIp(ip))) {
-                            p.setHostname(resolvedHostname);
-                            p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname: " + resolvedHostname, getSession(), "chat", "");
-                        } else {
-                            p.sendText("NOTICE AUTH *** (jwebirc) No hostname found (verification failed).", getSession(), "chat", "");
-                        }
-                    } else {
-                        p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
-                    }
-                } catch (java.net.UnknownHostException ex) {
-                    p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
-                }
+                performReverseDnsLookup(p, ip);
             } else if (!ip.equalsIgnoreCase(currentHostname)) {
                 // Hostname was already resolved/provided
                 p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname: " + currentHostname, getSession(), "chat", "");
             } else {
-                p.sendText("NOTICE AUTH *** (jwebirc) No hostname found.", getSession(), "chat", "");
+                p.sendText(HOSTNAME_NOT_FOUND, getSession(), "chat", "");
             }
         } catch (Exception ex) {
             p.sendText("NOTICE AUTH *** (jwebirc) DNS lookup error: " + ex.getMessage(), getSession(), "chat", "");
+        }
+    }
+    
+    /**
+     * Performs reverse DNS lookup for the given IP
+     * @param p The IrcParser instance
+     * @param ip The IP address to look up
+     */
+    private void performReverseDnsLookup(IrcParser p, String ip) {
+        try {
+            // Perform reverse DNS lookup
+            java.net.InetAddress addr = java.net.InetAddress.getByName(ip);
+            String resolvedHostname = addr.getCanonicalHostName();
+            
+            // Verify the resolved hostname doesn't just return the IP
+            if (!resolvedHostname.equalsIgnoreCase(ip)) {
+                verifyAndSetHostname(p, ip, resolvedHostname);
+            } else {
+                p.sendText(HOSTNAME_NOT_FOUND, getSession(), "chat", "");
+            }
+        } catch (java.net.UnknownHostException ex) {
+            p.sendText(HOSTNAME_NOT_FOUND, getSession(), "chat", "");
+        }
+    }
+    
+    /**
+     * Verifies hostname through forward DNS lookup and sets it if valid
+     * @param p The IrcParser instance
+     * @param originalIp The original IP address
+     * @param resolvedHostname The hostname resolved from reverse DNS
+     */
+    private void verifyAndSetHostname(IrcParser p, String originalIp, String resolvedHostname) {
+        try {
+            // Perform forward DNS lookup to verify
+            java.net.InetAddress verifyAddr = java.net.InetAddress.getByName(resolvedHostname);
+            String verifyIp = verifyAddr.getHostAddress();
+            
+            // If forward lookup matches the original IP, accept the hostname
+            if (verifyIp.equalsIgnoreCase(originalIp) || normalizeIp(verifyIp).equalsIgnoreCase(normalizeIp(originalIp))) {
+                p.setHostname(resolvedHostname);
+                p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname: " + resolvedHostname, getSession(), "chat", "");
+            } else {
+                p.sendText("NOTICE AUTH *** (jwebirc) No hostname found (verification failed).", getSession(), "chat", "");
+            }
+        } catch (java.net.UnknownHostException ex) {
+            p.sendText("NOTICE AUTH *** (jwebirc) No hostname found (verification failed).", getSession(), "chat", "");
         }
     }
     

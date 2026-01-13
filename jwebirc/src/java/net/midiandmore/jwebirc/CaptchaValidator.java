@@ -23,6 +23,15 @@ public class CaptchaValidator {
     
     private static final Logger LOGGER = Logger.getLogger(CaptchaValidator.class.getName());
     
+    // Constants for repeated strings
+    private static final String SECRET_PARAM = "secret=";
+    private static final String RESPONSE_PARAM = "&response=";
+    private static final String REMOTEIP_PARAM = "&remoteip=";
+    private static final String SUCCESS_KEY = "success";
+    private static final String ERROR_CODES_KEY = "error-codes";
+    private static final String UNKNOWN_ERROR = "Unknown error";
+    private static final String SCORE_KEY = "score";
+    
     // CAPTCHA Provider Types
     public enum CaptchaType {
         NONE,
@@ -75,18 +84,18 @@ public class CaptchaValidator {
     private static boolean validateTurnstile(String token, String secretKey, String remoteIp) {
         try {
             String url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-            String params = "secret=" + secretKey + "&response=" + token + "&remoteip=" + remoteIp;
+            String params = SECRET_PARAM + secretKey + RESPONSE_PARAM + token + REMOTEIP_PARAM + remoteIp;
             
             JsonObject response = sendPostRequest(url, params);
             
-            if (response != null && response.containsKey("success")) {
-                boolean success = response.getBoolean("success");
+            if (response != null && response.containsKey(SUCCESS_KEY)) {
+                boolean success = response.getBoolean(SUCCESS_KEY);
                 if (success) {
                     LOGGER.log(Level.INFO, "Turnstile validation successful");
                     return true;
                 } else {
                     LOGGER.log(Level.WARNING, "Turnstile validation failed: {0}", 
-                              response.containsKey("error-codes") ? response.getJsonArray("error-codes").toString() : "Unknown error");
+                              response.containsKey(ERROR_CODES_KEY) ? response.getJsonArray(ERROR_CODES_KEY).toString() : UNKNOWN_ERROR);
                 }
             }
         } catch (Exception e) {
@@ -101,18 +110,18 @@ public class CaptchaValidator {
     private static boolean validateRecaptchaV2(String token, String secretKey, String remoteIp) {
         try {
             String url = "https://www.google.com/recaptcha/api/siteverify";
-            String params = "secret=" + secretKey + "&response=" + token + "&remoteip=" + remoteIp;
+            String params = SECRET_PARAM + secretKey + RESPONSE_PARAM + token + REMOTEIP_PARAM + remoteIp;
             
             JsonObject response = sendPostRequest(url, params);
             
-            if (response != null && response.containsKey("success")) {
-                boolean success = response.getBoolean("success");
+            if (response != null && response.containsKey(SUCCESS_KEY)) {
+                boolean success = response.getBoolean(SUCCESS_KEY);
                 if (success) {
                     LOGGER.log(Level.INFO, "reCAPTCHA v2 validation successful");
                     return true;
                 } else {
                     LOGGER.log(Level.WARNING, "reCAPTCHA v2 validation failed: {0}", 
-                              response.containsKey("error-codes") ? response.getJsonArray("error-codes").toString() : "Unknown error");
+                              response.containsKey(ERROR_CODES_KEY) ? response.getJsonArray(ERROR_CODES_KEY).toString() : UNKNOWN_ERROR);
                 }
             }
         } catch (Exception e) {
@@ -127,31 +136,42 @@ public class CaptchaValidator {
     private static boolean validateRecaptchaV3(String token, String secretKey, String remoteIp, double minScore) {
         try {
             String url = "https://www.google.com/recaptcha/api/siteverify";
-            String params = "secret=" + secretKey + "&response=" + token + "&remoteip=" + remoteIp;
+            String params = SECRET_PARAM + secretKey + RESPONSE_PARAM + token + REMOTEIP_PARAM + remoteIp;
             
             JsonObject response = sendPostRequest(url, params);
             
-            if (response != null && response.containsKey("success")) {
-                boolean success = response.getBoolean("success");
-                if (success) {
-                    double score = response.containsKey("score") ? response.getJsonNumber("score").doubleValue() : 0.0;
-                    String action = response.containsKey("action") ? response.getString("action") : "";
-                    
-                    LOGGER.log(Level.INFO, "reCAPTCHA v3 validation - Score: {0}, Action: {1}", new Object[]{score, action});
-                    
-                    if (score >= minScore) {
-                        return true;
-                    } else {
-                        LOGGER.log(Level.WARNING, "reCAPTCHA v3 score too low: {0} < {1}", new Object[]{score, minScore});
-                    }
-                } else {
-                    LOGGER.log(Level.WARNING, "reCAPTCHA v3 validation failed: {0}", 
-                              response.containsKey("error-codes") ? response.getJsonArray("error-codes").toString() : "Unknown error");
-                }
+            if (response == null || !response.containsKey(SUCCESS_KEY)) {
+                return false;
             }
+            
+            boolean success = response.getBoolean(SUCCESS_KEY);
+            if (!success) {
+                LOGGER.log(Level.WARNING, "reCAPTCHA v3 validation failed: {0}", 
+                          response.containsKey(ERROR_CODES_KEY) ? response.getJsonArray(ERROR_CODES_KEY).toString() : UNKNOWN_ERROR);
+                return false;
+            }
+            
+            return validateRecaptchaV3Score(response, minScore);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "reCAPTCHA v3 validation error", e);
+            return false;
         }
+    }
+    
+    /**
+     * Validates the score from reCAPTCHA v3 response
+     */
+    private static boolean validateRecaptchaV3Score(JsonObject response, double minScore) {
+        double score = response.containsKey(SCORE_KEY) ? response.getJsonNumber(SCORE_KEY).doubleValue() : 0.0;
+        String action = response.containsKey("action") ? response.getString("action") : "";
+        
+        LOGGER.log(Level.INFO, "reCAPTCHA v3 validation - Score: {0}, Action: {1}", new Object[]{score, action});
+        
+        if (score >= minScore) {
+            return true;
+        }
+        
+        LOGGER.log(Level.WARNING, "reCAPTCHA v3 score too low: {0} < {1}", new Object[]{score, minScore});
         return false;
     }
     
@@ -175,30 +195,51 @@ public class CaptchaValidator {
             
             JsonObject response = sendPostRequestJson(url, jsonBody);
             
-            if (response != null && response.containsKey("tokenProperties")) {
-                JsonObject tokenProps = response.getJsonObject("tokenProperties");
-                boolean valid = tokenProps.getBoolean("valid", false);
-                
-                if (valid && response.containsKey("riskAnalysis")) {
-                    JsonObject riskAnalysis = response.getJsonObject("riskAnalysis");
-                    double score = riskAnalysis.containsKey("score") ? riskAnalysis.getJsonNumber("score").doubleValue() : 0.0;
-                    
-                    LOGGER.log(Level.INFO, "reCAPTCHA Enterprise validation - Score: {0}", score);
-                    
-                    if (score >= minScore) {
-                        return true;
-                    } else {
-                        LOGGER.log(Level.WARNING, "reCAPTCHA Enterprise score too low: {0} < {1}", new Object[]{score, minScore});
-                    }
-                } else if (!valid) {
-                    String invalidReason = tokenProps.containsKey("invalidReason") ? 
-                                         tokenProps.getString("invalidReason") : "Unknown";
-                    LOGGER.log(Level.WARNING, "reCAPTCHA Enterprise token invalid: {0}", invalidReason);
-                }
+            if (response == null || !response.containsKey("tokenProperties")) {
+                return false;
             }
+            
+            return validateEnterpriseResponse(response, minScore);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "reCAPTCHA Enterprise validation error", e);
+            return false;
         }
+    }
+    
+    /**
+     * Validates the response from reCAPTCHA Enterprise
+     */
+    private static boolean validateEnterpriseResponse(JsonObject response, double minScore) {
+        JsonObject tokenProps = response.getJsonObject("tokenProperties");
+        boolean valid = tokenProps.getBoolean("valid", false);
+        
+        if (!valid) {
+            String invalidReason = tokenProps.containsKey("invalidReason") ? 
+                                 tokenProps.getString("invalidReason") : "Unknown";
+            LOGGER.log(Level.WARNING, "reCAPTCHA Enterprise token invalid: {0}", invalidReason);
+            return false;
+        }
+        
+        if (!response.containsKey("riskAnalysis")) {
+            return false;
+        }
+        
+        return validateEnterpriseScore(response.getJsonObject("riskAnalysis"), minScore);
+    }
+    
+    /**
+     * Validates the risk score from reCAPTCHA Enterprise
+     */
+    private static boolean validateEnterpriseScore(JsonObject riskAnalysis, double minScore) {
+        double score = riskAnalysis.containsKey(SCORE_KEY) ? riskAnalysis.getJsonNumber(SCORE_KEY).doubleValue() : 0.0;
+        
+        LOGGER.log(Level.INFO, "reCAPTCHA Enterprise validation - Score: {0}", score);
+        
+        if (score >= minScore) {
+            return true;
+        }
+        
+        LOGGER.log(Level.WARNING, "reCAPTCHA Enterprise score too low: {0} < {1}", new Object[]{score, minScore});
         return false;
     }
     
@@ -206,8 +247,7 @@ public class CaptchaValidator {
      * Sends a POST request with form data and returns JSON response
      */
     private static JsonObject sendPostRequest(String urlString, String params) throws Exception {
-        URL url = new URL(urlString);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new java.net.URI(urlString).toURL().openConnection();
         
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -243,8 +283,7 @@ public class CaptchaValidator {
      * Sends a POST request with JSON body and returns JSON response
      */
     private static JsonObject sendPostRequestJson(String urlString, String jsonBody) throws Exception {
-        URL url = new URL(urlString);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new java.net.URI(urlString).toURL().openConnection();
         
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "application/json");

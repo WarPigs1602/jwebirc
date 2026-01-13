@@ -356,17 +356,17 @@
     </script>
     
     <!-- Topic Bar -->
-    <div class="topic_frame" id="topic_window" role="complementary" aria-label="Channel Topic">
+    <aside class="topic_frame" id="topic_window" aria-label="Channel Topic">
         <i class="fas fa-info-circle topic-icon"></i>
         <span class="topic-text"></span>
-    </div>
+    </aside>
     
     <!-- Chat Window -->
-    <div class="chat_frame" id="chat_window" role="main" aria-label="Chat Messages" aria-live="polite">
-    </div>
+    <main class="chat_frame" id="chat_window" aria-label="Chat Messages" aria-live="polite">
+    </main>
     
     <!-- Typing Indicator Bar -->
-    <div class="typing-bar" id="typingBar" role="status" aria-live="polite">
+    <output class="typing-bar" id="typingBar" aria-live="polite">
         <div class="typing-content">
             <span class="typing-text" id="typingText"></span>
             <div class="typing-dots">
@@ -375,17 +375,17 @@
                 <span class="typing-dot"></span>
             </div>
         </div>
-    </div>
+    </output>
     
     <!-- User List -->
-    <div class="right_frame" id="right" role="complementary" aria-label="User List">
+    <aside class="right_frame" id="right" aria-label="User List">
         <div class="user-list-header">
             <i class="fas fa-users"></i> <span class="user-count" data-i18n="nav.users">Users</span>
         </div>
-    </div>
+    </aside>
     
     <!-- Message Input -->
-    <div class="post_frame" role="form" aria-label="Message Input">
+    <form class="post_frame" aria-label="Message Input" onsubmit="return false;">
         <div class="input-group">
             <button class="btn btn-outline-secondary" type="button" id="emojiBtn" title="Emojis">
                 <i class="far fa-smile"></i>
@@ -486,7 +486,7 @@
                     <button type="button" id="colorPickerApply" class="btn btn-primary btn-sm" data-i18n="chat.colorPicker.insert">Insert</button>
             </div>
         </div>
-    </div>
+    </form>
 </div>
 
 <script>
@@ -539,7 +539,7 @@
 </script>
 
     <!-- Cookie Warning Banner (login only) -->
-    <div id="cookieWarning" class="cookie-warning" role="region" aria-label="Cookie Notice" style="display: none;">
+    <section id="cookieWarning" class="cookie-warning" aria-label="Cookie Notice" style="display: none;">
         <div class="cookie-warning-content">
             <div class="cookie-warning-icon">
                 <i class="fas fa-cookie"></i>
@@ -557,7 +557,7 @@
                 </button>
             </div>
         </div>
-    </div>
+    </section>
 
     <script>
         // Cookie Warning Management (login page only)
@@ -741,7 +741,7 @@
                            name="nick" 
                            value="<% out.print(paramN); %>" 
                            required
-                           autocomplete="nickname"
+                           autocomplete="username"
                            pattern="[a-zA-Z0-9_\-\[\]\{\}\\\|]+"
                            placeholder=" ">
                     <label for="nickInput">

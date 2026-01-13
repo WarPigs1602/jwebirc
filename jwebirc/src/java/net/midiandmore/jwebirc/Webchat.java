@@ -58,75 +58,136 @@ public class Webchat {
         var hs = (HttpSession) config.getUserProperties()
                 .get(HttpSession.class.getName());
         setHttpSession(hs);
-        var sessionTimeout = Integer.parseInt((String) getHttpSession().getAttribute("webchat_session_timout"));
-        var host = (String) getHttpSession().getAttribute("webchat_host");
-        var port = Integer.parseInt((String) getHttpSession().getAttribute("webchat_port"));
-        var ssl = getHttpSession().getAttribute("webchat_ssl").equals("true");
-        var serverPassword = (String) getHttpSession().getAttribute("webchat_server_password");
-        var ident = (String) getHttpSession().getAttribute("webchat_ident");
-        var user = (String) getHttpSession().getAttribute("webchat_user");
-        var bind = (String) getHttpSession().getAttribute("webchat_bind");
-        var password = (String) getHttpSession().getAttribute("webchat_password");
-        var hostname = (String) getHttpSession().getAttribute("hostname");
-        var ip = (String) getHttpSession().getAttribute("ip");
-        var realname = (String) getHttpSession().getAttribute("webchat_realname");
-        var forwardedForHeader = (String) getHttpSession().getAttribute("forwarded_for_header");
-        var forwardedForIps = (String) getHttpSession().getAttribute("forwarded_for_ips");
-        var webircMode = (String) getHttpSession().getAttribute("webchat_mode");
-        var webircCgi = (String) getHttpSession().getAttribute("webchat_cgi");
-        var hmac = (String) getHttpSession().getAttribute("hmac_temporal");
-        var useSasl = (String) getHttpSession().getAttribute("use_sasl");
-        var saslUsername = (String) getHttpSession().getAttribute("sasl_username");
-        var saslPassword = (String) getHttpSession().getAttribute("sasl_password");
-        if (config.getUserProperties().containsKey(forwardedForHeader.toLowerCase()) && ip.contains(forwardedForIps)) {
-            hostname = (String) config.getUserProperties().getOrDefault(forwardedForHeader.toLowerCase(), "127.0.0.1");
-            try {
-                ip = InetAddress.getByName(hostname).getHostAddress();
-            } catch (UnknownHostException ex) {
-            }
-            try {
-                hostname = InetAddress.getByName(ip).getHostName();
-            } catch (UnknownHostException ex) {
-            }
-
+        
+        // Load configuration from HTTP session
+        WebchatConfig webchatConfig = loadWebchatConfig();
+        
+        // Process forwarded headers and IP addresses
+        processForwardedHeaders(config, webchatConfig);
+        
+        // Configure session timeout
+        configureSessionTimeout(webchatConfig.sessionTimeout);
+        
+        // Initialize IRC parser
+        if (!initializeIrcParser(session, webchatConfig)) {
+            return; // Error occurred, session closed
         }
-        // Parse IPv6 addresses first to get canonical form
-        if (ip.contains(":")) {
+        
+        // Setup login parameters
+        setupLoginParameters(webchatConfig);
+    }
+    
+    private static class WebchatConfig {
+        int sessionTimeout;
+        String host;
+        int port;
+        boolean ssl;
+        String serverPassword;
+        String ident;
+        String user;
+        String password;
+        String hostname;
+        String ip;
+        String realname;
+        String forwardedForHeader;
+        String forwardedForIps;
+        String webircMode;
+        String webircCgi;
+        String hmac;
+        String useSasl;
+        String saslUsername;
+        String saslPassword;
+        String nick;
+        String channel;
+    }
+    
+    private WebchatConfig loadWebchatConfig() {
+        WebchatConfig config = new WebchatConfig();
+        config.sessionTimeout = Integer.parseInt((String) getHttpSession().getAttribute("webchat_session_timout"));
+        config.host = (String) getHttpSession().getAttribute("webchat_host");
+        config.port = Integer.parseInt((String) getHttpSession().getAttribute("webchat_port"));
+        config.ssl = getHttpSession().getAttribute("webchat_ssl").equals("true");
+        config.serverPassword = (String) getHttpSession().getAttribute("webchat_server_password");
+        config.ident = (String) getHttpSession().getAttribute("webchat_ident");
+        config.user = (String) getHttpSession().getAttribute("webchat_user");
+        config.password = (String) getHttpSession().getAttribute("webchat_password");
+        config.hostname = (String) getHttpSession().getAttribute("hostname");
+        config.ip = (String) getHttpSession().getAttribute("ip");
+        config.realname = (String) getHttpSession().getAttribute("webchat_realname");
+        config.forwardedForHeader = (String) getHttpSession().getAttribute("forwarded_for_header");
+        config.forwardedForIps = (String) getHttpSession().getAttribute("forwarded_for_ips");
+        config.webircMode = (String) getHttpSession().getAttribute("webchat_mode");
+        config.webircCgi = (String) getHttpSession().getAttribute("webchat_cgi");
+        config.hmac = (String) getHttpSession().getAttribute("hmac_temporal");
+        config.useSasl = (String) getHttpSession().getAttribute("use_sasl");
+        config.saslUsername = (String) getHttpSession().getAttribute("sasl_username");
+        config.saslPassword = (String) getHttpSession().getAttribute("sasl_password");
+        config.nick = (String) getHttpSession().getAttribute("param-nick");
+        config.channel = (String) getHttpSession().getAttribute("param-channel");
+        return config;
+    }
+    
+    private void processForwardedHeaders(EndpointConfig config, WebchatConfig webchatConfig) {
+        if (config.getUserProperties().containsKey(webchatConfig.forwardedForHeader.toLowerCase()) 
+                && webchatConfig.ip.contains(webchatConfig.forwardedForIps)) {
+            webchatConfig.hostname = (String) config.getUserProperties().getOrDefault(webchatConfig.forwardedForHeader.toLowerCase(), "127.0.0.1");
+            try {
+                webchatConfig.ip = InetAddress.getByName(webchatConfig.hostname).getHostAddress();
+            } catch (UnknownHostException ex) {
+                // Ignore - use original hostname
+            }
+            try {
+                webchatConfig.hostname = InetAddress.getByName(webchatConfig.ip).getHostName();
+            } catch (UnknownHostException ex) {
+                // Ignore - use IP as hostname
+            }
+        }
+        
+        // Parse and normalize IP addresses
+        webchatConfig.ip = normalizeIpAddress(webchatConfig.ip);
+        webchatConfig.hostname = normalizeIpAddress(webchatConfig.hostname);
+    }
+    
+    private String normalizeIpAddress(String address) {
+        if (address.contains(":")) {
             // Remove zone ID if present (e.g., fe80::1%eth0 -> fe80::1)
-            if (ip.contains("%")) {
-                ip = ip.substring(0, ip.indexOf("%"));
+            if (address.contains("%")) {
+                address = address.substring(0, address.indexOf("%"));
             }
-            ip = parseIpv6(ip);
+            address = parseIpv6(address);
         }
-        if (hostname.contains(":")) {
-            // Remove zone ID if present
-            if (hostname.contains("%")) {
-                hostname = hostname.substring(0, hostname.indexOf("%"));
-            }
-            hostname = parseIpv6(hostname);
-        }
-        // Set idle timeout (in milliseconds)
-        // If sessionTimeout is too low, increase it to prevent disconnections
-        long timeoutMillis = (long) sessionTimeout;
+        return address;
+    }
+    
+    private void configureSessionTimeout(int sessionTimeout) {
+        long timeoutMillis = sessionTimeout;
         if (timeoutMillis < 300000) { // Less than 5 minutes
             timeoutMillis = 300000; // Set to 5 minutes minimum
             Logger.getLogger(Webchat.class.getName()).log(Level.INFO, 
-                "Session timeout adjusted from " + sessionTimeout + "ms to " + timeoutMillis + "ms");
+                "Session timeout adjusted from {0}ms to {1}ms", new Object[]{sessionTimeout, timeoutMillis});
         }
         getSession().setMaxIdleTimeout(timeoutMillis);
-        
-        // Create IRC parser with proper error handling
+    }
+    
+    private boolean initializeIrcParser(Session session, WebchatConfig config) {
         try {
-            setParser(new IrcParser(host, port, ssl, serverPassword, ident, user, password, webircMode, webircCgi, hmac));
+            setParser(new IrcParser(config.host, config.port, config.ssl, config.serverPassword, 
+                    config.ident, config.user, config.password, config.webircMode, config.webircCgi, config.hmac));
             
             // Set SASL parameters if enabled
-            if (useSasl != null && useSasl.equals("true") && saslUsername != null && !saslUsername.isBlank()) {
+            if (config.useSasl != null && config.useSasl.equals("true") 
+                    && config.saslUsername != null && !config.saslUsername.isBlank()) {
                 getParser().setUseSasl(true);
-                getParser().setSaslUsername(saslUsername);
-                getParser().setSaslPassword(saslPassword != null ? saslPassword : "");
+                getParser().setSaslUsername(config.saslUsername);
+                getParser().setSaslPassword(config.saslPassword != null ? config.saslPassword : "");
             } else {
                 getParser().setUseSasl(false);
             }
+            
+            getParser().setHostname(config.hostname);
+            getParser().setIp(config.ip);
+            getParser().setRealname(config.realname);
+            return true;
         } catch (IOException ex) {
             Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "Failed to connect to IRC server: " + ex.getMessage(), ex);
             try {
@@ -139,12 +200,12 @@ public class Webchat {
             } catch (IOException e) {
                 // Ignore
             }
-            return;
+            return false;
         }
-        
-        String dispip = null;
-        var nick = (String) getHttpSession().getAttribute("param-nick");
-        var channel = (String) getHttpSession().getAttribute("param-channel");
+    }
+    
+    private void setupLoginParameters(WebchatConfig config) {
+        String channel = config.channel;
         if (channel != null) {
             var sb = new StringBuilder();
             if (channel.contains(",")) {
@@ -161,10 +222,7 @@ public class Webchat {
         }
         var p = getParser();
         p.setLoginChannels(channel);
-        p.setHostname(hostname);
-        p.setIp(ip);
-        p.setRealname(realname);
-        setIrcThread(new IrcThread(p, nick, getSession()));
+        setIrcThread(new IrcThread(p, config.nick, getSession()));
     }
 
     private String parseIpv6(String ip) {
@@ -180,7 +238,7 @@ public class Webchat {
             }
         } catch (AddressStringException e) {
             // If parsing fails, return original string
-            System.err.println("Failed to parse IP address: " + ip + " - " + e.getMessage());
+            Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Failed to parse IP address: {0} - {1}", new Object[]{ip, e.getMessage()});
         }
         return ip;
     }
@@ -210,9 +268,7 @@ public class Webchat {
             }
             
             var json = Json.createReader(new StringReader(message)).readObject();
-            var category = json.getString("category");
             var text = json.getString("message");
-            var target = json.getString("target");
             if (text.startsWith("/")) {
                 text = text.substring(1);
             } else {
@@ -245,7 +301,7 @@ public class Webchat {
      * @throws IOException
      */
     @OnClose
-    public synchronized void onClose(Session session) throws IOException {
+    public synchronized void onClose(Session session) {
         try {
             if (parser != null) {
                 try {
@@ -342,9 +398,9 @@ public class Webchat {
         @Override
         public void modifyHandshake(ServerEndpointConfig sec, HandshakeRequest req, HandshakeResponse response) {
             var request = getField(req, HttpServletRequest.class);
-            Enumeration headerNames = request.getHeaderNames();
+            Enumeration<String> headerNames = request.getHeaderNames();
             while (headerNames.hasMoreElements()) {
-                var key = (String) headerNames.nextElement();
+                String key = headerNames.nextElement();
                 var value = request.getHeader(key);
                 sec.getUserProperties().put(key.toLowerCase(), value);
             }
@@ -354,21 +410,34 @@ public class Webchat {
         }
 
         //hacking reflector to expose fields...
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "deprecation"})
         private static < I, F> F getField(I instance, Class< F> fieldType) {
             try {
                 for (var type = instance.getClass(); type != Object.class; type = type.getSuperclass()) {
                     for (var field : type.getDeclaredFields()) {
                         if (fieldType.isAssignableFrom(field.getType())) {
-                            field.setAccessible(true);
-                            return (F) field.get(instance);
+                            F result = tryGetFieldValue(field, instance);
+                            if (result != null) {
+                                return result;
+                            }
                         }
                     }
                 }
-            } catch (IllegalAccessException | IllegalArgumentException | SecurityException e) {
-                // Handle?
+            } catch (IllegalArgumentException | SecurityException e) {
+                // Unable to access fields
             }
             return null;
+        }
+        
+        @SuppressWarnings({"unchecked", "deprecation", "java:S3011"}) // S3011: Reflection should not be used to increase accessibility of classes, methods, or fields - Required for WebSocket handshake access
+        private static <I, F> F tryGetFieldValue(java.lang.reflect.Field field, I instance) {
+            try {
+                field.setAccessible(true);
+                return (F) field.get(instance);
+            } catch (SecurityException | IllegalAccessException e) {
+                // Continue to next field if security manager prevents access
+                return null;
+            }
         }
 
     }
