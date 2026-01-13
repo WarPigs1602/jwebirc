@@ -536,6 +536,11 @@ class EmojiPickerHandler {
         this.pickerModal.classList.remove('show');
         this.isOpen = false;
         this.emojiBtn.setAttribute('aria-expanded', 'false');
+        
+        // Set focus to the message input field when picker closes
+        if (this.messageInput) {
+            this.messageInput.focus();
+        }
     }
 }
 

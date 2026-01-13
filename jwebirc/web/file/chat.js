@@ -531,6 +531,15 @@ class ChatManager {
         this.setupWebSocket();
         this.initializePages();
         this.initNickContextMenu(); // Initialize context menu once
+        
+        // Add click handler to focus on message input when user clicks on chat window
+        if (this.chatWindow) {
+            this.chatWindow.addEventListener('click', () => {
+                if (window.postManager && window.postManager.messageInput) {
+                    window.postManager.messageInput.focus();
+                }
+            });
+        }
     }
     
     setupWebSocket() {
@@ -2610,6 +2619,11 @@ class ChatManager {
                 this.chatContainer.classList.remove('status-view');
             }
         }
+        
+        // Set focus to the message input field
+        if (window.postManager && window.postManager.messageInput) {
+            window.postManager.messageInput.focus();
+        }
     }
     
     getActiveWindow() {
@@ -2651,6 +2665,12 @@ class ChatManager {
         } else {
             this.setWindow(nick);
         }
+        
+        // Set focus to the message input field
+        if (window.postManager && window.postManager.messageInput) {
+            window.postManager.messageInput.focus();
+        }
+        
         return false;
     }
     
@@ -2908,6 +2928,11 @@ class ChatManager {
                     }
                 }
                 break;
+        }
+        
+        // Set focus to the message input field after action
+        if (window.postManager && window.postManager.messageInput) {
+            window.postManager.messageInput.focus();
         }
     }
     
