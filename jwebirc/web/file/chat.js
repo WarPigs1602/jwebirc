@@ -686,19 +686,14 @@ class ChatManager {
      * @returns {boolean} True if it's a keep-alive message
      */
     isKeepAliveMessage(message) {
-        const trimmed = (message || '').trim();
-        if (!trimmed) {
-            return false;
-        }
+        const withoutTags = this.stripMessageTags(message);
+        if (!withoutTags) return false;
 
-        // Strip IRCv3 message tags (start with @)
-        const withoutTags = trimmed.startsWith('@') ? trimmed.slice(trimmed.indexOf(' ') + 1) : trimmed;
-
-        // Check for PING/PONG commands at start (with optional prefix)
-        if (/^(:\S+\s+)?PING\s+/i.test(withoutTags)) {
+        // Check for PING/PONG commands at start (with optional prefix, optional payload)
+        if (/^(:\S+\s+)?PING(?:\s+.*)?$/i.test(withoutTags)) {
             return true;
         }
-        if (/^(:\S+\s+)?PONG\s+/i.test(withoutTags)) {
+        if (/^(:\S+\s+)?PONG(?:\s+.*)?$/i.test(withoutTags)) {
             return true;
         }
         return false;
@@ -710,18 +705,21 @@ class ChatManager {
      * @param {string} message - The IRC message
      */
     handleKeepAliveMessage(message) {
-        const trimmed = message.trim();
-        // Ignore IRCv3 message tags if present (start with @)
-        const withoutTags = trimmed.startsWith('@') ? trimmed.slice(trimmed.indexOf(' ') + 1) : trimmed;
+        const withoutTags = this.stripMessageTags(message);
+        if (!withoutTags) return;
 
         // PING handling - capture everything after the PING command and echo it back in PONG
-        const pingMatch = withoutTags.match(/^(:\S+\s+)?PING\s+(.+)$/i);
+        const pingMatch = withoutTags.match(/^(:\S+\s+)?PING(?:\s+(.*))?$/i);
         if (pingMatch) {
-            const payload = pingMatch[2].trim();
+            const payload = (pingMatch[2] || '').trim();
             if (window.postManager) {
                 try {
                     // Echo payload as-is to honor IRC PING/PONG rules (preserve colon/trailing)
-                    window.postManager.sendRawMessage('/PONG ' + payload);
+                    if (payload) {
+                        window.postManager.sendRawMessage('/PONG ' + payload);
+                    } else {
+                        window.postManager.sendRawMessage('/PONG');
+                    }
                 } catch (e) {
                     console.error('[IRC Keep-Alive] Error sending PONG:', e);
                 }
@@ -730,9 +728,27 @@ class ChatManager {
         }
 
         // PONG handling - informational only
-        const pongMatch = withoutTags.match(/^(:\S+\s+)?PONG\s+(.+)$/i);
+        const pongMatch = withoutTags.match(/^(:\S+\s+)?PONG(?:\s+(.*))?$/i);
         if (pongMatch) {
         }
+    }
+
+    /**
+     * Strip IRCv3 message tags (start with @) and return the remaining message.
+     * @param {string} message - The raw IRC message
+     * @returns {string} Message without tags
+     */
+    stripMessageTags(message) {
+        const trimmed = (message || '').trim();
+        if (!trimmed) return '';
+        if (!trimmed.startsWith('@')) return trimmed;
+
+        const spaceIdx = trimmed.indexOf(' ');
+        if (spaceIdx === -1) {
+            return trimmed;
+        }
+
+        return trimmed.slice(spaceIdx + 1).trimStart();
     }
     
     initializePages() {

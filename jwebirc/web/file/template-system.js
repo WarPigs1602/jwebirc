@@ -48,13 +48,6 @@
             
             // Apply current template
             this.applyTemplate(this.currentTemplate);
-            
-            console.log('[TemplateSystem] Initialized:', {
-                enabled: this.enabled,
-                currentTemplate: this.currentTemplate,
-                availableTemplates: this.availableTemplates,
-                userSelectable: this.userSelectable
-            });
         },
         
         /**
@@ -155,8 +148,6 @@
             document.dispatchEvent(new CustomEvent('templateChanged', {
                 detail: { template: templateName }
             }));
-            
-            console.log('[TemplateSystem] Applied template:', templateName);
         },
         
         /**

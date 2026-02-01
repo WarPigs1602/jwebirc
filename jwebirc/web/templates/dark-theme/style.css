@@ -718,15 +718,3 @@ p {
     border-right: 1px solid var(--border-color) !important;
 }
 
-/* Template Identification */
-body::before {
-    content: 'Dark Theme';
-    position: fixed;
-    bottom: 5px;
-    right: 5px;
-    font-size: 10px;
-    color: var(--text-muted);
-    opacity: 0.5;
-    pointer-events: none;
-    z-index: 9999;
-}

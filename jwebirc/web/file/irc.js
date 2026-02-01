@@ -209,10 +209,16 @@ class IRCParser {
             return null;
         }
         
-        // PING handling
+        // PING handling (respond in frontend, preserve payload format)
         if (command.toLowerCase() === "ping") {
-            if (window.postManager && params[0]) {
-                window.postManager.submitTextMessage("/pong " + params[0]);
+            if (window.postManager) {
+                const pingMatch = text.match(/(?:^|\s)PING\s+(.+)$/i);
+                const payload = pingMatch ? pingMatch[1].trim() : '';
+                if (payload.length > 0) {
+                    window.postManager.sendRawMessage('/PONG ' + payload);
+                } else {
+                    window.postManager.sendRawMessage('/PONG');
+                }
             }
             return null;
         }

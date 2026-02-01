@@ -1827,15 +1827,3 @@ button:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning):ho
     color: #6b7280 !important;
 }
 
-/* Template Identification */
-body::before {
-    content: 'Light Theme';
-    position: fixed;
-    bottom: 5px;
-    right: 5px;
-    font-size: 10px;
-    color: var(--text-muted);
-    opacity: 0.5;
-    pointer-events: none;
-    z-index: 9999;
-}
