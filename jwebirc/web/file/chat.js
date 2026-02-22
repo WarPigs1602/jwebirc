@@ -173,7 +173,7 @@ class ChatManager {
      * Client tracks requested capabilities and responds to server's CAP messages
      */
     requestCapabilities() {
-        this.capNegotiationActive = true;
+        this.capNegotiationActive = false;
         
         // List of desired capabilities
         const desiredCaps = [
@@ -192,26 +192,6 @@ class ChatManager {
      */
     handleCapLS(caps) {
         this.capabilities.available = caps;
-        
-        // Request only desired capabilities that are actually available
-        const toRequest = this.capabilities.requested.filter(cap => caps.includes(cap));
-        
-        // Also request SASL if it's available (backend may require it)
-        if (caps.includes('sasl') && !toRequest.includes('sasl')) {
-            toRequest.unshift('sasl');
-        }
-        
-        if (toRequest.length > 0) {
-            // Request the available desired capabilities
-            if (window.postManager) {
-                // Send with / prefix as required by server
-                const reqCommand = '/CAP REQ :' + toRequest.join(' ');
-                window.postManager.sendRawMessage(reqCommand);
-            }
-        } else {
-            // No capabilities available, end negotiation
-            this.endCapNegotiation();
-        }
     }
     
     /**
@@ -221,27 +201,6 @@ class ChatManager {
     handleCapACK(caps) {
         // Add confirmed capabilities to the enabled list
         this.capabilities.enabled = [...new Set([...this.capabilities.enabled, ...caps])];
-        
-        // Check if we got all requested capabilities
-        const allRequested = this.capabilities.requested.every(cap => 
-            this.capabilities.enabled.includes(cap)
-        );
-        
-        // Clear previous timeout and set a new one
-        if (this.capEndTimer) {
-            clearTimeout(this.capEndTimer);
-        }
-        
-        // If all requested capabilities are confirmed, end negotiation immediately
-        if (allRequested) {
-            this.endCapNegotiation();
-        } else {
-            // Otherwise, wait a bit for more ACK responses before ending negotiation
-            // Some servers send multiple ACK responses in sequence
-            this.capEndTimer = setTimeout(() => {
-                this.endCapNegotiation();
-            }, 500); // Wait 500ms for additional ACK responses
-        }
     }
     
     /**
@@ -249,12 +208,8 @@ class ChatManager {
      * @param {Array} caps - Array of rejected capabilities
      */
     handleCapNAK(caps) {
-        const capsRejected = this.buildI18nSpan('chat.capabilitiesRejected', 'Capabilities rejected');
-        this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> " + capsRejected + ": " + caps.join(', ') + "\n");
-        this.addWindow();
-        
-        // End CAP negotiation even on rejection
-        this.endCapNegotiation();
+        // CAP NAK is rendered by IRCParser; keep method for compatibility
+        return caps;
     }
     
     /**

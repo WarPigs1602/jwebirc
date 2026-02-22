@@ -308,6 +308,7 @@ public class IrcParser {
     private boolean capNegotiating = false;
     private boolean loginComplete = false;
     private String pendingNick;
+    private final java.util.Set<String> requestedCaps = new java.util.HashSet<>();
     
     // Constants for repeated strings
     private static final String USER_COMMAND = "USER %s 0 * :%s";
@@ -488,6 +489,7 @@ public class IrcParser {
     protected void handshake(String nick) {
         // Save nick for later use
         this.pendingNick = nick;
+        this.requestedCaps.clear();
         
         // IRC RFC requires: PASS (optional), then CAP, then NICK, then USER
         
@@ -672,15 +674,25 @@ public class IrcParser {
         
         // Build list of capabilities to request
         java.util.List<String> capsToRequest = buildCapabilitiesRequest(availableCaps, session);
+        java.util.List<String> newCapsToRequest = new java.util.ArrayList<>();
+        for (String cap : capsToRequest) {
+            String normalized = cap.toLowerCase();
+            if (!requestedCaps.contains(normalized)) {
+                newCapsToRequest.add(cap);
+                requestedCaps.add(normalized);
+            }
+        }
         
         // Request capabilities or end negotiation
-        if (!capsToRequest.isEmpty()) {
-            String capReq = String.join(" ", capsToRequest);
+        if (!newCapsToRequest.isEmpty()) {
+            String capReq = String.join(" ", newCapsToRequest);
             Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Requesting capabilities: {0}", capReq);
             submitMessage("CAP REQ :%s", capReq);
             doSleep();
-        } else {
+        } else if (requestedCaps.isEmpty()) {
             endCapNegotiationAndLogin("No capabilities to request, ending negotiation");
+        } else {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "Ignoring duplicate CAP LS entries (already requested capabilities)");
         }
     }
     
