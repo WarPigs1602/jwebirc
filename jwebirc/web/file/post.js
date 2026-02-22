@@ -532,6 +532,11 @@ class PostManager {
     
     parseCommand(text, activeWindow) {
         this.chatManager.setOutput(activeWindow);
+
+        // IRCv3 message tags (e.g. /@+typing=active TAGMSG #channel) must be sent unchanged
+        if (text.startsWith('/@')) {
+            return text;
+        }
         
         // CAP commands - send as raw without parsing
         if (text.toUpperCase().startsWith("/CAP ")) {

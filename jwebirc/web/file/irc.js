@@ -758,7 +758,9 @@ class IRCParser {
         const target = params[0];
         const sub = params[1].toUpperCase();
         const capsString = params.length > 2 ? params[params.length - 1] : "";
-        const caps = capsString.split(" ").filter(Boolean);
+        const rawCaps = capsString.split(" ").filter(Boolean);
+        const normalizeCap = (cap) => (cap || '').replace(/^[-~=]/, '').toLowerCase();
+        const caps = rawCaps.map(normalizeCap).filter(Boolean);
 
         // Deduplicate identical CAP announcements
         const joined = caps.join(", ");
@@ -772,9 +774,37 @@ class IRCParser {
 
         // Persist caps state for UI/feature toggles
         if (sub === "LS") {
-            this.availableCaps = new Set(caps.map(c => c.toLowerCase()));
+            for (const cap of caps) {
+                this.availableCaps.add(cap);
+            }
+            if (this.chatManager && typeof this.chatManager.handleCapLS === 'function') {
+                this.chatManager.handleCapLS(caps);
+            }
         } else if (sub === "ACK") {
-            this.enabledCaps = new Set(caps.map(c => c.toLowerCase()));
+            for (const rawCap of rawCaps) {
+                const normalized = normalizeCap(rawCap);
+                if (!normalized) {
+                    continue;
+                }
+                if (rawCap.startsWith('-')) {
+                    this.enabledCaps.delete(normalized);
+                } else {
+                    this.enabledCaps.add(normalized);
+                }
+            }
+            if (this.chatManager && typeof this.chatManager.handleCapACK === 'function') {
+                const ackedCaps = rawCaps
+                    .filter(cap => !cap.startsWith('-'))
+                    .map(normalizeCap)
+                    .filter(Boolean);
+                if (ackedCaps.length > 0) {
+                    this.chatManager.handleCapACK(ackedCaps);
+                }
+            }
+        } else if (sub === "NAK") {
+            if (this.chatManager && typeof this.chatManager.handleCapNAK === 'function') {
+                this.chatManager.handleCapNAK(caps);
+            }
         }
 
         this.output = "Status";
