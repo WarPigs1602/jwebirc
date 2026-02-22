@@ -511,31 +511,22 @@ public class IrcParser {
         }
         
         Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Completing login with NICK/USER...");
-        loginComplete = true;
-        
+
+        // WEBIRC must be sent before NICK/USER on many IRC servers.
+        if (getMode() != null && getMode().equalsIgnoreCase("webirc")) {
+            sendWebircCommand();
+            doSleep();
+        }
+
         // Send NICK
         submitMessage("NICK %s", pendingNick);
         doSleep();
         
-        // 4. Send USER command with appropriate mode
+        // Send USER command with appropriate mode
         if (getMode() == null || getMode().isBlank()) {
             // Default mode: simple USER command
             submitMessage(USER_COMMAND, getIdent(), getRealname());
         } else if (getMode().equalsIgnoreCase("webirc")) {
-            // WEBIRC mode: send WEBIRC command before USER
-            // Validate WEBIRC parameters
-            if (getPassword() == null || getPassword().isBlank() ||
-                getUser() == null || getUser().isBlank() ||
-                getHostname() == null || getHostname().isBlank() ||
-                getIp() == null || getIp().isBlank()) {
-                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "WEBIRC Error - Missing parameters: Password={0}, User={1}, Hostname={2}, IP={3}", 
-                    new Object[]{getPassword(), getUser(), getHostname(), getIp()});
-                throw new IOException("WEBIRC requires password, user, hostname and IP");
-            }
-            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "WEBIRC Debug - Password={0}, User={1}, Hostname={2}, IP={3}", 
-                new Object[]{getPassword(), getUser(), getHostname(), getIp()});
-            submitMessage("WEBIRC %s %s %s %s", getPassword(), getUser(), getHostname(), getIp());
-            doSleep();
             submitMessage(USER_COMMAND, getIdent(), getRealname());
         } else if (getMode().equalsIgnoreCase("cgiirc")) {
             // CGI:IRC mode: send special PASS before USER
@@ -557,6 +548,23 @@ public class IrcParser {
             submitMessage("USER %s 0 * :%s - %s", getIdent(), dispip, getRealname());
         }
         doSleep();
+        loginComplete = true;
+    }
+
+    private void sendWebircCommand() throws IOException {
+        if (getPassword() == null || getPassword().isBlank()
+                || getUser() == null || getUser().isBlank()
+                || getHostname() == null || getHostname().isBlank()
+                || getIp() == null || getIp().isBlank()) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE,
+                    "WEBIRC Error - Missing parameters: Password={0}, User={1}, Hostname={2}, IP={3}",
+                    new Object[]{getPassword(), getUser(), getHostname(), getIp()});
+            throw new IOException("WEBIRC requires password, user, hostname and IP");
+        }
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO,
+                "WEBIRC Debug - Password={0}, User={1}, Hostname={2}, IP={3}",
+                new Object[]{getPassword(), getUser(), getHostname(), getIp()});
+        submitMessage("WEBIRC %s %s %s %s", getPassword(), getUser(), getHostname(), getIp());
     }
 
     protected void parseCommands(String line, Session session) {
