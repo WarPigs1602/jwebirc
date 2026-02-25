@@ -945,7 +945,8 @@ class IRCParser {
             return this.i18nSpan('chat.hostname.lookup', '*** Looking up your hostname...');
         }
         if (lower.includes('found your hostname')) {
-            const host = message.includes(':') ? message.split(':').pop().trim() : '';
+            const match = message.match(/found your hostname:\s*(.+)$/i);
+            const host = match ? match[1].trim() : '';
             return this.i18nSpan('chat.hostname.found', '*** Found your hostname: {host}', { host });
         }
         if (lower.includes('no hostname found')) {
