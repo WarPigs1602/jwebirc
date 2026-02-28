@@ -50,18 +50,52 @@ You can see under https://chat.midiandmore.net/?channels=dev an example of the w
 
 - Java Development Kit (JDK) 17 or higher
 - Jakarta EE 11 compatible application server
-- Apache Ant (for building) or Maven
+- Apache Ant (for building from source) or Maven
 
 ## Installation
 
-### 1. Clone the Repository
+### Option A: Use Precompiled WAR (Quick Start)
+
+Download the precompiled package:
+
+- https://github.com/WarPigs1602/jwebirc/releases/download/jwebirc/jwebirc.war
+
+Deploy `jwebirc.war` to your Jakarta EE application server:
+
+- **GlassFish/Payara**: Copy to `domains/domain1/autodeploy/`
+- **TomEE**: Copy to `webapps/`
+- Or use the admin console of your application server
+
+#### Configuration for Precompiled WAR
+
+You have two ways to configure parameters such as IRC host, port, SASL, CAPTCHA, and chatnapping:
+
+1. **Recommended (server-managed config):**
+  - Create or edit your server's context configuration for `/jwebirc`
+  - Add the same `<Parameter ... />` values shown in this README
+  - This keeps your settings outside the WAR and survives WAR replacement
+
+2. **Alternative (edit WAR directly):**
+  - Unpack `jwebirc.war`
+  - Edit `META-INF/context.xml`
+  - Repack and deploy the WAR again
+
+After deployment and configuration, open:
+
+```
+http://localhost:8080/jwebirc/
+```
+
+### Option B: Build from Source
+
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/WarPigs1602/jwebirc.git
 cd jwebirc
 ```
 
-### 2. Configure the Application
+#### 2. Configure the Application
 
 Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
 
@@ -119,7 +153,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
 
 For detailed CAPTCHA configuration, see the **[CAPTCHA Protection](#captcha-protection)** section below.
 
-### 3. Build the Project
+#### 3. Build the Project
 
 Using Apache Ant:
 ```bash
@@ -130,7 +164,7 @@ ant dist
 
 The WAR file will be generated in the `dist/` directory.
 
-### 4. Deploy
+#### 4. Deploy
 
 Deploy the generated WAR file to your Jakarta EE application server:
 
@@ -138,7 +172,7 @@ Deploy the generated WAR file to your Jakarta EE application server:
 - **TomEE**: Copy to `webapps/`
 - Or use the admin console of your application server
 
-### 5. Access the Application
+#### 5. Access the Application
 
 Open your web browser and navigate to:
 ```
