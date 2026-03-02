@@ -175,10 +175,17 @@ public class Webchat {
                     config.ident, config.user, config.password, config.webircMode, config.webircCgi, config.hmac));
             
             // Set SASL parameters if enabled
-            if (config.useSasl != null && config.useSasl.equals("true") 
-                    && config.saslUsername != null && !config.saslUsername.isBlank()) {
+            if (config.useSasl != null && config.useSasl.equals("true")) {
+                String effectiveSaslUsername = config.saslUsername;
+                if (effectiveSaslUsername == null || effectiveSaslUsername.isBlank()) {
+                    if (config.nick != null && !config.nick.isBlank()) {
+                        effectiveSaslUsername = config.nick;
+                    } else {
+                        effectiveSaslUsername = config.user;
+                    }
+                }
                 getParser().setUseSasl(true);
-                getParser().setSaslUsername(config.saslUsername);
+                getParser().setSaslUsername(effectiveSaslUsername != null ? effectiveSaslUsername : "");
                 getParser().setSaslPassword(config.saslPassword != null ? config.saslPassword : "");
             } else {
                 getParser().setUseSasl(false);
