@@ -2363,6 +2363,8 @@ class ChatManager {
     
     delPage(page) {
         if (this.channels.length === 0) return;
+
+        this.clearTabAlerts(page);
         
         this.channels.forEach(elem => {
             if (elem.page.toLowerCase() === page.toLowerCase() && elem.type.toLowerCase() !== "status") {
@@ -2373,6 +2375,26 @@ class ChatManager {
         
         this.refreshNav();
         this.setWindow("Status");
+    }
+
+    clearTabAlerts(tabName) {
+        if (!tabName) return;
+
+        const lowerTabName = tabName.toLowerCase();
+
+        for (const key of this.unreadCounts.keys()) {
+            if (key.toLowerCase() === lowerTabName) {
+                this.unreadCounts.delete(key);
+            }
+        }
+
+        for (const key of this.highlightedTabs) {
+            if (key.toLowerCase() === lowerTabName) {
+                this.highlightedTabs.delete(key);
+            }
+        }
+
+        this.updateNotificationBadge();
     }
 
     sortChannelsForNav() {
