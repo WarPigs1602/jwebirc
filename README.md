@@ -58,7 +58,7 @@ You can see under https://chat.midiandmore.net/?channels=dev an example of the w
 
 Download the precompiled package:
 
-- https://github.com/WarPigs1602/jwebirc/releases/download/260302/jwebirc.war
+- https://github.com/WarPigs1602/jwebirc/releases/download/260303/jwebirc.war
 
 Deploy `jwebirc.war` to your Jakarta EE application server:
 
