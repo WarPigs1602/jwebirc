@@ -1,10 +1,44 @@
 # jWebIRC
 
-A modern web-based IRC (Internet Relay Chat) client built with Java EE, WebSockets, and Bootstrap. This application provides a user-friendly interface for connecting to IRC servers directly from your web browser.
+A modern web-based IRC (Internet Relay Chat) client built with Jakarta EE, WebSockets, and Bootstrap. This application provides a user-friendly interface for connecting to IRC servers directly from your web browser.
 
-## Example web-based IRC
+## Example Web-based IRC
 
-You can see under https://chat.midiandmore.net/?channels=dev an example of the web-based IRC... 
+See a live example at https://chat.midiandmore.net/?channels=dev.
+
+## Quick Navigation
+
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Prerequisites](#prerequisites)
+- [Jakarta EE Integration & Correct Version](#jakarta-ee-integration--correct-version)
+- [Installation](#installation)
+- [Configuration (Server-Side)](#configuration-server-side)
+- [Usage (Client-Side)](#usage-client-side)
+- [IRC Command Reference](#irc-command-reference)
+- [Troubleshooting](#troubleshooting)
+- [Building from Source](#building-from-source)
+
+## Quick Start (3 Commands)
+
+```bash
+cd jwebirc
+mvn -f web/WEB-INF/pom.xml clean package
+# deploy target/jwebirc.war to your Jakarta EE server
+```
+
+Then open: `http://localhost:8080/jwebirc/`
+
+## Quick Start (Ant)
+
+Requires local dependency JARs in `jwebirc/lib/` (see [Configuration (Server-Side)](#configuration-server-side)).
+
+```bash
+cd jwebirc
+ant clean
+ant dist
+# deploy dist/jwebirc.war to your Jakarta EE server
+```
 
 ## Features
 
@@ -34,7 +68,7 @@ You can see under https://chat.midiandmore.net/?channels=dev an example of the w
 
 ## Technology Stack
 
-- **Backend**: Java EE (Jakarta EE)
+- **Backend**: Jakarta EE
   - WebSocket API for real-time communication
   - Servlets for HTTP handling
   - JSP for dynamic pages
@@ -48,9 +82,29 @@ You can see under https://chat.midiandmore.net/?channels=dev an example of the w
 
 ## Prerequisites
 
-- Java Development Kit (JDK) 17 or higher
+- Java Development Kit (JDK) 21 or higher
 - Jakarta EE 11 compatible application server
-- Apache Ant (for building from source) or Maven
+- Apache Ant (for building from source) or Maven 3.9+
+
+## Jakarta EE Integration & Correct Version
+
+This project integrates Jakarta EE via Maven in `jwebirc/web/WEB-INF/pom.xml`:
+
+```xml
+<dependency>
+  <groupId>jakarta.platform</groupId>
+  <artifactId>jakarta.jakartaee-web-api</artifactId>
+  <version>${jakarta.ee.version}</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+Important notes:
+
+- `scope` is `provided` because Jakarta EE APIs are supplied by the application server (do not package them into the WAR).
+- The project is currently configured with `jakarta.ee.version=11.0.0`, which matches Java 21.
+- For runtime, use a Jakarta EE 11 (Web Profile) compatible server.
+- If you need to deploy specifically to Jakarta EE 10, change `jakarta.ee.version` (and, if needed, server/IDE configuration) consistently to 10.x and re-test.
 
 ## Installation
 
@@ -153,16 +207,37 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
 
 For detailed CAPTCHA configuration, see the **[CAPTCHA Protection](#captcha-protection)** section below.
 
-#### 3. Build the Project
+#### 3. Resolve Build Dependencies
 
-Using Apache Ant:
+Choose one build path:
+
+**A) Maven (recommended, resolves dependencies automatically):**
+```bash
+cd jwebirc
+mvn -f web/WEB-INF/pom.xml clean package
+```
+
+This reads dependencies from `web/WEB-INF/pom.xml` and builds `target/jwebirc.war`.
+
+**B) Ant / NetBeans build:**
+
+Ant uses JARs from `jwebirc/lib/` plus the Jakarta EE API from your application server/IDE.
+Ensure these files exist in `jwebirc/lib/` before running Ant:
+
+- `commons-codec-1.17.2.jar`
+- `ipaddress-5.5.1.jar`
+- `parsson-1.1.7.jar`
+- `jakarta.json-api-2.1.2.jar`
+- `jakarta.websocket-api-2.2.0.jar`
+
+Then run:
 ```bash
 cd jwebirc
 ant clean
 ant dist
 ```
 
-The WAR file will be generated in the `dist/` directory.
+The WAR file will be generated in `dist/`.
 
 #### 4. Deploy
 
@@ -179,7 +254,19 @@ Open your web browser and navigate to:
 http://localhost:8080/jwebirc/
 ```
 
-## Configuration Options
+## Configuration (Server-Side)
+
+Quick navigation:
+- [IRC Server Settings](#irc-server-settings)
+- [Session Configuration](#session-configuration)
+- [WEBIRC/CGIIRC Configuration](#webirccgiirc-configuration)
+- [Authentication Configuration](#authentication-configuration)
+- [IP Forwarding Configuration](#ip-forwarding-configuration)
+- [Application Display Configuration](#application-display-configuration)
+- [Error Page Configuration](#error-page-configuration)
+- [Chatnapping (Website Embedding)](#chatnapping-website-embedding)
+- [CAPTCHA Protection](#captcha-protection)
+- [Security Configuration](#security-configuration)
 
 ### IRC Server Settings
 ```xml
@@ -308,39 +395,12 @@ Enable embedding the webchat on external websites:
 <Parameter name="jwebirc.chatnappingDefaultChannel" value="#lobby" override="false" />
 ```
 
-### Display Options & UI Preferences
-
-Access customization options via the **⚙️ Settings** button:
-
-**On Login Page:**
-- Font Size adjustment
-- Navigation layout preference
-- Theme customization (hue rotation)
-
-**In Chat Interface:**
-- Font Size: 12-18 pixels
-- Hue: 0-360 degrees color rotation
-- Hide Topic: Toggle channel topic display
-- Hide Nicklist: Toggle user list display
-- Sidebar Mode: Alternative navigation layout
-
-**Settings Persistence:**
-- All preferences saved in browser localStorage
-- Automatically applied across all pages
-- Each browser/device maintains separate preferences
-
-### Chat Features
-1. **Connect**: Enter your nickname and optional password (for SASL)
-2. **Join Channels**: Use `/join #channelname`
-3. **Send Messages**: Type message and press Enter
-4. **Private Messages**: Click on a username
-5. **Emojis**: Click emoji button to insert emojis
-6. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
-7. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
-<iframe src="https://your-irc-server.com/jwebirc/?connect=1&name=Guest&channels=#main" 
-        width="800" 
-        height="600" 
-        frameborder="0">
+**Embed Example (iframe):**
+```html
+<iframe src="https://your-irc-server.com/jwebirc/?connect=1&name=Guest&channels=#main"
+  width="800"
+  height="600"
+  frameborder="0">
 </iframe>
 ```
 
@@ -441,7 +501,9 @@ Advanced version for high-traffic applications:
 - Disable stack trace display (`showStackTrace = false`)
 - Set `errorPageStyle = "simple"`
 
-## Usage
+## Usage (Client-Side)
+
+For command syntax and CTCP query examples, see [IRC Command Reference](#irc-command-reference).
 
 ### Display Options & UI Preferences
 
@@ -468,7 +530,7 @@ Access customization options via the **⚙️ Settings** button:
 6. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
 7. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
 
-## IRC Commands
+## IRC Command Reference
 
 Common IRC commands supported:
 
@@ -512,16 +574,10 @@ CTCP (Client-To-Client Protocol) commands for querying client information:
 
 ## Building from Source
 
-```bash
-# Clean build
-ant clean
+Use the quick sections at the top of this README:
 
-# Compile
-ant compile
-
-# Create WAR file
-ant dist
-```
+- [Quick Start (3 Commands)](#quick-start-3-commands) for Maven (recommended)
+- [Quick Start (Ant)](#quick-start-ant) for Ant/NetBeans with local `lib/` dependencies
 
 ## Contributing
 
