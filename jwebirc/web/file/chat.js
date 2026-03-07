@@ -2558,18 +2558,42 @@ class ChatManager {
     
     addWindow() {
         if (this.activeWindow) {
-            const content = this.getPage(this.activeWindow.toString());
+            let targetWindow = this.activeWindow.toString();
+            let content = this.getPage(targetWindow);
+
+            // Active tab can become stale (e.g. closed query with remaining unread key).
+            // Resolve to a safe existing tab before rendering.
+            if (!content) {
+                if (this.isPage('Status')) {
+                    targetWindow = 'Status';
+                } else if (this.channels.length > 0) {
+                    targetWindow = this.channels[0].page;
+                } else {
+                    if (this.chatWindow) {
+                        this.chatWindow.innerHTML = '';
+                    }
+                    return;
+                }
+
+                this.activeWindow = targetWindow;
+                content = this.getPage(targetWindow);
+            }
+
+            if (!content) {
+                return;
+            }
+
             this.chatWindow.innerHTML = content.innerHTML;
             
             this.channels.forEach(elem => {
-                if (elem.page.toLowerCase() === this.activeWindow.toLowerCase()) {
+                if (elem.page.toLowerCase() === targetWindow.toLowerCase()) {
                     this.parseFrame(elem.page, elem.type);
                 }
             });
             
-            this.sortStatus(this.activeWindow);
-            this.renderUserlist(this.activeWindow);
-            this.renderTopic(this.activeWindow);
+            this.sortStatus(targetWindow);
+            this.renderUserlist(targetWindow);
+            this.renderTopic(targetWindow);
             this.scrollToEnd("#chat_window", 1);
         } else {
             this.channels.forEach(elem => {
@@ -2594,6 +2618,17 @@ class ChatManager {
     }
     
     setWindow(win) {
+        // Ignore invalid windows and use a safe fallback.
+        if (!this.isPage(win)) {
+            if (this.isPage('Status')) {
+                win = 'Status';
+            } else if (this.channels.length > 0) {
+                win = this.channels[0].page;
+            } else {
+                return;
+            }
+        }
+
         this.activeWindow = win;
         this.clearTabHighlight(win); // Remove highlight when tab is activated
         this.addWindow();
@@ -2986,8 +3021,18 @@ class ChatManager {
      * Toggle notification dropdown menu
      */
     toggleNotifications() {
-        // Switch to first unread tab
-        const firstUnread = this.unreadCounts.keys().next().value;
+        // Switch to first unread tab that still exists; drop stale entries.
+        let firstUnread = null;
+        for (const tabName of this.unreadCounts.keys()) {
+            if (this.isPage(tabName)) {
+                firstUnread = tabName;
+                break;
+            }
+            this.unreadCounts.delete(tabName);
+        }
+
+        this.updateNotificationBadge();
+
         if (firstUnread) {
             this.setWindow(firstUnread);
             this.updateUnreadCount(firstUnread, 0);

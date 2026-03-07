@@ -244,6 +244,37 @@ window.NotificationManager = class NotificationManager {
             return null;
         }
     }
+
+    /**
+     * Focuses an existing tab or safely recreates a missing query tab.
+     * @param {string} target - Tab/channel/query name.
+     * @param {string} type - Expected target type ('query' or 'channel').
+     */
+    focusTarget(target, type = 'channel') {
+        if (!this.chatManager || !target) {
+            return;
+        }
+
+        const hasTab = typeof this.chatManager.isPage === 'function'
+            ? this.chatManager.isPage(target)
+            : false;
+
+        if (hasTab && typeof this.chatManager.setWindow === 'function') {
+            this.chatManager.setWindow(target);
+            return;
+        }
+
+        // Reopen missing private-message tabs so notification clicks remain useful.
+        if (!hasTab && type === 'query' && typeof this.chatManager.addPage === 'function') {
+            this.chatManager.addPage(target, 'query', true);
+            return;
+        }
+
+        // Fallback to status tab if target no longer exists.
+        if (typeof this.chatManager.setWindow === 'function' && typeof this.chatManager.isPage === 'function' && this.chatManager.isPage('Status')) {
+            this.chatManager.setWindow('Status');
+        }
+    }
     
     /**
      * Show notification for private message
@@ -260,10 +291,7 @@ window.NotificationManager = class NotificationManager {
             body: truncatedMessage,
             tag: `pm-${nick}`,
             onClick: () => {
-                // Switch to private message window
-                if (this.chatManager) {
-                    this.chatManager.switchTab(nick);
-                }
+                this.focusTarget(nick, 'query');
             }
         });
     }
@@ -284,10 +312,7 @@ window.NotificationManager = class NotificationManager {
             body: truncatedMessage,
             tag: `highlight-${channel}`,
             onClick: () => {
-                // Switch to channel window
-                if (this.chatManager) {
-                    this.chatManager.switchTab(channel);
-                }
+                this.focusTarget(channel, 'channel');
             }
         });
     }
@@ -308,10 +333,7 @@ window.NotificationManager = class NotificationManager {
             tag: `knock-${channel}`,
             requireInteraction: true, // Keep notification visible until clicked
             onClick: () => {
-                // Switch to channel window
-                if (this.chatManager) {
-                    this.chatManager.switchTab(channel);
-                }
+                this.focusTarget(channel, 'channel');
             }
         });
     }
@@ -332,10 +354,7 @@ window.NotificationManager = class NotificationManager {
             body: truncatedMessage,
             tag: `msg-${channel}`,
             onClick: () => {
-                // Switch to channel window
-                if (this.chatManager) {
-                    this.chatManager.switchTab(channel);
-                }
+                this.focusTarget(channel, 'channel');
             }
         });
     }
