@@ -497,21 +497,33 @@ public class IrcParser {
         this.requestedCaps.clear();
         this.capLsParts.clear();
         
-        // IRCv3 registration flow: PASS (optional), CAP LS, NICK/USER while CAP is negotiated.
+        // IRCv3 registration flow: PASS (optional), WEBIRC (if enabled), CAP LS, NICK/USER.
         
         // 1. Send PASS first if server password is set (but NOT in cgiirc mode)
         if (!getServerPassword().isBlank() && !(getMode() != null && getMode().equalsIgnoreCase("cgiirc"))) {
             submitMessage("PASS :%s", getServerPassword());
             doSleep();
         }
+
+        // 2. WEBIRC must be sent before CAP/SASL and before NICK/USER on many IRC servers.
+        if (getMode() != null && getMode().equalsIgnoreCase("webirc")) {
+            try {
+                sendWebircCommand();
+                doSleep();
+            } catch (IOException e) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE,
+                        "Error sending WEBIRC before CAP negotiation", e);
+                return;
+            }
+        }
         
-        // 2. Start capability negotiation (for IRCv3 features and optionally SASL)
+        // 3. Start capability negotiation (for IRCv3 features and optionally SASL)
         Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Starting CAP negotiation...");
         capNegotiating = true;
         submitMessage("CAP LS 302");
         doSleep();
 
-        // 3. Send registration commands now; server finalizes registration after CAP END.
+        // 4. Send registration commands now; server finalizes registration after CAP END.
         try {
             completeLogin();
         } catch (IOException e) {
@@ -525,12 +537,6 @@ public class IrcParser {
         }
         
         Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Completing login with NICK/USER...");
-
-        // WEBIRC must be sent before NICK/USER on many IRC servers.
-        if (getMode() != null && getMode().equalsIgnoreCase("webirc")) {
-            sendWebircCommand();
-            doSleep();
-        }
 
         // Send NICK
         submitMessage("NICK %s", pendingNick);
