@@ -758,8 +758,7 @@ public class IrcParser {
                 capsToRequest.add("sasl");
             } else {
                 sendText(":Server NOTICE * :SASL not supported by server\n", session, "chat", "");
-                endCapNegotiation("SASL requested but not supported by server, ending CAP negotiation");
-                return capsToRequest; // Return empty list to stop processing
+                // SASL not available – continue without it and still request other capabilities
             }
         }
         
