@@ -1510,9 +1510,19 @@ class ChatManager {
         const temp = document.createElement('div');
         temp.innerHTML = html;
         const channelRegex = /([\s>]|^)([#&][A-Za-z0-9_\-\[\]\\`{|}^]{1,50})([.,:;!?)]?)/g;
-        const nickRegex = /([\s>]|^)([A-Za-z0-9_\-\[\]\\`{|}^]{1,30})([.,:;!?)]?)/g;
+        const nickRegex = /([\s><]|^)([A-Za-z0-9_\-\[\]\\`{|}^]{1,30})([.,:;!?)]?)/g;
         
         const wrapTextNode = (node) => {
+            if (!node || !node.parentNode) return;
+
+            // Avoid relinking text that is already inside a nick span/link.
+            if (node.parentNode.nodeType === Node.ELEMENT_NODE) {
+                const parentElem = node.parentNode;
+                if (parentElem.closest('a') || parentElem.closest('.message-nick')) {
+                    return;
+                }
+            }
+
             const text = node.textContent;
             if (!text) return;
             let changed = false;
@@ -1531,7 +1541,11 @@ class ChatManager {
                 if (!currentChannel || !this.hasNick(currentChannel, nick)) return full;
                 changed = true;
                 const safeNick = this.escapeAttribute(nick);
-                return `${prefix}<a href="#" class="nick-link" data-nick="${safeNick}" onclick="return chatManager.handleNickClick('${safeNick}');"${linkStyle}>${nick}</a>${trailing || ''}`;
+                const nickColor = this.getColor(currentChannel, nick) || this.getNickColor(nick);
+                const nickStyle = underlined
+                    ? ` style="color: ${nickColor}; font-weight: 600;"`
+                    : ` style="text-decoration: none; color: ${nickColor}; font-weight: 600;"`;
+                return `${prefix}<a href="#" class="nick-link" data-nick="${safeNick}" onclick="return chatManager.handleNickClick('${safeNick}');"${nickStyle}>${nick}</a>${trailing || ''}`;
             });
             
             if (changed) {
@@ -2203,7 +2217,7 @@ class ChatManager {
                 }
             }
         }
-        return "";
+        return this.getNickColor(nickname);
     }
     
     parseTab(nickname, start) {
@@ -2471,9 +2485,7 @@ class ChatManager {
             if (elem.page.toLowerCase() === pg.toLowerCase()) {
                 // Don't apply highlight in query windows (private messages)
                 const isQuery = elem.type === 'query';
-                if (this.highlight && !isQuery) {
-                    text = `<span style="color: #ff6b6b; font-weight: 600;">${text}`;
-                }
+                const shouldLineHighlight = this.highlight && !isQuery;
                 
                 // Parse control codes first, then convert URLs to links
                 let parsed = this.parseControl(text);
@@ -2520,11 +2532,11 @@ class ChatManager {
                     }
                 }
                 
-                if (this.highlight && !isQuery) {
-                    parsed += "</span>";
-                    this.highlight = false;
-                } else if (this.highlight && isQuery) {
-                    // Reset highlight flag for queries without applying styling
+                if (shouldLineHighlight) {
+                    parsed = `<span class="irc-highlight-line">${parsed}</span>`;
+                }
+
+                if (this.highlight) {
                     this.highlight = false;
                 }
                 
@@ -2536,17 +2548,18 @@ class ChatManager {
     }
     
     parsePage(text) {
-        if (this.highlight) {
-            text = `<span style="color: #ff6b6b; font-weight: 600;">${text}`;
-        }
+        const shouldLineHighlight = this.highlight;
         
         for (const elem of this.channels) {
             // Parse control codes first, then convert URLs to links
             let parsed = this.parseControl(text);
             parsed = this.parseUrls(parsed, false, elem.page);
             
+            if (shouldLineHighlight) {
+                parsed = `<span class="irc-highlight-line">${parsed}</span>`;
+            }
+
             if (this.highlight) {
-                parsed += "</span>";
                 this.highlight = false;
             }
             

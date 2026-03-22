@@ -1304,7 +1304,19 @@ class IRCParser {
                 if (!this.chatManager.isPage(this.output)) {
                     this.chatManager.addPage(this.output, "query", true);
                 }
-                return `* <span class="message-nick" data-nick="${nick}" style="color: ${this.chatManager.getColor(this.output, nick)};">${this.chatManager.getStatus(this.output, nick)}${nick}</span> ${ctcpContent.substring(7)}`;
+
+                const actionText = ctcpContent.substring(7);
+                const isOwnAction = nick.toLowerCase() === window.user.toLowerCase();
+                if (target.startsWith("#") || target.startsWith("&")) {
+                    const isMention = this.containsNickMention(actionText, window.user);
+                    if (!isOwnAction && isMention) {
+                        this.chatManager.setHighlight(true);
+                    }
+                } else if (!isOwnAction) {
+                    this.chatManager.setHighlight(true);
+                }
+
+                return `* <span class="message-nick" data-nick="${nick}" style="color: ${this.chatManager.getColor(this.output, nick)};">${this.chatManager.getStatus(this.output, nick)}${nick}</span> ${actionText}`;
             }
             
             // Other CTCP requests - display in active window (no query window)
@@ -1325,18 +1337,61 @@ class IRCParser {
             this.chatManager.addPage(this.output, "query", true);
         }
         
-        // Highlight in channels when user is mentioned, or for private messages
+        const isOwnMessage = nick.toLowerCase() === window.user.toLowerCase();
+
+        // Highlight in channels when user is mentioned, or for private messages.
+        // Never highlight own messages.
         if (target.startsWith("#") || target.startsWith("&")) {
             // Channel message - highlight if user is mentioned
-            if (text.toLowerCase().includes(window.user.toLowerCase())) {
+            const isMention = this.containsNickMention(message, window.user);
+            if (!isOwnMessage && isMention) {
                 this.chatManager.setHighlight(true);
             }
-        } else {
-            // Private message - always highlight
+        } else if (!isOwnMessage) {
+            // Private message - always highlight (except own echo)
             this.chatManager.setHighlight(true);
         }
         
         return `&lt;<span class="message-nick" data-nick="${nick}" style="color: ${this.chatManager.getColor(target, nick)};">${this.chatManager.getStatus(target, nick)}${nick}</span>&gt; ${message}`;
+    }
+
+    containsNickMention(message, nick) {
+        if (!message || !nick) return false;
+
+        // Strip common IRC control/formatting codes before matching mentions.
+        const plainMessage = String(message)
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&amp;/gi, '&')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/gi, "'")
+            .replace(/\x03\d{0,2}(?:,\d{0,2})?/g, '')
+            .replace(/[\x02\x0F\x11\x16\x1D\x1E\x1F]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const targetNick = String(nick)
+            .replace(/^[~&@%+]+/, '')
+            .trim()
+            .toLowerCase();
+        if (!targetNick) return false;
+
+        // Token-based exact match avoids partial matches and behaves better with Unicode words.
+        const normalizeToken = (value) => String(value || '')
+            .replace(/^[~&@%+]+/, '')
+            .replace(/^[\s"'“”„‚`´.,:;!?()<>\[\]{}]+/g, '')
+            .replace(/[\s"'“”„‚`´.,:;!?()<>\[\]{}]+$/g, '')
+            .toLowerCase();
+
+        const tokens = plainMessage.split(/\s+/);
+        for (const token of tokens) {
+            if (normalizeToken(token) === targetNick) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     formatErrorNumeric(code, params) {

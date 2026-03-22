@@ -513,7 +513,7 @@ class PostManager {
                 if (window.ircParser) {
                     // Set output to the active window before parsing
                     window.ircParser.output = activeWindow;
-                    window.ircParser.parseOutput("&lt;<span style=\"color: " + this.chatManager.getColor(activeWindow, window.user) + ";\">" + this.chatManager.getStatus(activeWindow, window.user) + window.user + "</span>&gt; " + this.escapeHtml(text));
+                    window.ircParser.parseOutput("&lt;<span class=\"message-nick\" data-nick=\"" + this.escapeAttribute(window.user) + "\" style=\"color: " + this.chatManager.getColor(activeWindow, window.user) + ";\">" + this.chatManager.getStatus(activeWindow, window.user) + window.user + "</span>&gt; " + this.escapeHtml(text));
                 }
                 
                 this.chatManager.addWindow();
@@ -605,7 +605,7 @@ class PostManager {
             const content = text.substring(4);
             if (window.ircParser) {
                 window.ircParser.output = activeWindow;
-                window.ircParser.parseOutput("* <span style=\"color: " + this.chatManager.getColor(activeWindow, window.user) + ";\">" + this.chatManager.getStatus(activeWindow, window.user) + window.user + "</span> " + content);
+                window.ircParser.parseOutput("* <span class=\"message-nick\" data-nick=\"" + this.escapeAttribute(window.user) + "\" style=\"color: " + this.chatManager.getColor(activeWindow, window.user) + ";\">" + this.chatManager.getStatus(activeWindow, window.user) + window.user + "</span> " + content);
             }
             this.chatManager.addWindow();
             return this.ircText("/privmsg " + activeWindow + " " + String.fromCharCode(1) + "ACTION " + this.escapeHtml(content) + String.fromCharCode(1));
@@ -977,6 +977,15 @@ class PostManager {
         }
         
         return result;
+    }
+
+    escapeAttribute(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
     
     unescapeHtml(text) {

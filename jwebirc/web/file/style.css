@@ -1854,6 +1854,13 @@ nv.highlighted:not(.unread)::after {
     color: #ff6b6b !important;
 }
 
+.chat_frame .irc-highlight-line {
+    color: #ff6b6b;
+    font-weight: inherit;
+    background: rgba(255, 107, 107, 0.12);
+    box-shadow: inset 2px 0 0 rgba(255, 107, 107, 0.6);
+}
+
 .chat_frame span[style*="color: #00ff00"] {
     color: #51cf66 !important;
 }
