@@ -13,7 +13,7 @@ class IRCParser {
         this.user = window.user || '';
         
         // Shared delay (ms) for WHO and history commands to avoid flooding
-        this.commandDelay = parseInt(window.commandDelayOnJoin) || 2000;
+        this.commandDelay = parseInt(window.commandDelayOnJoin) || 300;
 
         // WHO command queue to avoid flooding the server
         this.whoQueue = [];
@@ -411,9 +411,25 @@ class IRCParser {
                 
                 // Split the nick list by spaces and add each nick
                 const nicks = nickList.trim().split(/\s+/);
-                for (const nick of nicks) {
-                    if (nick.length > 0) {
-                        this.chatManager.addNick(channel, nick, "", this.chatManager.getNickColor(nick));
+                for (const rawNick of nicks) {
+                    if (rawNick.length > 0) {
+                        let nickToken = rawNick;
+                        let hostMask = "";
+
+                        let statusPrefix = "";
+                        while (nickToken.length > 0 && this.chatManager.isStatusSymbol(nickToken[0])) {
+                            statusPrefix += nickToken[0];
+                            nickToken = nickToken.substring(1);
+                        }
+
+                        const hostSeparator = nickToken.indexOf('!');
+                        if (hostSeparator > 0) {
+                            hostMask = nickToken.substring(hostSeparator + 1);
+                            nickToken = nickToken.substring(0, hostSeparator);
+                        }
+
+                        const displayNick = statusPrefix + nickToken;
+                        this.chatManager.addNick(channel, displayNick, hostMask, this.chatManager.getNickColor(nickToken));
                     }
                 }
                 return null;
@@ -759,7 +775,10 @@ class IRCParser {
         const sub = params[1].toUpperCase();
         const capsString = params.length > 2 ? params[params.length - 1] : "";
         const rawCaps = capsString.split(" ").filter(Boolean);
-        const normalizeCap = (cap) => (cap || '').replace(/^[-~=]/, '').toLowerCase();
+        const normalizeCap = (cap) => {
+            const stripped = (cap || '').replace(/^[-+~=]/, '').toLowerCase();
+            return stripped.split('=')[0];
+        };
         const caps = rawCaps.map(normalizeCap).filter(Boolean);
 
         // Deduplicate identical CAP announcements
@@ -773,7 +792,7 @@ class IRCParser {
         }
 
         // Persist caps state for UI/feature toggles
-        if (sub === "LS") {
+        if (sub === "LS" || sub === "NEW") {
             for (const cap of caps) {
                 this.availableCaps.add(cap);
             }
@@ -805,6 +824,11 @@ class IRCParser {
             if (this.chatManager && typeof this.chatManager.handleCapNAK === 'function') {
                 this.chatManager.handleCapNAK(caps);
             }
+        } else if (sub === "DEL") {
+            for (const cap of caps) {
+                this.availableCaps.delete(cap);
+                this.enabledCaps.delete(cap);
+            }
         }
 
         this.output = "Status";
@@ -813,12 +837,20 @@ class IRCParser {
             const span = this.i18nSpan('chat.capabilitiesAvailable', 'Available capabilities');
             return " <span style=\"color: #00aaff\">==</span> " + span + ": " + joined;
         }
+        if (sub === "NEW") {
+            const span = this.i18nSpan('chat.capabilitiesNew', 'New capabilities');
+            return " <span style=\"color: #00aaff\">==</span> " + span + ": " + joined;
+        }
         if (sub === "ACK") {
             const span = this.i18nSpan('chat.capabilitiesEnabled', 'Enabled capabilities');
             return " <span style=\"color: #00aaff\">==</span> " + span + ": " + joined;
         }
         if (sub === "NAK") {
             const span = this.i18nSpan('chat.capabilitiesRejected', 'Rejected capabilities');
+            return " <span style=\"color: #ff6600\">==</span> " + span + ": " + joined;
+        }
+        if (sub === "DEL") {
+            const span = this.i18nSpan('chat.capabilitiesRemoved', 'Removed capabilities');
             return " <span style=\"color: #ff6600\">==</span> " + span + ": " + joined;
         }
 
@@ -858,6 +890,9 @@ class IRCParser {
                 return this.handleKick(ircMsg);
             case "away":
                 this.handleAway(ircMsg);
+                return null;
+            case "account":
+                this.handleAccount(ircMsg);
                 return null;
             case "chghost":
                 return this.handleChghost(ircMsg);
@@ -1086,6 +1121,7 @@ class IRCParser {
         const nick = this.parseNick(prefix);
         const host = this.parseHost(prefix);
         const channel = params[0];
+        const account = params.length > 1 && params[1] !== '*' ? params[1] : '';
         const color = this.chatManager.getNickColor(nick);
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
@@ -1114,6 +1150,9 @@ class IRCParser {
         } else {
             this.output = channel;
             this.chatManager.addNick(channel, nick, host, color);
+            if (account) {
+                this.handleAccount({ prefix, params: [account] });
+            }
         }
         
         const joinMsg = this.i18nSpan('chat.join', '[{host}] has joined {channel}', { host, channel });
@@ -1185,6 +1224,19 @@ class IRCParser {
         if (this.chatManager) {
             this.chatManager.setAwayStatus(nick, isAway, awayMsg);
         }
+    }
+
+    handleAccount(ircMsg) {
+        // ACCOUNT command format: :nick!user@host ACCOUNT account-name|*
+        const { prefix, params } = ircMsg;
+        const nick = this.parseNick(prefix);
+        const account = params[0] || '*';
+        const normalizedAccount = account === '*' ? '' : account;
+
+        if (!this.chatManager || typeof this.chatManager.setAccount !== 'function') {
+            return;
+        }
+        this.chatManager.setAccount(nick, normalizedAccount);
     }
     
     handleChghost(ircMsg) {

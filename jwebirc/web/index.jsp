@@ -497,7 +497,7 @@
     window.historyCommandEnabled = "<%= historyCommandEnabled %>" === "true";
     window.historyCommand = "<%= historyCommand %>";
     window.historyCommandDelay = parseInt("<%= historyCommandDelay %>", 10) || 2000;
-    window.commandDelayOnJoin = parseInt("<%= commandDelayOnJoin %>", 10) || 2000;
+    window.commandDelayOnJoin = parseInt("<%= commandDelayOnJoin %>", 10) || 300;
     
     // Loading screen will be hidden by IRC connection logic
     window.addEventListener('load', function() {

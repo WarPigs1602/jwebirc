@@ -136,7 +136,7 @@
     <Parameter name="jwebirc.historyCommandDelay" value="2000" override="false"/>
     
     <!-- General command delay after join (milliseconds) -->
-    <Parameter name="jwebirc.commandDelayOnJoin" value="2000" override="false"/>
+     <Parameter name="jwebirc.commandDelayOnJoin" value="300" override="false"/>
     
     <!-- ============================================
          ERROR HANDLING

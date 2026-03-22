@@ -311,6 +311,20 @@ public class IrcParser {
     private String pendingNick;
     private final java.util.Set<String> requestedCaps = new java.util.HashSet<>();
     private final java.util.List<String> capLsParts = new java.util.ArrayList<>();
+    private static final java.util.Set<String> PREFERRED_CAPABILITIES = java.util.Set.of(
+            "account-notify",
+            "away-notify",
+            "batch",
+            "cap-notify",
+            "chghost",
+            "extended-join",
+            "invite-notify",
+            "labeled-response",
+            "message-tags",
+            "multi-prefix",
+            "server-time",
+            "userhost-in-names"
+    );
     
     // Constants for repeated strings
     private static final String USER_COMMAND = "USER %s 0 * :%s";
@@ -682,6 +696,10 @@ public class IrcParser {
             handleCapAck(capParams);
         } else if ("NAK".equals(subCommand)) {
             handleCapNak(capParams, session);
+        } else if ("NEW".equals(subCommand)) {
+            handleCapNew(capParams);
+        } else if ("DEL".equals(subCommand)) {
+            handleCapDel(capParams);
         }
     }
     
@@ -715,14 +733,7 @@ public class IrcParser {
         
         // Build list of capabilities to request
         java.util.List<String> capsToRequest = buildCapabilitiesRequest(availableCaps, session);
-        java.util.List<String> newCapsToRequest = new java.util.ArrayList<>();
-        for (String cap : capsToRequest) {
-            String normalized = cap.toLowerCase();
-            if (!requestedCaps.contains(normalized)) {
-                newCapsToRequest.add(cap);
-                requestedCaps.add(normalized);
-            }
-        }
+        java.util.List<String> newCapsToRequest = filterNotYetRequested(capsToRequest);
         
         // Request capabilities or end negotiation
         if (!newCapsToRequest.isEmpty()) {
@@ -766,22 +777,60 @@ public class IrcParser {
         addEssentialCapabilities(availableCaps, capsToRequest);
         return capsToRequest;
     }
+
+    private java.util.List<String> filterNotYetRequested(java.util.List<String> capsToRequest) {
+        java.util.List<String> newCapsToRequest = new java.util.ArrayList<>();
+        for (String cap : capsToRequest) {
+            String normalized = cap.toLowerCase();
+            if (!requestedCaps.contains(normalized)) {
+                newCapsToRequest.add(cap);
+                requestedCaps.add(normalized);
+            }
+        }
+        return newCapsToRequest;
+    }
     
     private void addEssentialCapabilities(java.util.Set<String> availableCaps, java.util.List<String> capsToRequest) {
-        if (availableCaps.contains("away-notify")) {
-            capsToRequest.add("away-notify");
+        for (String preferredCap : PREFERRED_CAPABILITIES) {
+            if (availableCaps.contains(preferredCap)) {
+                capsToRequest.add(preferredCap);
+            }
         }
-        if (availableCaps.contains("message-tags")) {
-            capsToRequest.add("message-tags");
+    }
+
+    private void handleCapNew(String trailing) {
+        String newCaps = trailing == null ? "" : trailing.trim();
+        if (newCaps.isEmpty()) {
+            return;
         }
-        if (availableCaps.contains("chghost")) {
-            capsToRequest.add("chghost");
+
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP NEW received: {0}", newCaps);
+        java.util.Set<String> availableCaps = parseAvailableCapabilities(newCaps);
+        java.util.List<String> capsToRequest = new java.util.ArrayList<>();
+        addEssentialCapabilities(availableCaps, capsToRequest);
+        java.util.List<String> newCapsToRequest = filterNotYetRequested(capsToRequest);
+
+        if (!newCapsToRequest.isEmpty()) {
+            String capReq = String.join(" ", newCapsToRequest);
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Requesting newly announced capabilities: {0}", capReq);
+            submitMessage("CAP REQ :%s", capReq);
+            doSleep();
         }
-        if (availableCaps.contains("batch")) {
-            capsToRequest.add("batch");
+    }
+
+    private void handleCapDel(String trailing) {
+        String delCaps = trailing == null ? "" : trailing.trim();
+        if (delCaps.isEmpty()) {
+            return;
         }
-        if (availableCaps.contains("server-time")) {
-            capsToRequest.add("server-time");
+
+        Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "CAP DEL received: {0}", delCaps);
+        for (String cap : delCaps.split("\\s+")) {
+            if (cap.isEmpty()) {
+                continue;
+            }
+            String normalized = cap.toLowerCase().split("=")[0];
+            requestedCaps.remove(normalized);
         }
     }
     

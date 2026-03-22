@@ -1635,7 +1635,7 @@ class ChatManager {
                 if (!elem.nicks.some(e => e.nick === fullNick)) {
                     // Check global away status if not explicitly provided
                     let awayInfo = isAway ? { away: true, reason: '' } : this.awayStatus.get(nick.toLowerCase()) || { away: false, reason: '' };
-                    elem.nicks.push({ nick: fullNick, host, color, away: awayInfo.away, awayReason: awayInfo.reason });
+                    elem.nicks.push({ nick: fullNick, host, color, away: awayInfo.away, awayReason: awayInfo.reason, account: '' });
                 }
             }
         });
@@ -1779,7 +1779,10 @@ class ChatManager {
                         elem.nicks.splice(i, 1, {
                             nick: parsed,
                             host: host,
-                            color: name.color
+                            color: name.color,
+                            away: !!name.away,
+                            awayReason: name.awayReason || '',
+                            account: name.account || ''
                         });
                         return;
                     }
@@ -1787,13 +1790,37 @@ class ChatManager {
             }
         }
     }
+
+    setAccount(nick, account = '') {
+        const normalizedNick = (nick || '').toLowerCase();
+        const normalizedAccount = account || '';
+        this.channels.forEach(elem => {
+            if (elem.type !== 'channel') return;
+            let changed = false;
+            elem.nicks.forEach(nickData => {
+                let displayNick = nickData.nick;
+                if (displayNick.length > 0 && this.isStatusSymbol(displayNick[0])) {
+                    displayNick = displayNick.substring(1);
+                }
+                if (displayNick.toLowerCase() === normalizedNick) {
+                    if ((nickData.account || '') !== normalizedAccount) {
+                        nickData.account = normalizedAccount;
+                        changed = true;
+                    }
+                }
+            });
+            if (changed) {
+                this.renderUserlist(elem.page);
+            }
+        });
+    }
     
     setMode(channel, line) {
         for (const elem of this.channels) {
             if (elem.page.toLowerCase() !== channel.toLowerCase()) continue;
             
             for (const name of elem.nicks) {
-                const { nick, host, color } = name;
+                const { nick, host, color, away, awayReason, account } = name;
                 let parsed = null;
                 
                 if (!line.includes(" ")) continue;
@@ -1863,7 +1890,7 @@ class ChatManager {
                     
                     parsed = currentStatus + nickname;
                     const i = elem.nicks.findIndex(data => data.nick === nick);
-                    elem.nicks.splice(i, 1, { nick: parsed, host, color });
+                    elem.nicks.splice(i, 1, { nick: parsed, host, color, away: !!away, awayReason: awayReason || '', account: account || '' });
                 }
             }
         }
@@ -1980,11 +2007,11 @@ class ChatManager {
                 const parsed2 = status && status.length === 1 ? status + newnick : newnick;
                 
                 if (name.nick.toLowerCase() === parsed.toLowerCase()) {
-                    const { host, color } = name;
+                    const { host, color, away, awayReason, account } = name;
                     
                     if (this.isChannel(channel)) {
                         const i = elem.nicks.findIndex(data => data.nick === parsed);
-                        elem.nicks.splice(i, 1, { nick: parsed2, host, color });
+                        elem.nicks.splice(i, 1, { nick: parsed2, host, color, away: !!away, awayReason: awayReason || '', account: account || '' });
                         this.sortStatus(channel);
                         this.renderUserlist(channel);
                     }
@@ -2091,18 +2118,22 @@ class ChatManager {
                         statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusTitle}">${emoji}</span>`;
                     }
                     
-                    // Add away indicator - show as transparent and italic, with away reason in title
+                    // Add away/account indicator via tooltip metadata
                     const awayClass = nick.away ? ' away' : '';
-                    let awayTitle = '';
+                    let tooltipParts = [];
+                    if (nick.account && nick.account.length > 0) {
+                        tooltipParts.push(this.t('nicklist.account', 'Account: {account}', { account: nick.account }));
+                    }
                     if (nick.away) {
                         const reason = nick.awayReason ? nick.awayReason : '';
                         const awayText = reason
                             ? this.t('nicklist.awayWithReason', 'Away: {reason}', { reason })
                             : this.t('nicklist.away', 'Away');
-                        awayTitle = ` title="${this.escapeAttribute(awayText)}"`;
+                        tooltipParts.push(awayText);
                     }
+                    const tooltip = tooltipParts.length > 0 ? ` title="${this.escapeAttribute(tooltipParts.join(' | '))}"` : '';
                     
-                    doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};"${awayTitle}>${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
+                    doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};"${tooltip}>${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
                 });
                 
                 while (this.right.firstChild) {
