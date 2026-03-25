@@ -35,6 +35,7 @@
     String webircCgi = param(ctx, "jwebirc.webircCgi", "CGIIRC");
     String hmacTemporal = param(ctx, "jwebirc.hmacTemporal", "1337");
     String saslEnabled = param(ctx, "jwebirc.saslEnabled", "true");
+    String saslMechanism = param(ctx, "jwebirc.saslMechanism", "PLAIN");
 
     String captchaEnabled = param(ctx, "jwebirc.captchaEnabled", "false");
     String captchaType = param(ctx, "jwebirc.captchaType", "TURNSTILE");

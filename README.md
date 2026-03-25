@@ -176,6 +176,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
     
     <!-- Authentication Configuration -->
     <Parameter name="jwebirc.saslEnabled" value="true" override="false" />
+    <Parameter name="jwebirc.saslMechanism" value="SCRAM-SHA-256" override="false" />
     
     <!-- Proxy/IP Configuration -->
     <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
@@ -312,14 +313,32 @@ For proper IP forwarding to IRC servers:
 
 ### Authentication Configuration
 
+The SASL mechanism is configured server-side only via `jwebirc.saslMechanism`.
+It is not selectable in the login form.
+
 ```xml
 <!-- Enable/disable SASL authentication -->
 <Parameter name="jwebirc.saslEnabled" value="true" override="false" />
+
+<!-- SASL Mechanism: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 -->
+<!-- Default: PLAIN (basic) -->
+<!-- Recommended: SCRAM-SHA-256 or SCRAM-SHA-512 (more secure) -->
+<Parameter name="jwebirc.saslMechanism" value="PLAIN" override="false" />
 
 <!-- User credentials (optional) -->
 <Parameter name="jwebirc.webchatUser" value="jwebirc" override="false" />
 <Parameter name="jwebirc.webchatPassword" value="password" override="false" />
 ```
+
+**SASL Mechanisms:**
+
+- **PLAIN**: Basic authentication (username\0username\0password). Fast but less secure - uses base64 encoding only.
+- **SCRAM-SHA-256**: Salted Challenge Response Authentication Mechanism with SHA-256. Good balance of security and compatibility.
+- **SCRAM-SHA-512**: Salted Challenge Response Authentication Mechanism with SHA-512. Maximum security - requires server support.
+
+**How to Choose:**
+- Use **SCRAM-SHA-256** or **SCRAM-SHA-512** if your IRC server supports them (recommended)
+- Fall back to **PLAIN** if the server doesn't support SCRAM mechanisms
 
 ### UI Preferences & Display Options
 
@@ -522,13 +541,14 @@ Access customization options via the **⚙️ Settings** button:
 - Each browser/device maintains separate preferences
 
 ### Chat Features
-1. **Connect**: Enter your nickname and optional password (for SASL)
-2. **Join Channels**: Use `/join #channelname`
-3. **Send Messages**: Type message and press Enter
-4. **Private Messages**: Click on a username
-5. **Emojis**: Click emoji button to insert emojis
-6. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
-7. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
+1. **Connect**: Enter your nickname and optional SASL credentials
+2. **SASL Mechanism**: Uses the server-side configured value (`jwebirc.saslMechanism`)
+3. **Join Channels**: Use `/join #channelname`
+4. **Send Messages**: Type message and press Enter
+5. **Private Messages**: Click on a username
+6. **Emojis**: Click emoji button to insert emojis
+7. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
+8. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
 
 ## IRC Command Reference
 

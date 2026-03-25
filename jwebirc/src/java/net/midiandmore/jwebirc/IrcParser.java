@@ -18,6 +18,11 @@ import java.net.Socket;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.security.cert.X509Certificate;
+import java.security.MessageDigest;
+import javax.crypto.Mac;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -285,6 +290,20 @@ public class IrcParser {
         this.saslPassword = saslPassword;
     }
 
+    /**
+     * @return the saslMechanism
+     */
+    public String getSaslMechanism() {
+        return saslMechanism;
+    }
+
+    /**
+     * @param saslMechanism the saslMechanism to set (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+     */
+    public void setSaslMechanism(String saslMechanism) {
+        this.saslMechanism = saslMechanism != null ? saslMechanism : SASL_MECHANISM_PLAIN;
+    }
+
     private String host;
     private int port;
     private boolean ssl;
@@ -305,6 +324,16 @@ public class IrcParser {
     private boolean useSasl = false;
     private String saslUsername;
     private String saslPassword;
+    private String saslMechanism = SASL_MECHANISM_PLAIN;  // Values: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+    
+    // SCRAM-SHA authentication state variables
+    private int scramPhase = 0;  // 0: init, 1: client-first sent, 2: processing server-first, 3: client-final sent
+    private String scramClientNonce;
+    private String scramServerNonce;
+    private String scramServerFirstMessage;
+    private String scramClientFirstMessageBare;
+    private byte[] scramSaltedPassword;
+    private byte[] scramStoredKey;
     private boolean capNegotiating = false;
     private boolean capEnded = false;
     private boolean loginComplete = false;
@@ -329,6 +358,7 @@ public class IrcParser {
     // Constants for repeated strings
     private static final String USER_COMMAND = "USER %s 0 * :%s";
     private static final String CTCP_MARKER = "\u0001";
+    private static final String SASL_MECHANISM_PLAIN = "PLAIN";
     private static final String CAP_END = "CAP END";
     private static final String AUTHENTICATE_ABORT = "AUTHENTICATE *";
 
@@ -863,8 +893,14 @@ public class IrcParser {
     
     private void startSaslAuthentication() {
         try {
-            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL capability ACKed, starting authentication...");
-            submitMessage("AUTHENTICATE PLAIN");
+            String mechanism = getSaslMechanism();
+            if (mechanism == null || mechanism.isEmpty()) {
+                mechanism = SASL_MECHANISM_PLAIN;
+            }
+            
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL capability ACKed, starting authentication with mechanism: {0}", mechanism);
+            
+            submitMessage("AUTHENTICATE %s", mechanism);
             doSleep();
             // Don't end CAP negotiation yet, wait for SASL to complete
         } catch (Exception e) {
@@ -952,49 +988,237 @@ public class IrcParser {
     }
     
     private void handleAuthenticate(String prefix) {
-        // Format: server AUTHENTICATE +
-        // Extract the parameter after AUTHENTICATE
+        // Format: server AUTHENTICATE [+|base64data]
         int authPos = prefix.indexOf("AUTHENTICATE");
         if (authPos < 0) return;
         
-        String afterAuth = prefix.substring(authPos + 12).trim(); // 12 = length of "AUTHENTICATE"
+    
+    String afterAuth = prefix.substring(authPos + 12).trim(); // 12 = length of "AUTHENTICATE"
         
         Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE received with parameter: [{0}]", afterAuth);
         
+        String mechanism = getSaslMechanism();
+        if (mechanism == null || mechanism.isEmpty()) {
+            mechanism = SASL_MECHANISM_PLAIN;
+        }
+        
+        try {
+            if (SASL_MECHANISM_PLAIN.equalsIgnoreCase(mechanism)) {
+                handleAuthenticatePlain(afterAuth);
+            } else if ("SCRAM-SHA-256".equalsIgnoreCase(mechanism)) {
+                handleAuthenticateScramSha(afterAuth, "SHA-256", 32);  // 32 bytes = 256 bits
+            } else if ("SCRAM-SHA-512".equalsIgnoreCase(mechanism)) {
+                handleAuthenticateScramSha(afterAuth, "SHA-512", 64);  // 64 bytes = 512 bits
+            } else {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Unknown SASL mechanism: {0}", mechanism);
+                submitMessage(AUTHENTICATE_ABORT);
+            }
+        } catch (Exception e) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error handling AUTHENTICATE", e);
+            submitMessage(AUTHENTICATE_ABORT);
+            doSleep();
+        }
+    }
+
+    private void handleAuthenticatePlain(String afterAuth) {
         if ("+".equals(afterAuth)) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending PLAIN credentials...");
+            
+            if (getSaslUsername() == null || getSaslUsername().isEmpty()) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL username is null or empty!");
+                submitMessage(AUTHENTICATE_ABORT);
+                return;
+            }
+            if (getSaslPassword() == null) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL password is null!");
+                submitMessage(AUTHENTICATE_ABORT);
+                return;
+            }
+            
+            // Send SASL PLAIN authentication: base64(username\0username\0password)
+            String authString = getSaslUsername() + "\0" + getSaslUsername() + "\0" + getSaslPassword();
+            String base64Auth = java.util.Base64.getEncoder().encodeToString(authString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            
+            Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "Sending AUTHENTICATE with base64 length: {0}", base64Auth.length());
+            sendSaslAuthenticateData(base64Auth);
+            
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL PLAIN credentials sent, waiting for server response (903/904/905)...");
+        } else {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Unexpected AUTHENTICATE parameter for PLAIN: {0}", afterAuth);
+        }
+    }
+
+    private void handleAuthenticateScramSha(String afterAuth, String hashAlgorithm, int digestLength) throws java.security.NoSuchAlgorithmException, java.security.spec.InvalidKeySpecException {
+        if ("+".equals(afterAuth) && scramPhase == 0) {
+            // Phase 1: Send ClientFirstMessage
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending SCRAM-SHA-256 ClientFirstMessage...");
+            
+            if (getSaslUsername() == null || getSaslUsername().isEmpty()) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL username is null or empty!");
+                submitMessage(AUTHENTICATE_ABORT);
+                return;
+            }
+            
+            String clientFirstMessage = generateScramClientFirstMessage();
+            sendSaslAuthenticateData(clientFirstMessage);
+            scramPhase = 1;
+            
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SCRAM-SHA ClientFirstMessage sent, waiting for ServerFirstMessage...");
+        } else if (!"+".equals(afterAuth) && scramPhase == 1) {
+            // Phase 2: Process ServerFirstMessage and send ClientFinalMessage
+            Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "Received ServerFirstMessage, processing...");
+            
             try {
-                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "AUTHENTICATE + received, sending PLAIN credentials...");
+                String serverFirstMessage = new String(java.util.Base64.getDecoder().decode(afterAuth), java.nio.charset.StandardCharsets.UTF_8);
+                processScramServerFirstMessage(serverFirstMessage, hashAlgorithm, digestLength);
                 
-                // Validate SASL credentials
-                if (getSaslUsername() == null || getSaslUsername().isEmpty()) {
-                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL username is null or empty!");
-                    submitMessage(AUTHENTICATE_ABORT);
-                    return;
-                }
-                if (getSaslPassword() == null) {
-                    Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "SASL password is null!");
-                    submitMessage(AUTHENTICATE_ABORT);
-                    return;
-                }
+                String clientFinalMessage = generateScramClientFinalMessage();
+                sendSaslAuthenticateData(clientFinalMessage);
+                scramPhase = 2;
                 
-                // Send SASL PLAIN authentication: base64(username\0username\0password)
-                String authString = getSaslUsername() + "\0" + getSaslUsername() + "\0" + getSaslPassword();
-                String base64Auth = java.util.Base64.getEncoder().encodeToString(authString.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                
-                Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "Sending AUTHENTICATE with base64 length: {0}", base64Auth.length());
-                sendSaslAuthenticateData(base64Auth);
-                
-                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SASL PLAIN credentials sent, waiting for server response (903/904/905)...");
+                Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, "SCRAM-SHA ClientFinalMessage sent, waiting for ServerFinalMessage...");
             } catch (Exception e) {
-                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error sending SASL credentials", e);
-                // Abort SASL authentication
+                Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error processing ServerFirstMessage", e);
                 submitMessage(AUTHENTICATE_ABORT);
                 doSleep();
-                // Server will send 904/905, which will be handled by handleSaslEnd
             }
         } else {
-            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Unexpected AUTHENTICATE parameter: {0}", afterAuth);
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "Unexpected AUTHENTICATE state: phase={0}, parameter={1}", new Object[]{scramPhase, afterAuth});
         }
+    }
+
+    private String generateScramClientFirstMessage() {
+        // Generate random client nonce (avoid ',', '=', and control characters)
+        scramClientNonce = java.util.UUID.randomUUID().toString().replaceAll("[^a-zA-Z0-9]", "");
+        
+        // ClientFirstMessage: [GS2-header] ClientFirstMessageBare
+        // GS2-header: "n,," (no channel binding, no authzid)
+        scramClientFirstMessageBare = "n=" + 
+            percentEncode(getSaslUsername()) + 
+            ",r=" + scramClientNonce;
+        
+        String clientFirstMessage = "n,," + scramClientFirstMessageBare;
+        
+        String base64ClientFirstMessage = java.util.Base64.getEncoder().encodeToString(
+            clientFirstMessage.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        
+        Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "SCRAM ClientFirstMessage generated: {0}", clientFirstMessage);
+        
+        return base64ClientFirstMessage;
+    }
+
+    private void processScramServerFirstMessage(String serverFirstMessage, String hashAlgorithm, int digestLength) throws java.security.NoSuchAlgorithmException, java.security.spec.InvalidKeySpecException, java.security.InvalidKeyException {
+        Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "ServerFirstMessage: {0}", serverFirstMessage);
+        
+        scramServerFirstMessage = serverFirstMessage;
+        
+        // Parse ServerFirstMessage: r=<nonce>,s=<base64-salt>,i=<iteration-count>
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("r=([^,]+),s=([^,]+),i=(\\d+)");
+        java.util.regex.Matcher matcher = pattern.matcher(serverFirstMessage);
+        
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("Invalid ServerFirstMessage format");
+        }
+        
+        String serverNonce = matcher.group(1);
+        String base64Salt = matcher.group(2);
+        int iterationCount = Integer.parseInt(matcher.group(3));
+        
+        // Verify nonce starts with our client nonce
+        if (!serverNonce.startsWith(scramClientNonce)) {
+            throw new IllegalArgumentException("Server nonce does not contain client nonce");
+        }
+        
+        scramServerNonce = serverNonce;
+        int effectiveIterationCount = Math.max(iterationCount, 4096);  // Security: use at least 4096
+        
+        // Decode salt
+        byte[] salt = java.util.Base64.getDecoder().decode(base64Salt);
+        
+        // Calculate SaltedPassword using PBKDF2
+        scramSaltedPassword = pbkdf2(
+            getSaslPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            salt,
+            effectiveIterationCount,
+            digestLength,
+            hashAlgorithm
+        );
+        
+        // Calculate StoredKey = Hash(ClientKey)
+        byte[] clientKey = hmac(scramSaltedPassword, "Client Key".getBytes(java.nio.charset.StandardCharsets.UTF_8), hashAlgorithm);
+        scramStoredKey = digest(clientKey, hashAlgorithm);
+        
+        Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "SCRAM parameters parsed: iterations={0}, nonce={1}", 
+            new Object[]{iterationCount, serverNonce});
+    }
+
+    private String generateScramClientFinalMessage() throws java.security.NoSuchAlgorithmException, java.security.InvalidKeyException {
+        // ClientFinalMessage: ChannelBinding "," Nonce "," ProofData
+        String channelBinding = "c=" + java.util.Base64.getEncoder().encodeToString("n,,".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String nonce = "r=" + scramServerNonce;
+        
+        // AuthMessage = ClientFirstMessageBare "," ServerFirstMessage "," ClientFinalMessageWithoutProof
+        String clientFinalMessageWithoutProof = channelBinding + "," + nonce;
+        String authMessage = scramClientFirstMessageBare + "," + scramServerFirstMessage + "," + clientFinalMessageWithoutProof;
+        
+        // Calculate ClientSignature = HMAC(StoredKey, AuthMessage)
+        byte[] authMessageBytes = authMessage.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String hashAlgorithm = getSaslMechanism().contains("512") ? "SHA-512" : "SHA-256";
+        byte[] clientSignature = hmac(scramStoredKey, authMessageBytes, hashAlgorithm);
+        
+        // Calculate ClientProof = ClientKey XOR ClientSignature
+        // But we need ClientKey, so we recalculate it from password
+        byte[] clientKey = hmac(scramSaltedPassword, "Client Key".getBytes(java.nio.charset.StandardCharsets.UTF_8), hashAlgorithm);
+        byte[] clientProof = xor(clientKey, clientSignature);
+        
+        String proof = "p=" + java.util.Base64.getEncoder().encodeToString(clientProof);
+        
+        String clientFinalMessage = clientFinalMessageWithoutProof + "," + proof;
+        
+        String base64ClientFinalMessage = java.util.Base64.getEncoder().encodeToString(
+            clientFinalMessage.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        
+        Logger.getLogger(IrcParser.class.getName()).log(Level.FINE, "SCRAM ClientFinalMessage generated");
+        
+        return base64ClientFinalMessage;
+    }
+
+    // Cryptographic helper methods
+    private byte[] pbkdf2(byte[] password, byte[] salt, int iterations, int keyLength, String algorithm) throws java.security.NoSuchAlgorithmException, java.security.spec.InvalidKeySpecException {
+        javax.crypto.spec.PBEKeySpec spec = new javax.crypto.spec.PBEKeySpec(
+            new String(password, java.nio.charset.StandardCharsets.UTF_8).toCharArray(),
+            salt,
+            iterations,
+            keyLength * 8
+        );
+        javax.crypto.SecretKeyFactory factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmac" + algorithm.replace("-", ""));
+        return factory.generateSecret(spec).getEncoded();
+    }
+
+    private byte[] hmac(byte[] key, byte[] data, String algorithm) throws java.security.InvalidKeyException, java.security.NoSuchAlgorithmException {
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("Hmac" + algorithm.replace("-", ""));
+        mac.init(new javax.crypto.spec.SecretKeySpec(key, 0, key.length, mac.getAlgorithm()));
+        return mac.doFinal(data);
+    }
+
+    private byte[] digest(byte[] data, String algorithm) throws java.security.NoSuchAlgorithmException {
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance(algorithm);
+        return md.digest(data);
+    }
+
+    private byte[] xor(byte[] a, byte[] b) {
+        byte[] result = new byte[a.length];
+        for (int i = 0; i < a.length; i++) {
+            result[i] = (byte) (a[i] ^ b[i]);
+        }
+        return result;
+    }
+
+    private String percentEncode(String s) {
+        // RFC 5802 percent-encoding of username
+        return s.replace("=", "=3D").replace(",", "=2C");
     }
 
     private void sendSaslAuthenticateData(String base64Auth) {

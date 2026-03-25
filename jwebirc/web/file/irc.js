@@ -1125,6 +1125,9 @@ class IRCParser {
         const color = this.chatManager.getNickColor(nick);
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
+            // Ensure re-joins (e.g. /hop) can queue WHO/HISTORY/MODE again for this channel.
+            this.resetChannelCommandState(channel);
+
             if (this.chatManager.isPage(channel)) {
                 this.chatManager.delPage(channel);
             }
@@ -1169,6 +1172,7 @@ class IRCParser {
         const host = this.parseHost(prefix);
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
+            this.resetChannelCommandState(channel);
             this.chatManager.delPage(channel);
             // Remove channel from memory when leaving
             this.chatManager.removeFromChannelMemory(channel);
@@ -1740,6 +1744,24 @@ class IRCParser {
             this.modeQueue.push(channel);
             this.enqueueCommand("/mode " + channel);
         }
+    }
+
+    /**
+     * Reset dedupe state for channel-related queued commands so they can run again after rejoin.
+     */
+    resetChannelCommandState(channel) {
+        this.whoQueue = this.whoQueue.filter((entry) => entry !== channel);
+        this.historyQueue = this.historyQueue.filter((entry) => entry !== channel);
+        this.modeQueue = this.modeQueue.filter((entry) => entry !== channel);
+
+        const whoCommand = "/who " + channel;
+        const modeCommand = "/mode " + channel;
+        const historyCommand = this.historyCommand.replace(/%CHANNEL%/g, channel);
+        this.commandQueue = this.commandQueue.filter((queuedCommand) => {
+            return queuedCommand !== whoCommand
+                && queuedCommand !== modeCommand
+                && queuedCommand !== historyCommand;
+        });
     }
 
     /**

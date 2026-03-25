@@ -95,6 +95,7 @@ public class Webchat {
         String webircCgi;
         String hmac;
         String useSasl;
+        String saslMechanism;
         String saslUsername;
         String saslPassword;
         String nick;
@@ -120,6 +121,7 @@ public class Webchat {
         config.webircCgi = (String) getHttpSession().getAttribute("webchat_cgi");
         config.hmac = (String) getHttpSession().getAttribute("hmac_temporal");
         config.useSasl = (String) getHttpSession().getAttribute("use_sasl");
+        config.saslMechanism = (String) getHttpSession().getAttribute("sasl_mechanism");
         config.saslUsername = (String) getHttpSession().getAttribute("sasl_username");
         config.saslPassword = (String) getHttpSession().getAttribute("sasl_password");
         config.nick = (String) getHttpSession().getAttribute("param-nick");
@@ -187,6 +189,14 @@ public class Webchat {
                 getParser().setUseSasl(true);
                 getParser().setSaslUsername(effectiveSaslUsername != null ? effectiveSaslUsername : "");
                 getParser().setSaslPassword(config.saslPassword != null ? config.saslPassword : "");
+                
+                // Set SASL mechanism (default to PLAIN if not specified)
+                String mechanism = config.saslMechanism;
+                if (mechanism == null || mechanism.isBlank()) {
+                    mechanism = "PLAIN";
+                }
+                getParser().setSaslMechanism(mechanism);
+                Logger.getLogger(Webchat.class.getName()).log(Level.INFO, "SASL enabled with mechanism: {0}", mechanism);
             } else {
                 getParser().setUseSasl(false);
             }

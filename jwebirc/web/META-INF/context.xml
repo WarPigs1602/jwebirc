@@ -56,6 +56,8 @@
     
     <!-- SASL Authentication -->
     <Parameter name="jwebirc.saslEnabled" value="true" override="false"/>
+     <!-- SASL Mechanism: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512 -->
+     <Parameter name="jwebirc.saslMechanism" value="PLAIN" override="false"/>
     
     <!-- ============================================
          CAPTCHA CONFIGURATION

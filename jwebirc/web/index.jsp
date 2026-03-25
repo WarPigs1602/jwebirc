@@ -173,6 +173,12 @@
         var paramUseSasl = request.getParameter("useSasl");
         var paramSaslUsername = request.getParameter("saslUsername");
         var paramSaslPassword = request.getParameter("saslPassword");
+        String configuredSaslMechanism = saslMechanism != null ? saslMechanism.trim() : "PLAIN";
+        if (!"PLAIN".equalsIgnoreCase(configuredSaslMechanism)
+                && !"SCRAM-SHA-256".equalsIgnoreCase(configuredSaslMechanism)
+                && !"SCRAM-SHA-512".equalsIgnoreCase(configuredSaslMechanism)) {
+            configuredSaslMechanism = "PLAIN";
+        }
         
         if (paramUseSasl != null && paramUseSasl.equals("true")) {
             if (paramSaslUsername != null && !paramSaslUsername.isBlank()) {
@@ -185,11 +191,13 @@
             } else {
                 session.setAttribute("sasl_password", "");
             }
+            session.setAttribute("sasl_mechanism", configuredSaslMechanism);
             session.setAttribute("use_sasl", "true");
         } else {
             session.setAttribute("use_sasl", "false");
             session.setAttribute("sasl_username", "");
             session.setAttribute("sasl_password", "");
+            session.setAttribute("sasl_mechanism", configuredSaslMechanism);
         }
 %>
 <jsp:include page="header-webchat.jsp"/>
@@ -813,6 +821,7 @@
                             <i class="fas fa-lock"></i> <span data-i18n="login.sasl.password">Password</span>
                         </label>
                     </div>
+
                 </div>
             </div>
             <% } %>
