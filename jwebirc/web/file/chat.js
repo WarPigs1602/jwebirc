@@ -1754,6 +1754,8 @@ class ChatManager {
                     color: this.getNickColor(baseNick)
                 };
             });
+
+            this.updateNickColorElements(channel.elem);
         });
 
         if (window.user) {
@@ -1765,10 +1767,22 @@ class ChatManager {
         }
 
         // Update already-rendered message nick colors in chat log
-        const messageNicks = document.querySelectorAll('.message-nick[data-nick]');
-        messageNicks.forEach(span => {
-            const nick = span.getAttribute('data-nick') || span.textContent.trim();
-            span.style.color = this.getNickColor(nick);
+        this.updateNickColorElements(document);
+    }
+
+    updateNickColorElements(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') {
+            return;
+        }
+
+        const nickElements = root.querySelectorAll('.message-nick[data-nick], .nick-link[data-nick], .nick-entry[data-nick]');
+        nickElements.forEach(element => {
+            const nick = element.getAttribute('data-nick') || element.textContent.trim();
+            if (!nick) {
+                return;
+            }
+
+            element.style.color = this.getNickColor(nick);
         });
     }
     
@@ -2011,6 +2025,7 @@ class ChatManager {
     changeNick(oldnick, newnick) {
         if (oldnick.toLowerCase() === window.user.toLowerCase()) {
             window.user = newnick;
+            this.userColor = this.getNickColor(newnick);
         }
         
         for (const elem of this.channels) {
@@ -2021,7 +2036,8 @@ class ChatManager {
                 const parsed2 = status && status.length === 1 ? status + newnick : newnick;
                 
                 if (name.nick.toLowerCase() === parsed.toLowerCase()) {
-                    const { host, color, away, awayReason, account } = name;
+                    const { host, away, awayReason, account } = name;
+                    const color = this.getNickColor(newnick);
                     
                     if (this.isChannel(channel)) {
                         const i = elem.nicks.findIndex(data => data.nick === parsed);
@@ -2480,6 +2496,12 @@ class ChatManager {
         }
     }
     
+    stripSystemMessageMarker(text) {
+        return (text || '')
+            .replace(/^(\[[0-9]{2}:[0-9]{2}:[0-9]{2}\])\s*<span style=(['"])\s*color\s*:\s*[^'"]*\2>\s*==\s*<\/span>\s*/i, '$1 ')
+            .replace(/^<span style=(['"])\s*color\s*:\s*[^'"]*\1>\s*==\s*<\/span>\s*/i, '');
+    }
+
     parsePages(text, pg) {
         for (const elem of this.channels) {
             if (elem.page.toLowerCase() === pg.toLowerCase()) {
@@ -2490,6 +2512,7 @@ class ChatManager {
                 // Parse control codes first, then convert URLs to links
                 let parsed = this.parseControl(text);
                 parsed = this.parseUrls(parsed, false, pg);
+                parsed = this.stripSystemMessageMarker(parsed);
                 
                 // Filter empty output (only control codes, no visible text)
                 if (!this.hasVisibleText(parsed)) {
@@ -2554,6 +2577,7 @@ class ChatManager {
             // Parse control codes first, then convert URLs to links
             let parsed = this.parseControl(text);
             parsed = this.parseUrls(parsed, false, elem.page);
+            parsed = this.stripSystemMessageMarker(parsed);
             
             if (shouldLineHighlight) {
                 parsed = `<span class="irc-highlight-line">${parsed}</span>`;

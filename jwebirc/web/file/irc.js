@@ -95,12 +95,19 @@ class IRCParser {
                 const label = `${labelValue.label}:`;
                 const labelSpan = `<span class="whois-label" style="display: inline-block; min-width: ${this.whoisLabelWidth}ch; font-weight: 600;">${label}</span>`;
                 const valueSpan = `<span class="whois-value" style="white-space: pre-wrap;">${labelValue.value}</span>`;
-                return `${ts}<span style="color: #ff0000">==</span> <span class="whois-line" style="font-family: monospace;">&nbsp;${labelSpan} ${valueSpan}</span>`;
+                return `${ts}<span class="whois-line" style="font-family: monospace;">&nbsp;${labelSpan} ${valueSpan}</span>`;
             }
 
             const span = this.normalizeWhoisText(translated);
-            return `${ts}<span style="color: #ff0000">==</span> <span class="whois-line" style="font-family: monospace; white-space: pre;">&nbsp;${span}</span>`;
+            return `${ts}<span class="whois-line" style="font-family: monospace; white-space: pre;">&nbsp;${span}</span>`;
         };
+    }
+
+    stripSystemMessageMarker(text) {
+        return (text || '')
+            .replace(/^(\[[0-9]{2}:[0-9]{2}:[0-9]{2}\])\s*<span style=(['"])\s*color\s*:\s*[^'"]*\2>\s*==\s*<\/span>\s*/i, '$1 ')
+            .replace(/^<span style=(['"])\s*color\s*:\s*[^'"]*\1>\s*==\s*<\/span>\s*/i, '')
+            .replace(/^\s+/, '');
     }
     
     /**
@@ -166,7 +173,7 @@ class IRCParser {
             }
         }
         
-        const output = this.getNumerics(text.toString());
+        const output = this.stripSystemMessageMarker(this.getNumerics(text.toString()));
         if (!output) return;
 
         // Use server-provided timestamp if available and server-time is enabled
@@ -237,7 +244,7 @@ class IRCParser {
             
             if (this.isHostnameLookupMessage(parsed.trim())) {
                 const msg = this.formatHostnameMessage(parsed.trim());
-                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + msg + "\n");
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " " + msg + "\n");
                 return null;
             }
             return " <span style=\"color: #ff0000\">==</span> " + parsed.trim();
@@ -1061,8 +1068,10 @@ class IRCParser {
     handleQuit(ircMsg) {
         const { prefix, params } = ircMsg;
         const nick = this.parseNick(prefix);
-        const reason = params[0] || '';
-        this.chatManager.quit(nick, reason.trim());
+        const rawReason = params[0] || '';
+        const reason = rawReason.trim();
+        const normalizedReason = /^(?:error:\s*)?(?:null|undefined)$/i.test(reason) ? '' : reason;
+        this.chatManager.quit(nick, normalizedReason);
     }
     
     handleNick(ircMsg) {
@@ -1081,10 +1090,10 @@ class IRCParser {
         
         if (window.user.toLowerCase() === invitedNick.toLowerCase()) {
             const inviteMsg = this.i18nSpan('chat.invite.received', '{nick} has invited you to {channel}', { nick, channel });
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style=\"color: #ff0000\">==</span> ${inviteMsg}\n`);
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
         } else {
             const inviteMsg = this.i18nSpan('chat.invite.sent', 'You have invited {nick} to {channel}', { nick: invitedNick, channel });
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` <span style=\"color: #ff0000\">==</span> ${inviteMsg}\n`);
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
         }
     }
     
@@ -1279,7 +1288,7 @@ class IRCParser {
             for (const channelName of channelsWithNick) {
                 const nickColor = this.chatManager.getColor(channelName, nick);
                 const hostChange = this.i18nSpan('chat.hostChange', 'has changed host to {mask}', { mask: newUser + '@' + newHost });
-                const msg = ` <span style=\"color: #ff0000\">==</span> <span style=\"color: ${nickColor};\">${nick}</span> ${hostChange}`;
+                const msg = `<span style=\"color: ${nickColor};\">${nick}</span> ${hostChange}`;
                 this.chatManager.parsePages(`${stamp} ${msg}\n`, channelName);
             }
         }
@@ -1563,7 +1572,7 @@ class IRCParser {
     }
     
     formatError(message) {
-        return `<span style="color: #ff0000"> <span style="color: #ff0000">==</span> Error: ${message.trim()}</span>`;
+        return `<span style="color: #ff0000">Error: ${message.trim()}</span>`;
     }
     
     formatWhoisUser(ircMsg) {
