@@ -24,7 +24,7 @@ See a live example at https://chat.midiandmore.net/?channels=dev.
 ```bash
 cd jwebirc
 mvn -f web/WEB-INF/pom.xml clean package
-# deploy web/WEB-INF/target/jwebirc.war to your Jakarta EE server
+# deploy target/jwebirc.war to your Jakarta EE server
 ```
 
 Then open: `http://localhost:8080/jwebirc/`
@@ -105,7 +105,7 @@ Important notes:
 - The project is currently configured with `jakarta.ee.version=11.0.0`, which matches Java 21.
 - For runtime, use a Jakarta EE 11 (Web Profile) compatible server.
 - The Maven build uses the shared Java sources from `jwebirc/src/java` and the web root from `jwebirc/web`, even though the POM itself lives in `jwebirc/web/WEB-INF`.
-- The generated Maven artifact is written to `jwebirc/web/WEB-INF/target/jwebirc.war` and includes JSPs, static files, compiled classes, and resolved runtime libraries.
+- The generated Maven artifact is written to `jwebirc/target/jwebirc.war` and includes JSPs, static files, compiled classes, and resolved runtime libraries.
 - If you need to deploy specifically to Jakarta EE 10, change `jakarta.ee.version` (and, if needed, server/IDE configuration) consistently to 10.x and re-test.
 
 ## Installation
@@ -220,7 +220,7 @@ cd jwebirc
 mvn -f web/WEB-INF/pom.xml clean package
 ```
 
-This reads dependencies from `web/WEB-INF/pom.xml`, compiles sources from `src/java`, packages the web root from `web/`, and builds `web/WEB-INF/target/jwebirc.war`.
+This reads dependencies from `web/WEB-INF/pom.xml`, compiles sources from `src/java`, packages the web root from `web/`, and builds `target/jwebirc.war`.
 
 **B) Ant / NetBeans build:**
 
@@ -242,7 +242,7 @@ ant dist
 
 The WAR file will be generated in `dist/`.
 
-The Ant and Maven build paths are aligned and produce equivalent deployable WAR contents: the same JSPs, static assets, compiled classes, and runtime libraries. The main difference is the output path (`dist/jwebirc.war` for Ant, `web/WEB-INF/target/jwebirc.war` for Maven).
+The Ant and Maven build paths are aligned and produce equivalent deployable WAR contents: the same JSPs, static assets, compiled classes, and runtime libraries. The main difference is the output path (`dist/jwebirc.war` for Ant, `target/jwebirc.war` for Maven).
 
 For Ant, `jakarta.websocket-api` and the Jakarta EE server API remain compile-time dependencies from the local IDE/server setup and are not packaged into the WAR.
 
@@ -250,7 +250,7 @@ For Ant, `jakarta.websocket-api` and the Jakarta EE server API remain compile-ti
 
 Deploy the generated WAR file to your Jakarta EE application server:
 
-For the Maven build, deploy `jwebirc/web/WEB-INF/target/jwebirc.war`.
+For the Maven build, deploy `jwebirc/target/jwebirc.war`.
 For the Ant build, deploy `jwebirc/dist/jwebirc.war`.
 
 - **GlassFish/Payara**: Copy to `domains/domain1/autodeploy/`

@@ -61,6 +61,7 @@
     </dependencies>
     
     <build>
+        <directory>${project.basedir}/../../target</directory>
         <finalName>jwebirc</finalName>
         <sourceDirectory>${project.basedir}/../../src/java</sourceDirectory>
         <plugins>

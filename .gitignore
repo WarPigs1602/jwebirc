@@ -1,2 +1,4 @@
 /jwebirc/dist/
 /jwebirc/build/
+/jwebirc/target/
+/.vscode/
