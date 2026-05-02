@@ -712,7 +712,7 @@ class ChatManager {
         
         this.addPage('Status', 'status', true);
         this.parsePage(this.getTimestamp() + " jwebirc 2.0\n");
-        this.parsePage(this.getTimestamp() + " &copy; 2024-2025 by Andreas Pschorn\n");
+        this.parsePage(this.getTimestamp() + " &copy; 2024-2026 by Andreas Pschorn\n");
         this.parsePage(this.getTimestamp() + " <a href=\"https://github.com/WarPigs1602/jwebirc\" target=\"_blank\">https://github.com/WarPigs1602/jwebirc</a>\n");
         const mitLicense = this.buildI18nSpan('chat.license', 'Licensed under the MIT License');
         this.parsePage(this.getTimestamp() + " " + mitLicense + "\n");

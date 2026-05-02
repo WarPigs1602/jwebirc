@@ -489,7 +489,7 @@
             <div style="background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 6px; border-left: 3px solid var(--primary-color); margin-bottom: 1rem;">
                 <p style="margin-bottom: 0.75rem;"><strong style="color: var(--primary-color);">MIT License</strong></p>
                 <p class="text-muted" style="margin-bottom: 0.75rem; font-size: 0.95em;">
-                    Copyright © 2024-2025 Andreas Pschorn
+                    Copyright © 2024-2026 Andreas Pschorn
                 </p>
                 <p class="text-muted" style="font-size: 0.9em; line-height: 1.6;">
                     Permission is hereby granted, free of charge, to any person obtaining a copy
