@@ -24,6 +24,7 @@
     String webchatUser = param(ctx, "jwebirc.webchatUser", "jwebirc");
     String webchatPassword = param(ctx, "jwebirc.webchatPassword", "password");
     String webchatRealname = param(ctx, "jwebirc.webchatRealname", "https://irc.midiandmore.net/");
+    String webchatNickLength = param(ctx, "jwebirc.webchatNickLength", "15");
     String webchatName = param(ctx, "jwebirc.webchatName", "jWebIRC");
     String webchatTitle = param(ctx, "jwebirc.webchatTitle", "jWebIRC - IRC Web Client");
     String ircNetworkName = param(ctx, "jwebirc.ircNetworkName", "jWebIRC");

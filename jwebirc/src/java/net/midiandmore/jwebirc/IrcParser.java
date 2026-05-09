@@ -108,6 +108,14 @@ public class IrcParser {
         this.ip = ip;
     }
 
+    public int getServerNickLength() {
+        return serverNickLength;
+    }
+
+    public void setServerNickLength(int serverNickLength) {
+        this.serverNickLength = Math.max(1, serverNickLength);
+    }
+
     /**
      * @return the realname
      */
@@ -338,6 +346,7 @@ public class IrcParser {
     private boolean capEnded = false;
     private boolean loginComplete = false;
     private String pendingNick;
+    private int serverNickLength = 15;
     private final java.util.Set<String> requestedCaps = new java.util.HashSet<>();
     private final java.util.List<String> capLsParts = new java.util.ArrayList<>();
     private static final java.util.Set<String> PREFERRED_CAPABILITIES = java.util.Set.of(
@@ -648,12 +657,16 @@ public class IrcParser {
         IrcMessage msg = parseString(lineForParsing);
         String command = msg.command;
         
-        // Handle 433 (Nickname already in use) - auto-retry with alternative
-        if ("433".equals(command)) {
-            handleNicknameInUse(msg);
+        // Handle nickname rejection numerics with an automatic fallback nick.
+        if (isNicknameRetryNumeric(command)) {
+            handleNicknameRetry(msg);
             // Forward to client for display
             sendText(originalLine + "\n", session, "chat", "");
             return;
+        }
+
+        if ("005".equals(command)) {
+            updateServerNickLength(msg);
         }
         
         // Handle CAP responses - format: server CAP * LS/ACK ...
@@ -940,50 +953,94 @@ public class IrcParser {
         endCapNegotiation(logMessage);
     }
     
-    private void handleNicknameInUse(IrcMessage msg) {
-        // Format: :server 433 * nickname :Nickname is already in use
-        // msg.prefix contains: "server 433 * nickname"
-        // Extract the nickname from the prefix (last token before the trailing message)
-        String[] parts = msg.prefix.split("\\s+");
-        String attemptedNick = parts.length > 2 ? parts[2] : pendingNick;
+    private boolean isNicknameRetryNumeric(String command) {
+        return "432".equals(command) || "433".equals(command) || "437".equals(command);
+    }
+
+    private void handleNicknameRetry(IrcMessage msg) {
+        String attemptedNick = extractAttemptedNick(msg);
         
         if (attemptedNick == null || attemptedNick.isEmpty()) {
-            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING, "433 received but no nickname to retry");
+            Logger.getLogger(IrcParser.class.getName()).log(Level.WARNING,
+                    "{0} received but no nickname to retry", msg.command);
             return;
         }
         
-        // Generate alternative nickname
-        String newNick = attemptedNick;
-        if (newNick.endsWith("_")) {
-            // If already has underscore, try adding a number
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("^(.+?)_*(\\d*)$");
-            java.util.regex.Matcher matcher = pattern.matcher(newNick);
-            if (matcher.matches()) {
-                String base = matcher.group(1);
-                String numStr = matcher.group(2);
-                int num = numStr.isEmpty() ? 1 : Integer.parseInt(numStr) + 1;
-                newNick = base + "_" + num;
-            }
-        } else {
-            // Add underscore
-            newNick = attemptedNick + "_";
-        }
-        
-        // Ensure nick doesn't exceed 15 characters
-        if (newNick.length() > 15) {
-            newNick = newNick.substring(0, 15);
-        }
+        String newNick = buildAlternativeNickname(attemptedNick);
         
         // Update pending nick and retry
         pendingNick = newNick;
         Logger.getLogger(IrcParser.class.getName()).log(Level.INFO, 
-            "Nickname {0} already in use, retrying with {1}", new Object[]{attemptedNick, newNick});
+            "Nickname rejected via {0}; retrying {1} with {2}",
+            new Object[]{msg.command, attemptedNick, newNick});
         
         try {
             submitMessage("NICK %s", newNick);
             doSleep();
         } catch (Exception e) {
             Logger.getLogger(IrcParser.class.getName()).log(Level.SEVERE, "Error sending alternative NICK", e);
+        }
+    }
+
+    private String extractAttemptedNick(IrcMessage msg) {
+        if (pendingNick != null && !pendingNick.isBlank()) {
+            return pendingNick;
+        }
+
+        if (msg.prefix == null || msg.prefix.isBlank()) {
+            return pendingNick;
+        }
+
+        String[] parts = msg.prefix.split("\\s+");
+        if (parts.length == 0) {
+            return pendingNick;
+        }
+
+        String lastToken = parts[parts.length - 1];
+        if (lastToken == null || lastToken.isBlank() || "*".equals(lastToken)) {
+            return pendingNick;
+        }
+        return lastToken;
+    }
+
+    private String buildAlternativeNickname(String attemptedNick) {
+        final int maxNickLength = Math.max(1, serverNickLength);
+        String base = attemptedNick;
+        String suffix = "_" + java.util.concurrent.ThreadLocalRandom.current().nextInt(100, 1000);
+
+        java.util.regex.Matcher numberedNickMatcher = java.util.regex.Pattern
+                .compile("^(.*?)(?:_(\\d+)|(_))$")
+                .matcher(attemptedNick);
+
+        if (numberedNickMatcher.matches()) {
+            base = numberedNickMatcher.group(1);
+        }
+
+        int maxBaseLength = Math.max(1, maxNickLength - suffix.length());
+        if (base.length() > maxBaseLength) {
+            base = base.substring(0, maxBaseLength);
+        }
+
+        return base + suffix;
+    }
+
+    private void updateServerNickLength(IrcMessage msg) {
+        String featureLine = msg.prefix;
+        if (msg.trailing != null && !msg.trailing.isBlank()) {
+            featureLine += " " + msg.trailing;
+        }
+
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:^|\\s)NICKLEN=(\\d+)(?:\\s|$)")
+                .matcher(featureLine);
+
+        if (matcher.find()) {
+            try {
+                serverNickLength = Math.max(1, Integer.parseInt(matcher.group(1)));
+            } catch (NumberFormatException ex) {
+                Logger.getLogger(IrcParser.class.getName()).log(Level.FINE,
+                        "Ignoring invalid NICKLEN value: {0}", matcher.group(1));
+            }
         }
     }
     

@@ -29,6 +29,7 @@
     <Parameter name="jwebirc.webchatUser" value="jwebirc" override="false"/>
     <Parameter name="jwebirc.webchatPassword" value="password" override="false"/>
     <Parameter name="jwebirc.webchatRealname" value="https://irc.midiandmore.net/" override="false"/>
+     <Parameter name="jwebirc.webchatNickLength" value="12" override="false"/>
     
     <!-- Branding -->
     <Parameter name="jwebirc.webchatName" value="jWebIRC" override="false"/>

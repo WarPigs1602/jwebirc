@@ -9,6 +9,13 @@
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@include file="init.jsp"%>
 <%
+    int nickMaxLength = 15;
+    try {
+        nickMaxLength = Math.max(1, Integer.parseInt(webchatNickLength));
+    } catch (NumberFormatException ex) {
+        nickMaxLength = 15;
+    }
+
     // Persist UI language in session (supports en/de)
     String uiLang = (String) session.getAttribute("ui_lang");
     String langParam = request.getParameter("lang");
@@ -33,6 +40,7 @@
     session.setAttribute("webchat_user", webchatUser);
     session.setAttribute("webchat_password", webchatPassword);
     session.setAttribute("webchat_realname", webchatRealname);
+    session.setAttribute("webchat_nick_length", String.valueOf(nickMaxLength));
     session.setAttribute("webchat_name", webchatName);
     session.setAttribute("webchat_title", webchatTitle);
     session.setAttribute("irc_network_name", ircNetworkName);
@@ -154,8 +162,8 @@
         if (paramNick == null) {
             paramNick = "";
         }
-        if (paramNick.length() > 15) {
-            paramNick = paramNick.substring(0, 14);
+        if (paramNick.length() > nickMaxLength) {
+            paramNick = paramNick.substring(0, nickMaxLength);
         }
         session.setAttribute("param-nick", paramNick);
         var paramChannel = request.getParameter("channel");
@@ -501,6 +509,7 @@
     window.jwebircLang = "<%= uiLang %>";
     window.user = "<% out.print(paramNick); %>";
     window.chan = "<% out.print(paramChannel); %>";
+    window.nickMaxLength = parseInt("<%= nickMaxLength %>", 10) || 15;
     // Robust parsing to avoid JS errors if values are not literal booleans/numbers
     window.historyCommandEnabled = "<%= historyCommandEnabled %>" === "true";
     window.historyCommand = "<%= historyCommand %>";
@@ -745,7 +754,7 @@
                 <div class="form-floating mb-3">
                     <input class="form-control" 
                            id="nickInput"
-                           maxlength="15" 
+                           maxlength="<%= nickMaxLength %>" 
                            name="nick" 
                            value="<% out.print(paramN); %>" 
                            required

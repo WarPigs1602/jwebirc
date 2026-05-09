@@ -1643,7 +1643,8 @@ class ChatManager {
                     status = status[0];
                 }
                 
-                if (nick.length > 15) nick = nick.substring(0, 14);
+                const maxNickLength = Math.max(1, parseInt(window.nickMaxLength, 10) || 15);
+                if (nick.length > maxNickLength) nick = nick.substring(0, maxNickLength);
                 
                 const fullNick = status + nick;
                 if (!elem.nicks.some(e => e.nick === fullNick)) {

@@ -11,6 +11,7 @@ class IRCParser {
         this.login = true;
         this.channel = window.chan || '';
         this.user = window.user || '';
+        this.serverNickLength = Math.max(1, parseInt(window.nickMaxLength, 10) || 15);
         
         // Shared delay (ms) for WHO and history commands to avoid flooding
         this.commandDelay = parseInt(window.commandDelayOnJoin) || 300;
@@ -407,6 +408,12 @@ class IRCParser {
                     if (param.startsWith('PREFIX=')) {
                         this.chatManager.parseServerPrefix(param);
                     }
+                    if (param.startsWith('NICKLEN=')) {
+                        const nickLength = parseInt(param.substring(8), 10);
+                        if (!Number.isNaN(nickLength) && nickLength > 0) {
+                            this.serverNickLength = nickLength;
+                        }
+                    }
                 }
                 return this.handleGenericNumeric(ircMsg, code, text);
                 
@@ -702,6 +709,10 @@ class IRCParser {
             }
                 
             case "001": // Welcome
+                if (params[0]) {
+                    window.user = params[0];
+                    this.chatManager.userColor = this.chatManager.getNickColor(window.user);
+                }
                 this.output = "Status";
                 return " <span style=\"color: #ff0000\">==</span> " + this.i18nSpan('chat.signedOn', 'Signed on!');
                 
@@ -731,40 +742,10 @@ class IRCParser {
                 this.hideLoadingScreen();
                 return " <span style=\"color: #00aaff\">==</span> " + parsed.trim();
                 
-            case "433": // Nickname already in use
-                {
-                    this.output = "Status";
-                    const currentNick = params[1] || window.user;
-                    const message = params[2] || 'Nickname is already in use';
-                    
-                    // Generate alternative nickname by appending underscore or number
-                    let newNick = currentNick;
-                    if (newNick.endsWith('_')) {
-                        // If already has underscore, try adding a number
-                        const match = newNick.match(/^(.+?)_*(\d*)$/);
-                        if (match) {
-                            const base = match[1];
-                            const num = match[2] ? parseInt(match[2]) + 1 : 1;
-                            newNick = base + '_' + num;
-                        }
-                    } else {
-                        // Add underscore
-                        newNick = currentNick + '_';
-                    }
-                    
-                    // Ensure nick doesn't exceed 15 characters
-                    if (newNick.length > 15) {
-                        newNick = newNick.substring(0, 15);
-                    }
-                    
-                    // Update user and send new NICK command
-                    window.user = newNick;
-                    if (window.postManager) {
-                        window.postManager.submitTextMessage('/nick ' + newNick);
-                    }
-                    
-                    return ` <span style=\"color: #ff0000\">==</span> ${message} - Trying: ${newNick}`;
-                }
+            case "432":
+            case "433":
+            case "437":
+                return this.handleRejectedNickname(code, params);
                 
             default:
                 return this.handleGenericNumeric(ircMsg, code, text);
@@ -862,6 +843,42 @@ class IRCParser {
         }
 
         return null;
+    }
+
+    handleRejectedNickname(code, params) {
+        this.output = "Status";
+
+        const attemptedNick = window.user || params[1];
+        const fallbackMessages = {
+            '432': 'Nickname is invalid',
+            '433': 'Nickname is already in use',
+            '437': 'Nickname is temporarily unavailable'
+        };
+        const message = params[2] || fallbackMessages[code] || 'Nickname rejected';
+        const newNick = this.buildAlternativeNickname(attemptedNick);
+
+        window.user = newNick;
+
+        return ` <span style=\"color: #ff0000\">==</span> ${message} - Trying: ${newNick}`;
+    }
+
+    buildAlternativeNickname(currentNick) {
+        const maxNickLength = Math.max(1, this.serverNickLength || 15);
+        const attemptedNick = currentNick || window.user || '';
+        let base = attemptedNick;
+        let suffix = `_${Math.floor(Math.random() * 900) + 100}`;
+
+        const match = attemptedNick.match(/^(.*?)(?:_(\d+)|(_))$/);
+        if (match) {
+            base = match[1];
+        }
+
+        const maxBaseLength = Math.max(1, maxNickLength - suffix.length);
+        if (base.length > maxBaseLength) {
+            base = base.substring(0, maxBaseLength);
+        }
+
+        return `${base}${suffix}`;
     }
     
     handleCommand(ircMsg, text) {

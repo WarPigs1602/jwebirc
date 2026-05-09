@@ -79,6 +79,7 @@ public class Webchat {
     
     private static class WebchatConfig {
         int sessionTimeout;
+        int nickLength;
         String host;
         int port;
         boolean ssl;
@@ -105,6 +106,16 @@ public class Webchat {
     private WebchatConfig loadWebchatConfig() {
         WebchatConfig config = new WebchatConfig();
         config.sessionTimeout = Integer.parseInt((String) getHttpSession().getAttribute("webchat_session_timout"));
+        Object nickLengthAttr = getHttpSession().getAttribute("webchat_nick_length");
+        config.nickLength = 15;
+        if (nickLengthAttr instanceof String nickLengthValue) {
+            try {
+                config.nickLength = Math.max(1, Integer.parseInt(nickLengthValue));
+            } catch (NumberFormatException ex) {
+                Logger.getLogger(Webchat.class.getName()).log(Level.FINE,
+                        "Ignoring invalid configured nick length: {0}", nickLengthValue);
+            }
+        }
         config.host = (String) getHttpSession().getAttribute("webchat_host");
         config.port = Integer.parseInt((String) getHttpSession().getAttribute("webchat_port"));
         config.ssl = getHttpSession().getAttribute("webchat_ssl").equals("true");
@@ -201,6 +212,7 @@ public class Webchat {
                 getParser().setUseSasl(false);
             }
             
+            getParser().setServerNickLength(config.nickLength);
             getParser().setHostname(config.hostname);
             getParser().setIp(config.ip);
             getParser().setRealname(config.realname);

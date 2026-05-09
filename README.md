@@ -170,6 +170,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
     <Parameter name="jwebirc.webchatUser" value="jwebirc" override="false" />
     <Parameter name="jwebirc.webchatPassword" value="password" override="false" />
     <Parameter name="jwebirc.webchatRealname" value="https://irc.example.com/" override="false" />
+    <Parameter name="jwebirc.webchatNickLength" value="12" override="false" />
     
     <!-- WEBIRC/CGIIRC Configuration -->
     <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false" />
@@ -380,6 +381,9 @@ When running behind a reverse proxy or load balancer:
 ### Application Display Configuration
 
 ```xml
+<!-- Maximum nickname length used by login validation and fallback nick generation -->
+<Parameter name="jwebirc.webchatNickLength" value="12" override="false" />
+
 <!-- Application Name -->
 <Parameter name="jwebirc.webchatName" value="jWebIRC" override="false" />
 
@@ -395,6 +399,8 @@ When running behind a reverse proxy or load balancer:
 <!-- SEO Keywords -->
 <Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat" override="false" />
 ```
+
+`jwebirc.webchatNickLength` defines the maximum nickname length accepted in the login form, applied by the backend before connect, and used as the fallback limit for automatic alternative nicknames when the IRC server rejects the requested nick before advertising its own `NICKLEN` value.
 
 ### Error Page Configuration
 
@@ -551,6 +557,7 @@ Access customization options via the **⚙️ Settings** button:
 
 ### Chat Features
 1. **Connect**: Enter your nickname and optional SASL credentials
+  The nickname field is limited by the server-side `jwebirc.webchatNickLength` setting.
 2. **SASL Mechanism**: Uses the server-side configured value (`jwebirc.saslMechanism`)
 3. **Join Channels**: Use `/join #channelname`
 4. **Send Messages**: Type message and press Enter
