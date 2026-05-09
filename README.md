@@ -114,7 +114,7 @@ Important notes:
 
 Download the precompiled package:
 
-- https://github.com/WarPigs1602/jwebirc/releases/download/260502/jwebirc.war
+- https://github.com/WarPigs1602/jwebirc/releases/download/260509/jwebirc.war
 
 Deploy `jwebirc.war` to your Jakarta EE application server:
 
