@@ -378,6 +378,60 @@ When running behind a reverse proxy or load balancer:
 <Parameter name="jwebirc.forwardedForIps" value="127.0.0.1,10.0.0.0/8" override="false" />
 ```
 
+### Optimized Nginx Reverse Proxy Example
+
+For production deployments, use an upstream block plus explicit WebSocket handling. This keeps the configuration stable for both normal HTTP requests and the `/jwebirc/Webchat` endpoint:
+
+```nginx
+upstream jwebirc_backend {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 80;
+    server_name chat.example.com;
+
+    location /jwebirc/ {
+        proxy_pass http://jwebirc_backend/jwebirc/;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+```
+
+Recommended matching application settings:
+
+```xml
+<Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
+<Parameter name="jwebirc.forwardedForIps" value="127.0.0.1" override="false" />
+```
+
+Notes:
+
+- The WebSocket endpoint is exposed below the application path as `/jwebirc/Webchat`, so WebSocket upgrade headers must be passed through by Nginx.
+- `map $http_upgrade $connection_upgrade` avoids forcing `Connection: upgrade` on normal HTTP requests.
+- `proxy_buffering off` and longer read/send timeouts help prevent idle WebSocket sessions from being interrupted too aggressively.
+- Set `jwebirc.forwardedForIps` to the IP address or CIDR range of your trusted proxy, not to arbitrary client networks.
+- If Nginx runs on another host, replace `127.0.0.1:8080` and `127.0.0.1` with the actual application server address and the trusted proxy address or subnet.
+- For HTTPS deployments, keep the same proxy headers and switch the listener to `443 ssl` or `443 ssl http2` with your TLS certificate configuration.
+
 ### Application Display Configuration
 
 ```xml
