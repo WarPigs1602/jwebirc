@@ -758,12 +758,21 @@ class ChatManager {
     loadUiPreferences() {
         try {
             const saved = localStorage.getItem('jwebirc_ui');
+            const hasSavedPreferences = !!saved;
             if (saved) {
                 const parsed = JSON.parse(saved);
                 this.uiPrefs = {
                     ...this.uiPrefs,
                     ...parsed
                 };
+            }
+
+            if (!hasSavedPreferences) {
+                const params = new URLSearchParams(window.location.search);
+                const hasNicklistOverride = params.has('hidenicklist');
+                if (!hasNicklistOverride && window.matchMedia('(max-width: 1024px)').matches) {
+                    this.uiPrefs.hideNicklist = true;
+                }
             }
         } catch (e) {
             console.warn('Could not load UI preferences:', e);
@@ -821,6 +830,7 @@ class ChatManager {
         const fontSizeValue = document.getElementById('fontSizeValue');
         const menu = this.optionsMenu;
         const toggle = this.optionsToggle;
+        const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
 
         if (hideTopicToggle) {
             hideTopicToggle.checked = this.uiPrefs.hideTopic;
@@ -839,9 +849,10 @@ class ChatManager {
         }
 
         if (navLeftToggle) {
-            navLeftToggle.checked = this.uiPrefs.navLeft;
+            navLeftToggle.checked = !isMobileViewport && this.uiPrefs.navLeft;
+            navLeftToggle.disabled = isMobileViewport;
             navLeftToggle.addEventListener('change', () => {
-                this.uiPrefs.navLeft = navLeftToggle.checked;
+                this.uiPrefs.navLeft = !window.matchMedia('(max-width: 768px)').matches && navLeftToggle.checked;
                 this.applyLayoutPreferences();
             });
         }
@@ -967,8 +978,17 @@ class ChatManager {
         const container = this.chatContainer;
         const showTopic = !this.uiPrefs.hideTopic;
         const showNicklist = !this.uiPrefs.hideNicklist;
-        const navLeft = this.uiPrefs.navLeft;
+        const isPhoneViewport = window.matchMedia('(max-width: 480px)').matches;
+        const isCompactViewport = window.matchMedia('(max-width: 600px)').matches;
+        const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
+        const navLeft = !isMobileViewport && this.uiPrefs.navLeft;
         const fontSize = Math.min(Math.max(this.uiPrefs.fontSize, 12), 18);
+        const navLeftToggle = document.getElementById('optNavLeft');
+
+        if (navLeftToggle) {
+            navLeftToggle.checked = navLeft;
+            navLeftToggle.disabled = isMobileViewport;
+        }
 
         if (container) {
             // Toggle helper classes
@@ -996,21 +1016,27 @@ class ChatManager {
                     container.style.gridTemplateAreas = '"nav chat" "nav input"';
                 }
             } else {
+                const mobileNicklistWidth = isCompactViewport
+                    ? 'clamp(92px, 28vw, 132px)'
+                    : 'clamp(108px, 30vw, 180px)';
+                const mobileRowsWithTopic = isPhoneViewport ? '26px 22px 1fr 50px' : '32px 28px 1fr 56px';
+                const mobileRowsWithoutTopic = isPhoneViewport ? '26px 1fr 50px' : '32px 1fr 56px';
+
                 if (showTopic && showNicklist) {
-                    container.style.gridTemplateColumns = '1fr 220px';
-                    container.style.gridTemplateRows = '36px auto 1fr 60px';
+                    container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
                     container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
                 } else if (!showTopic && showNicklist) {
-                    container.style.gridTemplateColumns = '1fr 220px';
-                    container.style.gridTemplateRows = '36px 1fr 60px';
+                    container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
                     container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
                 } else if (showTopic && !showNicklist) {
                     container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = '36px auto 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
                     container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
                 } else {
                     container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = '36px 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
                     container.style.gridTemplateAreas = '"nav" "chat" "input"';
                 }
             }
@@ -2182,19 +2208,36 @@ class ChatManager {
         const cf = document.querySelectorAll(".chat_frame");
         const tf = document.querySelectorAll(".topic_frame");
         const container = document.querySelector(".chat-container");
+        const isChannelView = type === "channel";
+        const shouldShowNicklist = isChannelView && !this.uiPrefs.hideNicklist;
         
-        if (type !== "channel" || !window.matchMedia("(min-width: 600px)").matches) {
-            // Status window or non-channel: use full width
+        if (!isChannelView) {
+            // Status and query windows use the simplified full-width layout.
             if (container) container.classList.add('status-view');
-            right.forEach(frame => frame.style.cssText = 'display: none;');
-            cf.forEach(frame => frame.style.cssText = "right: 3px; top: 25px;");
-            tf.forEach(frame => frame.style.cssText = 'display: none;');
+            right.forEach(frame => {
+                frame.style.display = 'none';
+            });
+            cf.forEach(frame => {
+                frame.style.right = '3px';
+                frame.style.top = '25px';
+            });
+            tf.forEach(frame => {
+                frame.style.display = 'none';
+            });
         } else {
-            // Channel window: show nicklist
+            // Channel windows keep the topic visible and only show the nicklist
+            // when the user has explicitly enabled it.
             if (container) container.classList.remove('status-view');
-            right.forEach(frame => frame.style.cssText = "display: initial;");
-            cf.forEach(frame => frame.style.cssText = "right: 200px; top: 47px;");
-            tf.forEach(frame => frame.style.cssText = 'display: initial;');
+            right.forEach(frame => {
+                frame.style.display = shouldShowNicklist ? '' : 'none';
+            });
+            cf.forEach(frame => {
+                frame.style.right = '';
+                frame.style.top = '';
+            });
+            tf.forEach(frame => {
+                frame.style.display = '';
+            });
         }
     }
     

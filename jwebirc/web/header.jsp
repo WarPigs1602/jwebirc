@@ -80,7 +80,7 @@
     </head>
     <body>
         <!-- Language + Login Options -->
-        <div style="position: fixed; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 8px; align-items: flex-start; flex-direction: row-reverse;">
+        <div id="loginTopControls">
             <div id="loginOptionsContainer">
                 <button class="nav-action-btn" id="loginOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Display Options" data-i18n-title="options.display">
                     <i class="fas fa-cog"></i>
@@ -120,7 +120,7 @@
                             <input type="checkbox" id="loginOptHideNicklist" class="nav-toggle">
                         </label>
                         <div class="nav-dropdown-divider"></div>
-                        <label class="nav-dropdown-item" for="loginOptNavLeft">
+                        <label class="nav-dropdown-item nav-sidebar-mode-item" for="loginOptNavLeft">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-align-left"></i>
                                 <span data-i18n="nav.sidebarMode">Sidebar Mode</span>

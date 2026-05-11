@@ -286,7 +286,7 @@
                             <input type="checkbox" id="optHideNicklist" class="nav-toggle">
                         </label>
                         <div class="nav-dropdown-divider"></div>
-                        <label class="nav-dropdown-item" for="optNavLeft">
+                        <label class="nav-dropdown-item nav-sidebar-mode-item" for="optNavLeft">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-align-left"></i>
                                 <span data-i18n="nav.sidebarMode">Sidebar Mode</span>
