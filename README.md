@@ -269,7 +269,7 @@ window.jwebircRegisterPlugin({
 <Parameter name="jwebirc.pluginAutoLoad" value="welcome-banner,my-plugin" override="false" />
 ```
 
-Wenn `jwebirc.pluginAutoLoad` leer bleibt, lädt jWebIRC automatisch alle in `jwebirc.pluginAvailable` aufgeführten Plugins.
+If `jwebirc.pluginAutoLoad` is left empty, jWebIRC automatically loads all plugins listed in `jwebirc.pluginAvailable`.
 
 The shipped `welcome-banner` plugin is an example scaffold and can be activated either by listing it explicitly in `jwebirc.pluginAutoLoad` or by leaving `jwebirc.pluginAutoLoad` empty while `jwebirc.pluginEnabled=true`.
 
