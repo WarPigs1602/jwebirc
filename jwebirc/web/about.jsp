@@ -7,6 +7,14 @@
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@include file="init.jsp"%>
 <%
+    String uiLang = (String) session.getAttribute("ui_lang");
+    if (uiLang == null) {
+        uiLang = request.getLocale() != null ? request.getLocale().getLanguage() : "en";
+    }
+    if (!"de".equalsIgnoreCase(uiLang)) {
+        uiLang = "en";
+    }
+
     // Set session attributes from config
     session.setAttribute("webchat_name", webchatName);
     session.setAttribute("webchat_title", webchatTitle);
@@ -16,9 +24,10 @@
     session.setAttribute("webchat_host", webchatHost);
     session.setAttribute("webchat_port", webchatPort);
     session.setAttribute("webchat_ssl", webchatSsl);
+    session.setAttribute("ui_lang", uiLang);
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= uiLang %>">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -49,6 +58,7 @@
         
         <!-- Scripts -->
         <script src="file/jquery.js"></script>
+        <%@include file="plugin-head.jsp"%>
         
         <style>
             /* Force page to be scrollable */
@@ -318,6 +328,10 @@
                     <span>IRC + IRCv3 Extensions</span>
                 </div>
                 <div class="info-item">
+                    <strong><i class="fas fa-puzzle-piece"></i> Extension Model</strong>
+                    <span>Independent templates and optional plugins</span>
+                </div>
+                <div class="info-item">
                     <strong><i class="fas fa-network-wired"></i> Communication</strong>
                     <span>WebSocket (RFC 6455)</span>
                 </div>
@@ -344,10 +358,18 @@
                     <i class="fas fa-plug"></i> 
                     <strong>IRCv3 Extensions</strong><br>
                     <span style="font-size: 0.9em; opacity: 0.8;">
-                        • message-tags: Client metadata transmission<br>
-                        • SASL: Simple Authentication and Security Layer<br>
-                        • multi-prefix: Multiple user mode symbols<br>
-                        • capability-negotiation: Feature discovery
+                        • capability-negotiation: CAP LS 302 with LS, ACK, NAK, NEW, and DEL handling<br>
+                        • message-tags: Preserves and forwards IRCv3 metadata to the web client<br>
+                        • account-notify, away-notify, batch, cap-notify, chghost, extended-join<br>
+                        • invite-notify, labeled-response, multi-prefix, server-time, userhost-in-names<br>
+                        • SASL authentication via PLAIN, SCRAM-SHA-256, and SCRAM-SHA-512
+                    </span>
+                </li>
+                <li>
+                    <i class="fas fa-user-shield"></i>
+                    <strong>SASL Authentication</strong><br>
+                    <span style="font-size: 0.9em; opacity: 0.8;">
+                        Server-configured authentication for IRC login with support for PLAIN, SCRAM-SHA-256, and SCRAM-SHA-512 depending on server capabilities
                     </span>
                 </li>
                 <li>
@@ -359,6 +381,11 @@
                     <i class="fas fa-network-wired"></i> 
                     <strong>WEBIRC Protocol</strong><br>
                     <span style="font-size: 0.9em; opacity: 0.8;">Transparent client IP forwarding for IRC servers with HMAC authentication</span>
+                </li>
+                <li>
+                    <i class="fas fa-puzzle-piece"></i>
+                    <strong>Plugin API</strong><br>
+                    <span style="font-size: 0.9em; opacity: 0.8;">Optional frontend extensions can register independently from templates and target login, chat, or about pages</span>
                 </li>
                 <li>
                     <i class="fas fa-terminal"></i> 
@@ -407,6 +434,8 @@
                 <span class="tech-badge"><i class="fas fa-code"></i> JSP/JSTL</span>
                 <span class="tech-badge"><i class="fab fa-html5"></i> HTML5 APIs</span>
                 <span class="tech-badge"><i class="fab fa-css3-alt"></i> CSS3 Variables</span>
+                <span class="tech-badge"><i class="fas fa-puzzle-piece"></i> Plugin Loader</span>
+                <span class="tech-badge"><i class="fas fa-paint-brush"></i> Template System</span>
             </div>
             
             <p class="text-muted" style="font-size: 0.9em;">
@@ -418,12 +447,28 @@
         
         <div class="about-section">
             <h3>
+                <i class="fas fa-user-lock"></i>
+                SASL & IRCv3 Details
+            </h3>
+
+            <ul class="feature-list">
+                <li><i class="fas fa-key"></i> <strong>SASL PLAIN</strong> - Fast baseline authentication using the IRC server's standard username and password flow</li>
+                <li><i class="fas fa-shield-alt"></i> <strong>SCRAM-SHA-256</strong> - Recommended salted challenge-response authentication with broad modern IRC server support</li>
+                <li><i class="fas fa-shield-virus"></i> <strong>SCRAM-SHA-512</strong> - Stronger challenge-response variant for servers that support the higher hash strength</li>
+                <li><i class="fas fa-stream"></i> <strong>Tagged IRCv3 events</strong> - Message tags, server-time, labeled-response, and batch support improve context and message ordering</li>
+                <li><i class="fas fa-users-cog"></i> <strong>Presence and identity updates</strong> - account-notify, away-notify, chghost, extended-join, and userhost-in-names reduce stale user state</li>
+                <li><i class="fas fa-sliders-h"></i> <strong>Dynamic capability updates</strong> - cap-notify and capability negotiation allow runtime feature changes without reconnecting</li>
+            </ul>
+        </div>
+
+        <div class="about-section">
+            <h3>
                 <i class="fas fa-shield-alt"></i>
                 Security Features
             </h3>
             
             <ul class="feature-list">
-                <li><i class="fas fa-lock"></i> <strong>SASL Authentication</strong> - Secure account login before joining channels</li>
+                <li><i class="fas fa-lock"></i> <strong>SASL Authentication</strong> - Secure account login before joining channels with server-side mechanism selection</li>
                 <li><i class="fas fa-lock"></i> <strong>SSL/TLS Support</strong> - Encrypted connection to IRC servers</li>
                 <li><i class="fas fa-robot"></i> <strong>CAPTCHA Integration</strong> - Cloudflare Turnstile, Google reCAPTCHA v2/v3/Enterprise</li>
                 <li><i class="fas fa-lock"></i> <strong>HMAC Validation</strong> - Secure client authentication</li>
@@ -447,10 +492,13 @@
                 <li><i class="fas fa-check-circle"></i> Private messaging (query windows)</li>
                 <li><i class="fas fa-check-circle"></i> Emoji picker with search and categories</li>
                 <li><i class="fas fa-check-circle"></i> Typing indicators for active users (IRCv3 TAGMSG)</li>
+                <li><i class="fas fa-check-circle"></i> Modern IRCv3 capabilities including server-time, labeled-response, invite-notify, and extended-join</li>
                 <li><i class="fas fa-check-circle"></i> User list with status symbols (@, +, etc.)</li>
                 <li><i class="fas fa-check-circle"></i> Topic display and editing</li>
                 <li><i class="fas fa-check-circle"></i> Auto-reconnect on connection loss</li>
                 <li><i class="fas fa-check-circle"></i> Responsive design for mobile and desktop</li>
+                <li><i class="fas fa-check-circle"></i> Theme switching via the template system</li>
+                <li><i class="fas fa-check-circle"></i> Optional page-aware plugins for login, chat, and about views</li>
             </ul>
         </div>
                
