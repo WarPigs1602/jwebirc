@@ -15,6 +15,7 @@ See a live example at https://chat.midiandmore.net/?channels=dev.
 - [Installation](#installation)
 - [Configuration (Server-Side)](#configuration-server-side)
 - [Usage (Client-Side)](#usage-client-side)
+- [IRCv3 Feature Support](#ircv3-feature-support)
 - [IRC Command Reference](#irc-command-reference)
 - [Troubleshooting](#troubleshooting)
 - [Building from Source](#building-from-source)
@@ -45,6 +46,7 @@ ant dist
 - **WebSocket-based Communication**: Real-time IRC communication using modern WebSocket technology
 - **WEBIRC/CGIIRC Support**: Supports WEBIRC and CGIIRC protocols for proper IP forwarding
 - **SASL Authentication**: Optional SASL authentication support for secure login
+- **IRCv3 Support**: Supports IRCv3 capability negotiation (CAP 302), SASL, message tags, and modern server capabilities such as account-notify, away-notify, batch, cap-notify, chghost, extended-join, invite-notify, labeled-response, multi-prefix, server-time, and userhost-in-names when offered by the server
 - **CTCP Support**: Full CTCP (Client-To-Client Protocol) support including VERSION, TIME, PING, FINGER, USERINFO, SOURCE, and CLIENTINFO
 - **Customizable UI Preferences**: 
   - Adjustable font size (12-18px) per user session
@@ -619,6 +621,29 @@ Access customization options via the **⚙️ Settings** button:
 6. **Emojis**: Click emoji button to insert emojis
 7. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
 8. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
+
+## IRCv3 Feature Support
+
+jWebIRC negotiates IRCv3 capabilities with `CAP LS 302` and requests supported features only when the IRC server advertises them.
+
+Supported IRCv3 features:
+
+- **capability-negotiation**: CAP LS 302 with handling for `LS`, `ACK`, `NAK`, `NEW`, and `DEL`
+- **sasl**: Authentication via `PLAIN`, `SCRAM-SHA-256`, and `SCRAM-SHA-512`
+- **message-tags**: Preserves and forwards IRCv3 message tags to the web client
+- **account-notify**: Receives account login/logout changes for users
+- **away-notify**: Receives away status changes without polling
+- **batch**: Supports grouped server message delivery
+- **cap-notify**: Handles capability changes announced during an active session
+- **chghost**: Receives host or ident changes without requiring a reconnect
+- **extended-join**: Receives extended JOIN metadata such as account information
+- **invite-notify**: Receives invitation-related notifications where supported by the server
+- **labeled-response**: Supports correlating responses to tagged client requests
+- **multi-prefix**: Receives multiple channel status prefixes per user when available
+- **server-time**: Receives authoritative server timestamps via message tags
+- **userhost-in-names**: Receives extended NAMES replies with userhost information
+
+Availability depends on the IRC server. jWebIRC requests these capabilities automatically when they are advertised during login or later via `CAP NEW`.
 
 ## IRC Command Reference
 
