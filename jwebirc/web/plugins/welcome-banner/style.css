@@ -1,0 +1,12 @@
+.plugin-welcome-banner {
+    margin: 12px 12px 0;
+    padding: 10px 14px;
+    border-left: 4px solid #990000;
+    border-radius: 8px;
+    background: rgba(153, 0, 0, 0.12);
+    color: var(--text-primary, #f5f5f5);
+    font-size: 13px;
+    line-height: 1.4;
+    position: relative;
+    z-index: 2;
+}

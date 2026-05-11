@@ -5,5 +5,6 @@
     Updated    : 31.12.2025
 --%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
+    <%@include file="plugin-foot.jsp"%>
     </body>
 </html>

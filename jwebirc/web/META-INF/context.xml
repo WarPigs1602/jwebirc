@@ -108,6 +108,22 @@
     
     <!-- Template Path Prefix -->
     <Parameter name="jwebirc.templatePath" value="templates/" override="false"/>
+
+    <!-- ============================================
+         PLUGIN SYSTEM
+         ============================================ -->
+
+    <!-- Enable/Disable Plugin System -->
+    <Parameter name="jwebirc.pluginEnabled" value="false" override="false"/>
+
+     <!-- Available Plugins (comma-separated directory names under web/plugins/) -->
+    <Parameter name="jwebirc.pluginAvailable" value="welcome-banner" override="false"/>
+
+     <!-- Plugins to autoload on page render (subset of pluginAvailable, empty = load all available plugins) -->
+    <Parameter name="jwebirc.pluginAutoLoad" value="" override="false"/>
+
+    <!-- Plugin Path Prefix -->
+     <Parameter name="jwebirc.pluginPath" value="plugins/" override="false"/>
     
     <!-- ============================================
          CHATNAPPING (IFRAME EMBEDDING)
@@ -180,6 +196,7 @@
      PUBLIC SERVER WITH USER CHOICE:
      - Set templateUserSelectable to 'true'
      - List all available templates in templateAvailable
+     - Enable optional plugins through pluginAvailable/pluginAutoLoad
      - Enable SASL: saslEnabled 'true'
      - Configure CAPTCHA to prevent spam
      

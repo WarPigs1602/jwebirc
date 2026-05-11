@@ -40,5 +40,6 @@
             }
         </script>
         <% } %>
+        <%@include file="plugin-foot.jsp"%>
     </body>
 </html>

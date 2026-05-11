@@ -8,3 +8,4 @@
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@include file="config.jsp"%>
 <%@include file="template.jsp"%> 
+<%@include file="plugin.jsp"%>

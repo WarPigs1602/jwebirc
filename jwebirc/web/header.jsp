@@ -77,6 +77,7 @@
             };
         </script>
         <script src="file/template-system.js"></script>
+        <%@include file="plugin-head.jsp"%>
     </head>
     <body>
         <!-- Language + Login Options -->

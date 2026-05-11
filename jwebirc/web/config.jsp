@@ -60,6 +60,17 @@
     String templateAvailable = param(ctx, "jwebirc.templateAvailable", "dark-theme,light-theme");
     // Template path prefix
     String templatePath = param(ctx, "jwebirc.templatePath", "templates/");
+    
+    // Plugin System Configuration
+    // Enable/disable plugin system
+    String pluginEnabled = param(ctx, "jwebirc.pluginEnabled", "false");
+    // Available plugins (comma-separated list of directory names under web/plugins/)
+    String pluginAvailable = param(ctx, "jwebirc.pluginAvailable", "");
+    // Plugins that should be loaded automatically (comma-separated subset of pluginAvailable)
+    String pluginAutoLoad = param(ctx, "jwebirc.pluginAutoLoad", "");
+    // Plugin path prefix
+    String pluginPath = param(ctx, "jwebirc.pluginPath", "plugins/");
+
     String recaptchaEnterpriseProjectId = param(ctx, "jwebirc.recaptchaEnterpriseProjectId", "your-project-id");
     String recaptchaEnterpriseSiteKey = param(ctx, "jwebirc.recaptchaEnterpriseSiteKey", "your-site-key");
     String recaptchaEnterpriseApiKey = param(ctx, "jwebirc.recaptchaEnterpriseApiKey", "your-api-key");
