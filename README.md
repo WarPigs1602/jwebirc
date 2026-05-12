@@ -221,60 +221,6 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
 
 For detailed CAPTCHA configuration, see the **[CAPTCHA Protection](#captcha-protection)** section below.
 
-## Plugin System
-
-The frontend now includes an independent plugin system that is separate from the template/theme mechanism. Plugins live under `jwebirc/web/plugins/<plugin-id>/` and are loaded only when explicitly enabled in server configuration.
-
-### Configuration
-
-Use these context parameters:
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `jwebirc.pluginEnabled` | `false` | Enables the plugin system globally |
-| `jwebirc.pluginAvailable` | `welcome-banner` | Comma-separated allowlist of plugin directory names |
-| `jwebirc.pluginAutoLoad` | empty | Comma-separated subset of `pluginAvailable` to inject automatically; empty loads all available plugins |
-| `jwebirc.pluginPath` | `plugins/` | Base path for plugin assets |
-
-### Plugin Structure
-
-Each plugin gets its own directory:
-
-```text
-jwebirc/web/plugins/
-  welcome-banner/
-    plugin.js
-    style.css
-```
-
-- `plugin.js` is required and must call `window.jwebircRegisterPlugin(...)`
-- `style.css` is optional and is injected automatically when present
-
-### Minimal Plugin Example
-
-```javascript
-window.jwebircRegisterPlugin({
-  id: 'my-plugin',
-  initialize(context) {
-    console.log('Plugin started on page:', context.page);
-  }
-});
-```
-
-### Activation Example
-
-```xml
-<Parameter name="jwebirc.pluginEnabled" value="true" override="false" />
-<Parameter name="jwebirc.pluginAvailable" value="welcome-banner,my-plugin" override="false" />
-<Parameter name="jwebirc.pluginAutoLoad" value="welcome-banner,my-plugin" override="false" />
-```
-
-If `jwebirc.pluginAutoLoad` is left empty, jWebIRC automatically loads all plugins listed in `jwebirc.pluginAvailable`.
-
-The shipped `welcome-banner` plugin is an example scaffold and can be activated either by listing it explicitly in `jwebirc.pluginAutoLoad` or by leaving `jwebirc.pluginAutoLoad` empty while `jwebirc.pluginEnabled=true`.
-
-For a focused quick start, see `PLUGIN_SYSTEM.md`.
-
 #### 3. Resolve Build Dependencies
 
 Choose one build path:
@@ -683,6 +629,60 @@ Access customization options via the **⚙️ Settings** button:
 6. **Emojis**: Click emoji button to insert emojis
 7. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
 8. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
+
+## Plugin System
+
+The frontend now includes an independent plugin system that is separate from the template/theme mechanism. Plugins live under `jwebirc/web/plugins/<plugin-id>/` and are loaded only when explicitly enabled in server configuration.
+
+### Configuration
+
+Use these context parameters:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `jwebirc.pluginEnabled` | `false` | Enables the plugin system globally |
+| `jwebirc.pluginAvailable` | `welcome-banner` | Comma-separated allowlist of plugin directory names |
+| `jwebirc.pluginAutoLoad` | empty | Comma-separated subset of `pluginAvailable` to inject automatically; empty loads all available plugins |
+| `jwebirc.pluginPath` | `plugins/` | Base path for plugin assets |
+
+### Plugin Structure
+
+Each plugin gets its own directory:
+
+```text
+jwebirc/web/plugins/
+  welcome-banner/
+    plugin.js
+    style.css
+```
+
+- `plugin.js` is required and must call `window.jwebircRegisterPlugin(...)`
+- `style.css` is optional and is injected automatically when present
+
+### Minimal Plugin Example
+
+```javascript
+window.jwebircRegisterPlugin({
+  id: 'my-plugin',
+  initialize(context) {
+    console.log('Plugin started on page:', context.page);
+  }
+});
+```
+
+### Activation Example
+
+```xml
+<Parameter name="jwebirc.pluginEnabled" value="true" override="false" />
+<Parameter name="jwebirc.pluginAvailable" value="welcome-banner,my-plugin" override="false" />
+<Parameter name="jwebirc.pluginAutoLoad" value="welcome-banner,my-plugin" override="false" />
+```
+
+If `jwebirc.pluginAutoLoad` is left empty, jWebIRC automatically loads all plugins listed in `jwebirc.pluginAvailable`.
+
+The shipped `welcome-banner` plugin is an example scaffold and can be activated either by listing it explicitly in `jwebirc.pluginAutoLoad` or by leaving `jwebirc.pluginAutoLoad` empty while `jwebirc.pluginEnabled=true`.
+
+For a focused quick start, see `PLUGIN_SYSTEM.md`.
 
 ## IRCv3 Feature Support
 
