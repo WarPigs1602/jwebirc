@@ -135,6 +135,49 @@ You have two ways to configure parameters such as IRC host, port, SASL, CAPTCHA,
   - Add the same `<Parameter ... />` values shown in this README
   - This keeps your settings outside the WAR and survives WAR replacement
 
+   In practice, this means the WAR stays unchanged and all environment-specific values live in the application server configuration. That is usually the better deployment model because you can replace or upgrade `jwebirc.war` without re-editing files inside the archive.
+
+   Typical use cases for server-managed config:
+
+   - different IRC hostnames or ports between development, staging, and production
+   - secret values such as CAPTCHA keys that should not be baked into the WAR
+   - reverse-proxy settings that depend on the target server environment
+   - safer upgrades, because replacing the WAR does not overwrite your local settings
+
+   Example locations for server-managed context files:
+
+   - **Tomcat**: `conf/Catalina/localhost/jwebirc.xml`
+   - **Payara/GlassFish**: define the same context/application parameters through the server configuration or admin console for the deployed `jwebirc` application
+
+   Example Tomcat context file (`conf/Catalina/localhost/jwebirc.xml`):
+
+   ```xml
+   <Context path="/jwebirc" reloadable="false">
+       <Parameter name="jwebirc.webchatHost" value="irc.example.com" override="false" />
+       <Parameter name="jwebirc.webchatPort" value="6697" override="false" />
+       <Parameter name="jwebirc.webchatSsl" value="true" override="false" />
+       <Parameter name="jwebirc.webchatName" value="ExampleNet WebChat" override="false" />
+       <Parameter name="jwebirc.ircNetworkName" value="ExampleNet" override="false" />
+       <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
+       <Parameter name="jwebirc.forwardedForIps" value="127.0.0.1,10.0.0.0/8" override="false" />
+       <Parameter name="jwebirc.saslEnabled" value="true" override="false" />
+       <Parameter name="jwebirc.saslMechanism" value="SCRAM-SHA-256" override="false" />
+       <Parameter name="jwebirc.captchaEnabled" value="true" override="false" />
+       <Parameter name="jwebirc.captchaType" value="TURNSTILE" override="false" />
+       <Parameter name="jwebirc.turnstileSiteKey" value="your-site-key" override="false" />
+       <Parameter name="jwebirc.turnstileSecretKey" value="your-secret-key" override="false" />
+   </Context>
+   ```
+
+   Workflow example:
+
+   1. Deploy `jwebirc.war` unchanged.
+   2. Create `jwebirc.xml` in the server configuration.
+   3. Put your local `<Parameter ... />` values into that file.
+   4. Restart or redeploy the application so the server reloads the context.
+
+   If both the server-managed context and the WAR contain the same parameter name, the effective value depends on the application server and deployment model. For predictable behavior, keep production values in one place only and prefer the server-managed file.
+
 2. **Alternative (edit WAR directly):**
   - Unpack `jwebirc.war`
   - Edit `META-INF/context.xml`
