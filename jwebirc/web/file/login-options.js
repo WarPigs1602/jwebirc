@@ -262,10 +262,14 @@ class LoginOptionsManager {
      */
     applyFontSize() {
         const root = document.documentElement;
-        root.style.setProperty('--login-font-size', `${this.uiPrefs.fontSize}px`);
+        const fontSize = Math.min(Math.max(parseInt(this.uiPrefs.fontSize, 10) || 14, 12), 18);
+
+        root.style.setProperty('--font-size-base', `${fontSize}px`);
+        root.style.setProperty('--login-font-size', `${fontSize}px`);
+        root.style.fontSize = `${fontSize}px`;
         
         // Apply to body as well for fallback
-        document.body.style.fontSize = `${this.uiPrefs.fontSize}px`;
+        document.body.style.fontSize = `${fontSize}px`;
     }
     
     /**

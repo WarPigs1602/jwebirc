@@ -2006,6 +2006,16 @@ nv.highlighted:not(.unread)::after {
     animation: menuFadeIn 0.15s ease-out;
 }
 
+.nick-context-menu-header {
+    padding: 10px 16px 8px;
+    color: var(--text-primary);
+    font-weight: 600;
+    line-height: 1.3;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 4px;
+    white-space: nowrap;
+}
+
 @keyframes menuFadeIn {
     from {
         opacity: 0;
@@ -4266,5 +4276,56 @@ a:hover {
         width: clamp(76px, 31vw, 104px) !important;
         min-width: clamp(76px, 31vw, 104px) !important;
         max-width: clamp(76px, 31vw, 104px) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .chat_frame,
+    .chat_frame .message,
+    .chat_frame .message *,
+    .topic-text {
+        font-size: 1em !important;
+        line-height: 1.35;
+    }
+
+    .right_frame,
+    .typing-bar,
+    .post_frame .btn,
+    .post_frame .btn-primary,
+    .post_frame .btn-outline-secondary,
+    #send_button,
+    #emojiBtn,
+    #formatHelpBtn {
+        font-size: 0.95rem !important;
+    }
+
+    .post_frame .form-control,
+    #chat_input,
+    .post_frame .post_field {
+        font-size: max(16px, 1rem) !important;
+        line-height: 1.35;
+    }
+}
+
+@media (max-width: 480px) {
+    .chat_frame,
+    .chat_frame .message,
+    .chat_frame .message *,
+    .topic-text,
+    .typing-bar,
+    .right_frame,
+    .post_frame .btn,
+    .post_frame .btn-primary,
+    .post_frame .btn-outline-secondary,
+    #send_button,
+    #emojiBtn,
+    #formatHelpBtn {
+        font-size: 0.9rem !important;
+    }
+
+    .post_frame .form-control,
+    #chat_input,
+    .post_frame .post_field {
+        font-size: max(16px, 1rem) !important;
     }
 }

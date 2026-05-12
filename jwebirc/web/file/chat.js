@@ -2959,7 +2959,9 @@ class ChatManager {
         }
         
         // Build HTML
-        let html = '';
+        const safeNick = this.escapeHtml(nick);
+        let html = `<div class="nick-context-menu-header">${safeNick}</div>`;
+
         menuItems.forEach(item => {
             if (item.separator) {
                 html += '<div class="nick-context-menu-separator"></div>';
