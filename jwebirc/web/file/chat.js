@@ -370,7 +370,7 @@ class ChatManager {
     }
 
     buildNickWithStatus(status = '', nick = '') {
-        return `${this.getPrimaryStatusSymbol(status)}${String(nick || '')}`;
+        return `${this.normalizeStatusSymbols(status)}${String(nick || '')}`;
     }
     
     /**
@@ -1747,11 +1747,27 @@ class ChatManager {
                 if (nick.length > maxNickLength) nick = nick.substring(0, maxNickLength);
                 
                 const fullNick = this.buildNickWithStatus(statusModes, nick);
-                if (!elem.nicks.some(e => e.nick === fullNick)) {
-                    // Check global away status if not explicitly provided
-                    let awayInfo = isAway ? { away: true, reason: '' } : this.awayStatus.get(nick.toLowerCase()) || { away: false, reason: '' };
-                    elem.nicks.push({ nick: fullNick, host, color, away: awayInfo.away, awayReason: awayInfo.reason, account: '', statusModes });
+                const existingIndex = elem.nicks.findIndex((entry) => this.extractNickParts(entry.nick).nick.toLowerCase() === nick.toLowerCase());
+
+                // Check global away status if not explicitly provided
+                let awayInfo = isAway ? { away: true, reason: '' } : this.awayStatus.get(nick.toLowerCase()) || { away: false, reason: '' };
+
+                if (existingIndex >= 0) {
+                    const existingEntry = elem.nicks[existingIndex];
+                    const mergedStatusModes = this.normalizeStatusSymbols(this.getStoredStatusSymbols(existingEntry) + statusModes);
+                    elem.nicks[existingIndex] = {
+                        nick: this.buildNickWithStatus(mergedStatusModes, nick),
+                        host: host || existingEntry.host,
+                        color: existingEntry.color || color,
+                        away: awayInfo.away,
+                        awayReason: awayInfo.reason,
+                        account: existingEntry.account || '',
+                        statusModes: mergedStatusModes
+                    };
+                    return;
                 }
+
+                elem.nicks.push({ nick: fullNick, host, color, away: awayInfo.away, awayReason: awayInfo.reason, account: '', statusModes });
             }
         });
         
@@ -1898,20 +1914,21 @@ class ChatManager {
     setHost(channel, nick, host) {
         for (const elem of this.channels) {
             if (elem.page.toLowerCase() === channel.toLowerCase()) {
-                const status = this.getStatus(channel, nick);
-                const parsed = this.buildNickWithStatus(status, nick);
-                
-                for (const name of elem.nicks) {
-                    if (name.nick.toLowerCase() === parsed.toLowerCase()) {
-                        const i = elem.nicks.findIndex(data => data.nick === parsed);
+                const normalizedNick = (nick || '').toLowerCase();
+
+                for (let i = 0; i < elem.nicks.length; i++) {
+                    const name = elem.nicks[i];
+                    const { nick: baseNick } = this.extractNickParts(name.nick);
+                    if (baseNick.toLowerCase() === normalizedNick) {
+                        const statusModes = this.getStoredStatusSymbols(name);
                         elem.nicks.splice(i, 1, {
-                            nick: parsed,
+                            nick: this.buildNickWithStatus(statusModes, nick),
                             host: host,
                             color: name.color,
                             away: !!name.away,
                             awayReason: name.awayReason || '',
                             account: name.account || '',
-                            statusModes: this.getStoredStatusSymbols(name)
+                            statusModes
                         });
                         return;
                     }
@@ -1945,9 +1962,9 @@ class ChatManager {
         for (const elem of this.channels) {
             if (elem.page.toLowerCase() !== channel.toLowerCase()) continue;
             
-            for (const name of elem.nicks) {
+            for (let i = 0; i < elem.nicks.length; i++) {
+                const name = elem.nicks[i];
                 const { nick, host, color, away, awayReason, account } = name;
-                let parsed = null;
                 
                 if (!line.includes(" ")) continue;
                 
@@ -1958,8 +1975,9 @@ class ChatManager {
                 let add = false;
                 let remove = false;
                 let flag = 0;
-                let nickname = this.getNick(channel, nick);
+                const nickname = this.getNick(channel, nick);
                 let currentStatusSymbols = this.getStoredStatusSymbols(name);
+                let changed = false;
                 
                 for (let j = 0; j < mode.length; j++) {
                     if (mode[j] === "-") {
@@ -1992,19 +2010,35 @@ class ChatManager {
                     }
 
                     if (add) {
-                        currentStatusSymbols = this.normalizeStatusSymbols(currentStatusSymbols + modeSymbol);
+                        const nextStatusSymbols = this.normalizeStatusSymbols(currentStatusSymbols + modeSymbol);
+                        if (nextStatusSymbols !== currentStatusSymbols) {
+                            currentStatusSymbols = nextStatusSymbols;
+                            changed = true;
+                        }
                     } else if (remove) {
-                        currentStatusSymbols = this.normalizeStatusSymbols(
+                        const nextStatusSymbols = this.normalizeStatusSymbols(
                             currentStatusSymbols
                                 .split('')
                                 .filter((symbol) => symbol !== modeSymbol)
                                 .join('')
                         );
+                        if (nextStatusSymbols !== currentStatusSymbols) {
+                            currentStatusSymbols = nextStatusSymbols;
+                            changed = true;
+                        }
                     }
-                    
-                    parsed = this.buildNickWithStatus(currentStatusSymbols, nickname);
-                    const i = elem.nicks.findIndex(data => data.nick === nick);
-                    elem.nicks.splice(i, 1, { nick: parsed, host, color, away: !!away, awayReason: awayReason || '', account: account || '', statusModes: currentStatusSymbols });
+
+                    if (changed) {
+                        elem.nicks[i] = {
+                            nick: this.buildNickWithStatus(currentStatusSymbols, nickname),
+                            host,
+                            color,
+                            away: !!away,
+                            awayReason: awayReason || '',
+                            account: account || '',
+                            statusModes: currentStatusSymbols
+                        };
+                    }
                 }
             }
         }
@@ -2015,11 +2049,12 @@ class ChatManager {
     
     delNick(channel, nick) {
         for (const elem of this.channels) {
-            const status = this.getStatus(channel, nick);
-            const parsed = status && status.length === 1 ? status + nick : nick;
-            
-            if (elem.page.toLowerCase() === channel.toLowerCase() && elem.nicks.some(e => e.nick === parsed)) {
-                const i = elem.nicks.findIndex(data => data.nick === parsed);
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                const normalizedNick = (nick || '').toLowerCase();
+                const i = elem.nicks.findIndex((data) => this.extractNickParts(data.nick).nick.toLowerCase() === normalizedNick);
+                if (i === -1) {
+                    continue;
+                }
                 elem.nicks.splice(i, 1);
             }
         }
@@ -2032,9 +2067,9 @@ class ChatManager {
         for (const elem of this.channels) {
             if (elem.page.toLowerCase() === channel.toLowerCase()) {
                 if (elem.nicks.length === 0) return false;
-                
-                const nickname = this.getStatus(channel, nick) + nick;
-                if (elem.nicks.some(name => name.nick === nickname)) return true;
+
+                const normalizedNick = (nick || '').toLowerCase();
+                if (elem.nicks.some(name => this.extractNickParts(name.nick).nick.toLowerCase() === normalizedNick)) return true;
             }
         }
         return false;
@@ -2085,11 +2120,11 @@ class ChatManager {
                 const channel = elem.page;
                 const status = this.getStatus(channel, nick);
                 const color = this.getColor(channel, nick);
-                const parsed = status && status.length === 1 ? status + nick : nick;
+                const parsed = this.buildNickWithStatus(this.getStoredStatusSymbols(name), nick);
                 
-                if (name.nick.toLowerCase() === parsed.toLowerCase()) {
+                if (this.extractNickParts(name.nick).nick.toLowerCase() === nick.toLowerCase()) {
                     if (this.isChannel(channel)) {
-                        const i = elem.nicks.findIndex(data => data.nick === parsed);
+                        const i = elem.nicks.findIndex((data) => this.extractNickParts(data.nick).nick.toLowerCase() === nick.toLowerCase());
                         elem.nicks.splice(i, 1);
                         this.sortStatus(channel);
                         this.renderUserlist(channel);
@@ -2112,17 +2147,16 @@ class ChatManager {
         for (const elem of this.channels) {
             for (const name of elem.nicks) {
                 const channel = elem.page;
-                const status = this.getStatus(channel, oldnick);
-                const parsed = status && status.length === 1 ? status + oldnick : oldnick;
-                const parsed2 = status && status.length === 1 ? status + newnick : newnick;
+                const statusModes = this.getStoredStatusSymbols(name);
+                const parsed = this.buildNickWithStatus(statusModes, oldnick);
+                const parsed2 = this.buildNickWithStatus(statusModes, newnick);
                 
-                if (name.nick.toLowerCase() === parsed.toLowerCase()) {
+                if (this.extractNickParts(name.nick).nick.toLowerCase() === oldnick.toLowerCase()) {
                     const { host, away, awayReason, account } = name;
                     const color = this.getNickColor(newnick);
-                    const statusModes = this.getStoredStatusSymbols(name);
                     
                     if (this.isChannel(channel)) {
-                        const i = elem.nicks.findIndex(data => data.nick === parsed);
+                        const i = elem.nicks.findIndex((data) => this.extractNickParts(data.nick).nick.toLowerCase() === oldnick.toLowerCase());
                         elem.nicks.splice(i, 1, { nick: parsed2, host, color, away: !!away, awayReason: awayReason || '', account: account || '', statusModes });
                         this.sortStatus(channel);
                         this.renderUserlist(channel);
@@ -2301,6 +2335,20 @@ class ChatManager {
                         return this.getPrimaryStatusSymbol(this.getStoredStatusSymbols(nick));
                     } else if (nick.nick.toLowerCase() === nickname.toLowerCase()) {
                         return "";
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    getStatusModes(channel, nickname) {
+        for (const elem of this.channels) {
+            if (elem.page.toLowerCase() === channel.toLowerCase()) {
+                for (const nick of elem.nicks) {
+                    const parts = this.extractNickParts(nick.nick);
+                    if (parts.nick.toLowerCase() === nickname.toLowerCase()) {
+                        return this.getStoredStatusSymbols(nick);
                     }
                 }
             }
@@ -2897,7 +2945,7 @@ class ChatManager {
         
         // Get user's own status in channel
         const myStatus = this.getStatus(channel, window.user);
-        const targetStatus = this.getStatus(channel, nick);
+        const targetStatusModes = this.getStatusModes(channel, nick);
         
         // Get away status and reason
         const awayInfo = this.awayStatus.get(nick.toLowerCase()) || { away: false, reason: '' };
@@ -2963,7 +3011,7 @@ class ChatManager {
                     
                     if (canManage) {
                         // Check if target has this mode
-                        const hasMode = targetStatus === symbol;
+                        const hasMode = targetStatusModes.includes(symbol);
                         
                         if (hasMode) {
                             menuItems.push({
