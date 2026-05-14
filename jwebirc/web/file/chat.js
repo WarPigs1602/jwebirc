@@ -3205,6 +3205,23 @@ class ChatManager {
         this.updateNotificationBadge();
         this.refreshNav();
     }
+
+    /**
+     * Register a notify event for the bell/badge system.
+     * @param {string} tabName - Preferred tab to associate with this event.
+     */
+    addNotificationEvent(tabName = 'Status') {
+        const targetTab = this.isPage(tabName)
+            ? tabName
+            : (this.isPage('Status') ? 'Status' : this.getActiveWindow());
+
+        if (!targetTab) {
+            return;
+        }
+
+        const currentCount = this.unreadCounts.get(targetTab) || 0;
+        this.updateUnreadCount(targetTab, currentCount + 1);
+    }
     
     /**
      * Update the notification badge display

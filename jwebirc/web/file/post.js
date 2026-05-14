@@ -574,6 +574,18 @@ class PostManager {
         if (text.startsWith("/names ") || text.startsWith("/who ")) {
             return this.ircText(text);
         }
+
+        if (text.toLowerCase().startsWith('/knock ')) {
+            const knockParts = text.substring(7).trim().split(/\s+/).filter(Boolean);
+            if (knockParts.length > 0 && this.chatManager) {
+                let knockChannel = knockParts[0];
+                if (!knockChannel.startsWith('#') && !knockChannel.startsWith('&')) {
+                    knockChannel = `#${knockChannel}`;
+                }
+                this.chatManager.lastKnockChannel = knockChannel.toLowerCase();
+            }
+            return this.ircText(text);
+        }
         
         if (text.startsWith("/kick ")) {
             const content = text.substring(6).trim();

@@ -602,14 +602,16 @@ class IRCParser {
 
             case "378": { // WHOIS connecting from
                 this.output = this.chatManager.getActiveWindow();
-                const info = params[1] || '';
-                return this.whoisLine('chat.whois.connectingFrom', 'connecting: {info}', { info });
+                const rawInfo = (params.slice(2).join(' ') || params[2] || '').replace(/^:/, '').trim();
+                const info = rawInfo.replace(/^(?:\S+\s+)?is\s+connecting\s+from\s+/i, '').trim();
+                return this.whoisLine('chat.whois.connectingFrom', '{info}', { info });
             }
 
             case "379": { // WHOIS modes
                 this.output = this.chatManager.getActiveWindow();
-                const info = params[1] || '';
-                return this.whoisLine('chat.whois.modes', 'modes: {info}', { info });
+                const rawInfo = (params.slice(2).join(' ') || params[2] || '').replace(/^:/, '').trim();
+                const info = rawInfo.replace(/^(?:\S+\s+)?is\s+using\s+modes\s+/i, '').trim();
+                return this.whoisLine('chat.whois.modes', '{info}', { info });
             }
 
             case "671": { // WHOIS secure connection (SSL/TLS)
@@ -630,6 +632,15 @@ class IRCParser {
                 if (params.length >= 4) {
                     const knocker = params[2] || '';
                     const message = params[3] ? trailing : '';
+
+                    if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
+                        this.chatManager.addNotificationEvent(channel || 'Status');
+                    }
+
+                    if (this.chatManager.notificationManager) {
+                        this.chatManager.notificationManager.notifyKnock(channel, knocker, message);
+                    }
+
                     const knockMsg = this.i18nSpan('chat.knock', '{nick} has knocked on {channel}{message}', {
                         nick: knocker,
                         channel,
@@ -657,6 +668,15 @@ class IRCParser {
                 if (maybeNick) {
                     const isDefault = /has knocked on channel/i.test(message);
                     const msg = !isDefault && message ? ` (${message})` : '';
+
+                    if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
+                        this.chatManager.addNotificationEvent(channel || 'Status');
+                    }
+
+                    if (this.chatManager.notificationManager) {
+                        this.chatManager.notificationManager.notifyKnock(channel, maybeNick, msg);
+                    }
+
                     const knockMsg = this.i18nSpan('chat.knock', '{nick} has knocked on {channel}{message}', { nick: maybeNick, channel, message: msg });
                     return ` <span style=\"color: #ff0000\">==</span> ${knockMsg}`;
                 }
@@ -932,7 +952,17 @@ class IRCParser {
     handleNotice(ircMsg) {
         const { prefix, params } = ircMsg;
         const nick = this.parseNick(prefix);
+        const rawTarget = params[0] || '';
         let message = params[1] || ''; // Target is params[0], message is params[1]
+
+        // Some networks deliver knock notices with a single NOTICE parameter.
+        // In that case the full knock payload can arrive in params[0].
+        if (!message && typeof rawTarget === 'string') {
+            const targetLooksLikeKnock = /(?:\[Knock\]|\bhas\s+knocked\b|\bhat\s+(?:bei\s+\S+\s+)?(?:an)?geklopft\b)/i.test(rawTarget);
+            if (targetLooksLikeKnock) {
+                message = rawTarget;
+            }
+        }
 
         // Check for CTCP reply (NOTICE with \001 delimiters)
         if (message.startsWith(String.fromCharCode(1))) {
@@ -943,14 +973,80 @@ class IRCParser {
             return this.handleCtcpReply(nick, message);
         }
 
+        // Normalize server-style knock notice, e.g.:
+        // [Knock] by Nick!user@host (no reason specified)
+        // @#channel- [Knock] by Nick!user@host (no reason specified)
+        // [Knock] by Nick!user@host on #channel (reason)
+        const knockNoticeByMatch = message.match(/^(?:@?(#[^\s-]+)-\s+)?\[Knock\]\s+by\s+([^!\s]+)!\S+(?:\s+(?:on|to)\s+(#[^\s]+))?\s*\((.*)\)\s*$/i);
+        const knockNoticeTextMatch = message.match(/^(?:@?(#[^\s-]+)-\s+)?([^!\s]+)(?:!\S+)?\s+(?:has\s+knocked(?:\s+(?:on|to)\s+(#[^\s]+))?|hat\s+(?:bei\s+(#[^\s]+)\s+)?(?:an)?geklopft)\s*(?:\((.*)\))?\s*$/i);
+        const knockNoticeMatch = knockNoticeByMatch || knockNoticeTextMatch;
+
+        if (knockNoticeMatch) {
+            const isByFormat = !!knockNoticeByMatch;
+            const knocker = (isByFormat ? knockNoticeMatch[2] : knockNoticeMatch[2]) || '';
+            const noticeTarget = (params[0] || '').toLowerCase();
+            // Strip IRC status prefixes (@, +, %, ~, !) that precede the channel name
+            const noticeTargetStripped = noticeTarget.replace(/^[@+%~!]+/, '');
+            const targetChannel = (noticeTargetStripped.startsWith('#') || noticeTargetStripped.startsWith('&')) ? noticeTargetStripped : '';
+            const targetPrefixedMatch = noticeTarget.match(/^[@+%~!]*(#[^\s-]+)-$/i);
+            const targetPrefixedChannel = targetPrefixedMatch ? (targetPrefixedMatch[1] || '').toLowerCase() : '';
+            const inferredChannel = this.chatManager ? (this.chatManager.lastKnockChannel || '') : '';
+            const prefixedChannel = (knockNoticeMatch[1] || '').toLowerCase();
+            const inlineChannel = (
+                isByFormat
+                    ? (knockNoticeMatch[3] || '')
+                    : (knockNoticeMatch[3] || knockNoticeMatch[4] || '')
+            ).toLowerCase();
+            const knockChannel = (inlineChannel || prefixedChannel || targetChannel || targetPrefixedChannel || inferredChannel || '').toLowerCase();
+            const rawReason = (
+                isByFormat
+                    ? (knockNoticeMatch[4] || '')
+                    : (knockNoticeMatch[5] || '')
+            ).trim();
+            const hasReason = rawReason && !/no reason specified/i.test(rawReason);
+            const reason = hasReason ? rawReason : '';
+            const reasonText = reason ? ` (${reason})` : '';
+            const hasKnockChannelTab = !!(this.chatManager && knockChannel && this.chatManager.isPage(knockChannel));
+
+            if (this.chatManager && knockChannel && !hasKnockChannelTab) {
+                this.chatManager.addPage(knockChannel, 'channel', false);
+            }
+
+            this.output = (this.chatManager && knockChannel && this.chatManager.isPage(knockChannel))
+                ? knockChannel
+                : 'Status';
+
+            if (this.chatManager && this.chatManager.notificationManager) {
+                const notifyChannel = (this.chatManager && knockChannel && this.chatManager.isPage(knockChannel)) ? knockChannel : 'Status';
+                this.chatManager.notificationManager.notifyKnock(notifyChannel, knocker, reason);
+            }
+
+            if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
+                const eventTab = (this.chatManager && knockChannel && this.chatManager.isPage(knockChannel)) ? knockChannel : 'Status';
+                this.chatManager.addNotificationEvent(eventTab);
+            }
+
+            if (this.chatManager && this.chatManager.lastKnockChannel && (!inlineChannel || inlineChannel === '')) {
+                this.chatManager.lastKnockChannel = '';
+            }
+
+            const knockMessage = knockChannel
+                ? this.i18nSpan('chat.knock', '{nick} has knocked on {channel}{message}', { nick: knocker, channel: knockChannel, message: reasonText })
+                : this.i18nSpan('chat.knock.notice', '{nick} has knocked{message}', { nick: knocker, message: reasonText });
+
+            return ` <span style="color: #ff0000">==</span> ${knockMessage}`;
+        }
+
         // Try to find a channel to route this notice to
         let targetChannel = null;
         const hasChatManager = !!this.chatManager;
 
         // 1) Prefer explicit NOTICE target if it is a joined channel
         const noticeTarget = (params[0] || '').toLowerCase();
-        if (hasChatManager && noticeTarget.startsWith('#') && this.chatManager.isPage(noticeTarget)) {
-            targetChannel = noticeTarget;
+        // Strip IRC status prefixes (@, +, %, ~, !) that can precede channel names (e.g. @#channel)
+        const noticeTargetStripped = noticeTarget.replace(/^[@+%~!]+/, '');
+        if (hasChatManager && (noticeTargetStripped.startsWith('#') || noticeTargetStripped.startsWith('&')) && this.chatManager.isPage(noticeTargetStripped)) {
+            targetChannel = noticeTargetStripped;
         }
 
         // 2) Otherwise look for any mentioned channel names inside the message text
@@ -1108,9 +1204,29 @@ class IRCParser {
         if (window.user.toLowerCase() === invitedNick.toLowerCase()) {
             const inviteMsg = this.i18nSpan('chat.invite.received', '{nick} has invited you to {channel}', { nick, channel });
             this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
-        } else {
+
+            if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
+                this.chatManager.addNotificationEvent('Status');
+            }
+
+            if (this.chatManager.notificationManager) {
+                this.chatManager.notificationManager.notifyInvite(nick, channel);
+            }
+        } else if (window.user.toLowerCase() === nick.toLowerCase()) {
             const inviteMsg = this.i18nSpan('chat.invite.sent', 'You have invited {nick} to {channel}', { nick: invitedNick, channel });
             this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
+        } else {
+            const inviteMsg = this.i18nSpan('chat.invite.notify', '{invitedNick} has been invited to {channel} by {nick}{host}', {
+                invitedNick,
+                channel,
+                nick,
+                host: ''
+            });
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
+
+            if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
+                this.chatManager.addNotificationEvent('Status');
+            }
         }
     }
     
@@ -1132,6 +1248,10 @@ class IRCParser {
         this.chatManager.setHighlight(true);
         
         // Trigger browser notification for knock
+        if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
+            this.chatManager.addNotificationEvent(channel);
+        }
+
         if (this.chatManager.notificationManager) {
             this.chatManager.notificationManager.notifyKnock(channel, nick, message);
         }

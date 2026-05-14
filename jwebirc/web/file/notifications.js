@@ -176,10 +176,11 @@ window.NotificationManager = class NotificationManager {
     }
     
     /**
-     * Check if should show notification (only when window is not focused)
+     * Check if should show notification
+     * @param {boolean} showWhenFocused - Allow notification even when window is focused
      */
-    shouldShowNotification() {
-        return this.enabled && this.supported && this.permission === 'granted' && !this.windowFocused;
+    shouldShowNotification(showWhenFocused = false) {
+        return this.enabled && this.supported && this.permission === 'granted' && (showWhenFocused || !this.windowFocused);
     }
     
     /**
@@ -189,7 +190,9 @@ window.NotificationManager = class NotificationManager {
      * @returns {Notification|null} The notification object or null
      */
     showNotification(title, options = {}) {
-        if (!this.shouldShowNotification()) {
+        const { showWhenFocused = false, onClick = null, ...notificationOptions } = options;
+
+        if (!this.shouldShowNotification(showWhenFocused)) {
             return null;
         }
         
@@ -197,7 +200,7 @@ window.NotificationManager = class NotificationManager {
             icon: '/file/bootstrap/favicon.ico',
             badge: '/file/bootstrap/favicon.ico',
             requireInteraction: false,
-            ...options
+            ...notificationOptions
         };
         
         try {
@@ -227,8 +230,8 @@ window.NotificationManager = class NotificationManager {
                 this.activeNotifications.delete(id);
                 
                 // Call callback if provided
-                if (options.onClick) {
-                    options.onClick();
+                if (onClick) {
+                    onClick();
                 }
             };
             
@@ -369,6 +372,7 @@ window.NotificationManager = class NotificationManager {
             body: `${nick} invited you to ${channel}`,
             tag: `invite-${channel}`,
             requireInteraction: true,
+            showWhenFocused: true,
             onClick: () => {
                 // Could automatically join the channel or just focus window
                 window.focus();
