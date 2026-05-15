@@ -493,6 +493,9 @@ class PostManager {
      */
     sendRawMessage(rawMessage) {
         if (rawMessage && this.chatManager.socket) {
+            if (window.ircParser && typeof window.ircParser.logRawLine === 'function') {
+                window.ircParser.logRawLine('OUT', rawMessage);
+            }
             const msg = {
                 category: "chat",
                 message: rawMessage,
@@ -532,6 +535,45 @@ class PostManager {
     
     parseCommand(text, activeWindow) {
         this.chatManager.setOutput(activeWindow);
+        const loweredText = text.toLowerCase();
+
+        if (loweredText.startsWith('/rawdebug')) {
+            const parts = text.trim().split(/\s+/);
+            const mode = (parts[1] || 'toggle').toLowerCase();
+            const parser = window.ircParser;
+
+            if (!parser || typeof parser.setRawDebug !== 'function' || typeof parser.isRawDebugEnabled !== 'function') {
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.rawDebugUnavailable', 'RAW debug is unavailable right now') + "\n");
+                this.chatManager.addWindow();
+                return null;
+            }
+
+            let nextState = parser.isRawDebugEnabled();
+            if (mode === 'on' || mode === '1' || mode === 'true') {
+                nextState = true;
+            } else if (mode === 'off' || mode === '0' || mode === 'false') {
+                nextState = false;
+            } else if (mode === 'status') {
+                // keep current state
+            } else if (mode === 'toggle') {
+                nextState = !nextState;
+            } else {
+                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.rawDebugUsage', 'Usage: /rawdebug [on|off|status]') + "\n");
+                this.chatManager.addWindow();
+                return null;
+            }
+
+            if (mode !== 'status') {
+                parser.setRawDebug(nextState);
+            }
+
+            const stateText = parser.isRawDebugEnabled()
+                ? this.t('chat.command.rawDebugOn', 'RAW line debug is now ON (console)')
+                : this.t('chat.command.rawDebugOff', 'RAW line debug is now OFF');
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #00aaff\">==</span> " + stateText + "\n");
+            this.chatManager.addWindow();
+            return null;
+        }
 
         // IRCv3 message tags (e.g. /@+typing=active TAGMSG #channel) must be sent unchanged
         if (text.startsWith('/@')) {

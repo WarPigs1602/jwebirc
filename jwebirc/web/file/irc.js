@@ -12,6 +12,7 @@ class IRCParser {
         this.channel = window.chan || '';
         this.user = window.user || '';
         this.serverNickLength = Math.max(1, parseInt(window.nickMaxLength, 10) || 15);
+        this.rawLineDebug = window.ircRawDebug === true || window.ircRawDebug === 'true';
         
         // Shared delay (ms) for WHO and history commands to avoid flooding
         this.commandDelay = parseInt(window.commandDelayOnJoin) || 300;
@@ -140,9 +141,10 @@ class IRCParser {
         }
         
         // Parse command and middle params
-        const parts = text.trim().split(' ');
-        const command = parts[0];
-        const params = parts.slice(1);
+        const middle = text.trim();
+        const parts = middle.length > 0 ? middle.split(/\s+/) : [];
+        const command = parts.length > 0 ? parts[0] : '';
+        const params = parts.length > 1 ? parts.slice(1) : [];
         
         // Add trailing as last param if it exists
         if (trailing !== null) {
@@ -153,6 +155,8 @@ class IRCParser {
     }
     
     parseOutput(text) {
+        this.logRawLine('IN', text);
+
         // Check for message tags (IRCv3)
         let tags = null;
         if (text.startsWith('@')) {
@@ -175,7 +179,15 @@ class IRCParser {
         }
         
         const output = this.stripSystemMessageMarker(this.getNumerics(text.toString()));
-        if (!output) return;
+        if (!output) {
+            if (this.isRawDebugEnabled()) {
+                this.output = 'Status';
+                const ts = this.chatManager.getTimestamp();
+                const escapedRaw = this.escapeRawForDisplay(text);
+                this.chatManager.parsePage(`${ts} <span style="color: #888;">[RAW]</span> <span style="font-family: monospace;">${escapedRaw}</span>\n`);
+            }
+            return;
+        }
 
         // Use server-provided timestamp if available and server-time is enabled
         const ts = (tags && tags.has('time') && this.enabledCaps.has('server-time'))
@@ -191,6 +203,15 @@ class IRCParser {
         } else {
             this.chatManager.parsePage(ts + " " + output.trim() + "\n");
         }
+    }
+
+    escapeRawForDisplay(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
     
     getNumerics(text) {
@@ -1197,24 +1218,33 @@ class IRCParser {
     handleInvite(ircMsg) {
         const { prefix, params } = ircMsg;
         const nick = this.parseNick(prefix);
-        const invitedNick = params[0];
-        const channel = params[1];
-        this.output = this.chatManager.getActiveWindow();
+        const normalizedParams = (params || []).filter(param => typeof param === 'string' && param.length > 0);
+        const invitedNick = normalizedParams[0] || '';
+        const channel = normalizedParams[1] || '';
+        const currentUser = (typeof window.user === 'string' ? window.user : '').toLowerCase();
+
+        if (!invitedNick || !channel) {
+            return;
+        }
+
+        const hasChatManager = !!this.chatManager;
+        const inviteTargetWindow = (hasChatManager && channel && this.chatManager.isPage(channel)) ? channel : 'Status';
+        this.output = inviteTargetWindow;
         
-        if (window.user.toLowerCase() === invitedNick.toLowerCase()) {
+        if (currentUser && currentUser === invitedNick.toLowerCase()) {
             const inviteMsg = this.i18nSpan('chat.invite.received', '{nick} has invited you to {channel}', { nick, channel });
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
+            this.chatManager.parsePages(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`, inviteTargetWindow);
 
             if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
-                this.chatManager.addNotificationEvent('Status');
+                this.chatManager.addNotificationEvent(inviteTargetWindow);
             }
 
             if (this.chatManager.notificationManager) {
                 this.chatManager.notificationManager.notifyInvite(nick, channel);
             }
-        } else if (window.user.toLowerCase() === nick.toLowerCase()) {
+        } else if (currentUser && currentUser === nick.toLowerCase()) {
             const inviteMsg = this.i18nSpan('chat.invite.sent', 'You have invited {nick} to {channel}', { nick: invitedNick, channel });
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
+            this.chatManager.parsePages(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`, inviteTargetWindow);
         } else {
             const inviteMsg = this.i18nSpan('chat.invite.notify', '{invitedNick} has been invited to {channel} by {nick}{host}', {
                 invitedNick,
@@ -1222,10 +1252,10 @@ class IRCParser {
                 nick,
                 host: ''
             });
-            this.chatManager.parsePage(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`);
+            this.chatManager.parsePages(this.chatManager.getTimestamp() + ` ${inviteMsg}\n`, inviteTargetWindow);
 
             if (this.chatManager && typeof this.chatManager.addNotificationEvent === 'function') {
-                this.chatManager.addNotificationEvent('Status');
+                this.chatManager.addNotificationEvent(inviteTargetWindow);
             }
         }
     }
@@ -1739,6 +1769,9 @@ class IRCParser {
     }
     
     parseNick(nick) {
+        if (typeof nick !== 'string' || nick.length === 0) {
+            return '';
+        }
         // Remove leading : if present
         if (nick.startsWith(':')) {
             nick = nick.substring(1);
@@ -1747,6 +1780,12 @@ class IRCParser {
     }
     
     parseHost(nick) {
+        if (typeof nick !== 'string' || nick.length === 0) {
+            return '';
+        }
+        if (nick.startsWith(':')) {
+            nick = nick.substring(1);
+        }
         return nick.includes("!") ? nick.split("!", 2)[1] : nick;
     }
 
@@ -1780,6 +1819,22 @@ class IRCParser {
         }
         
         return tags;
+    }
+
+    isRawDebugEnabled() {
+        return this.rawLineDebug === true;
+    }
+
+    setRawDebug(enabled) {
+        this.rawLineDebug = enabled === true;
+        window.ircRawDebug = this.rawLineDebug;
+    }
+
+    logRawLine(direction, line) {
+        if (!this.isRawDebugEnabled()) return;
+        if (typeof line !== 'string' || line.length === 0) return;
+        const dir = direction === 'OUT' ? 'OUT' : 'IN';
+        console.debug(`[IRC RAW ${dir}]`, line);
     }
     
     /**
