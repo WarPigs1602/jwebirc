@@ -256,7 +256,8 @@ class ChatManager {
         const match = prefixString.match(/^PREFIX=\(([a-z]+)\)(\S+)/i);
         if (match) {
             const modes = match[1];
-            const candidateSymbols = match[2].substring(0, modes.length);
+            const decodedSymbols = this.decodeNickToken(match[2]);
+            const candidateSymbols = decodedSymbols.substring(0, modes.length);
             const knownFallbackSymbols = {
                 q: '~',
                 a: '&',
@@ -319,9 +320,23 @@ class ChatManager {
         return this.serverPrefixes.symbols.includes(char);
     }
 
+    decodeNickToken(value = '') {
+        const text = String(value || '');
+        if (text.indexOf('&') === -1) {
+            return text;
+        }
+
+        return text
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;|&apos;/gi, "'");
+    }
+
     extractNickParts(rawNick = '') {
         let status = '';
-        let nick = String(rawNick || '');
+        let nick = this.decodeNickToken(rawNick);
 
         while (nick.length > 0 && this.isStatusSymbol(nick[0])) {
             status += nick[0];

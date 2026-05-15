@@ -1776,7 +1776,22 @@ class IRCParser {
         if (nick.startsWith(':')) {
             nick = nick.substring(1);
         }
-        return nick.includes("!") ? nick.split("!", 2)[0] : nick;
+
+        let parsedNick = nick.includes("!") ? nick.split("!", 2)[0] : nick;
+
+        if (this.chatManager && typeof this.chatManager.decodeNickToken === 'function') {
+            parsedNick = this.chatManager.decodeNickToken(parsedNick);
+        }
+
+        if (this.chatManager && typeof this.chatManager.isStatusSymbol === 'function') {
+            while (parsedNick.length > 0 && this.chatManager.isStatusSymbol(parsedNick[0])) {
+                parsedNick = parsedNick.substring(1);
+            }
+        } else {
+            parsedNick = parsedNick.replace(/^[~&@%+!]+/, '');
+        }
+
+        return parsedNick;
     }
     
     parseHost(nick) {
