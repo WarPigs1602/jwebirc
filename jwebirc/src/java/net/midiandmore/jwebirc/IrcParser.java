@@ -510,8 +510,10 @@ public class IrcParser {
      * @return IrcMessage object
      */
     protected IrcMessage parseString(String text) {
+        boolean hasPrefix = text.startsWith(":");
+
         // Remove leading colon if present
-        if (text.startsWith(":")) {
+        if (hasPrefix) {
             text = text.substring(1);
         }
         
@@ -528,15 +530,25 @@ public class IrcParser {
             trailing = "";
         }
         
-        // Extract command from prefix (second token after first space)
+        // Extract IRC command:
+        // - with server prefix: second token (":server COMMAND ...")
+        // - without prefix: first token ("COMMAND ...")
         String command = "";
         int firstSpace = prefix.indexOf(' ');
-        if (firstSpace >= 0 && firstSpace + 1 < prefix.length()) {
-            int secondSpace = prefix.indexOf(' ', firstSpace + 1);
-            if (secondSpace >= 0) {
-                command = prefix.substring(firstSpace + 1, secondSpace);
+        if (hasPrefix) {
+            if (firstSpace >= 0 && firstSpace + 1 < prefix.length()) {
+                int secondSpace = prefix.indexOf(' ', firstSpace + 1);
+                if (secondSpace >= 0) {
+                    command = prefix.substring(firstSpace + 1, secondSpace);
+                } else {
+                    command = prefix.substring(firstSpace + 1);
+                }
+            }
+        } else {
+            if (firstSpace >= 0) {
+                command = prefix.substring(0, firstSpace);
             } else {
-                command = prefix.substring(firstSpace + 1);
+                command = prefix;
             }
         }
         
