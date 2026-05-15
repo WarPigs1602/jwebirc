@@ -2154,6 +2154,15 @@ class ChatManager {
     }
     
     changeNick(oldnick, newnick) {
+        // Ignore no-op nick changes to avoid misleading "nick changed" messages.
+        if (oldnick && newnick && oldnick.toLowerCase() === newnick.toLowerCase()) {
+            if (window.user && oldnick.toLowerCase() === window.user.toLowerCase()) {
+                window.user = newnick;
+                this.userColor = this.getNickColor(newnick);
+            }
+            return;
+        }
+
         if (oldnick.toLowerCase() === window.user.toLowerCase()) {
             window.user = newnick;
             this.userColor = this.getNickColor(newnick);

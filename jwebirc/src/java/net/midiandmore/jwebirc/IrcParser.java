@@ -15,6 +15,7 @@ import java.io.StringReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.security.cert.X509Certificate;
@@ -345,6 +346,7 @@ public class IrcParser {
     private boolean capNegotiating = false;
     private boolean capEnded = false;
     private boolean loginComplete = false;
+    private boolean registrationComplete = false;
     private String pendingNick;
     private int serverNickLength = 15;
     private final java.util.Set<String> requestedCaps = new java.util.HashSet<>();
@@ -545,6 +547,7 @@ public class IrcParser {
         // Save nick for later use
         this.pendingNick = nick;
         this.loginComplete = false;
+        this.registrationComplete = false;
         this.capNegotiating = false;
         this.capEnded = false;
         this.requestedCaps.clear();
@@ -656,12 +659,32 @@ public class IrcParser {
         // Parse only to check for special commands that need backend handling
         IrcMessage msg = parseString(lineForParsing);
         String command = msg.command;
+
+        // Mark the connection as fully registered once server welcome arrives.
+        if ("001".equals(command)) {
+            registrationComplete = true;
+        }
         
         // Handle nickname rejection numerics with an automatic fallback nick.
         if (isNicknameRetryNumeric(command)) {
+            // Some servers temporarily rate-limit nick changes (e.g. "Nick change too fast").
+            // In that case we forward the server message only and skip automatic retry/synthetic NICK.
+            if ("437".equals(command) && msg.trailing != null
+                && msg.trailing.toLowerCase(Locale.ROOT).contains("nick change too fast")) {
+                sendText(originalLine + "\n", session, "chat", "");
+                return;
+            }
+
+            String oldNick = pendingNick;
             handleNicknameRetry(msg);
             // Forward to client for display
             sendText(originalLine + "\n", session, "chat", "");
+            // Notify the client of the new nick being attempted so window.user stays in sync.
+            // This matters when 001 is never received (e.g. Registration Timeout): without this
+            // the client-side nick display would stay stuck on the original nick.
+            if (oldNick != null && pendingNick != null && !pendingNick.equals(oldNick)) {
+                 sendText(":" + oldNick + " NICK :" + pendingNick + "\n", session, "chat", "");
+            }
             return;
         }
 
@@ -958,6 +981,13 @@ public class IrcParser {
     }
 
     private void handleNicknameRetry(IrcMessage msg) {
+        if (registrationComplete) {
+            Logger.getLogger(IrcParser.class.getName()).log(Level.FINE,
+                    "{0} received after registration; skipping automatic nickname retry",
+                    msg.command);
+            return;
+        }
+
         String attemptedNick = extractAttemptedNick(msg);
         
         if (attemptedNick == null || attemptedNick.isEmpty()) {

@@ -888,19 +888,14 @@ class IRCParser {
 
     handleRejectedNickname(code, params) {
         this.output = "Status";
-
-        const attemptedNick = window.user || params[1];
         const fallbackMessages = {
             '432': 'Nickname is invalid',
             '433': 'Nickname is already in use',
             '437': 'Nickname is temporarily unavailable'
         };
         const message = params[2] || fallbackMessages[code] || 'Nickname rejected';
-        const newNick = this.buildAlternativeNickname(attemptedNick);
 
-        window.user = newNick;
-
-        return ` <span style=\"color: #ff0000\">==</span> ${message} - Trying: ${newNick}`;
+        return ` <span style=\"color: #ff0000\">==</span> ${message}`;
     }
 
     buildAlternativeNickname(currentNick) {
@@ -1212,6 +1207,12 @@ class IRCParser {
         const { prefix, params } = ircMsg;
         const oldnick = this.parseNick(prefix);
         const newnick = params[0];
+
+        if (oldnick && newnick && typeof window.user === 'string' && oldnick.toLowerCase() === window.user.toLowerCase()) {
+            window.user = newnick;
+            this.chatManager.userColor = this.chatManager.getNickColor(window.user);
+        }
+
         this.chatManager.changeNick(oldnick, newnick);
     }
     
