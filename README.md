@@ -15,6 +15,7 @@ See a live example at https://chat.midiandmore.net/?channels=dev.
 - [Installation](#installation)
 - [Configuration (Server-Side)](#configuration-server-side)
 - [Usage (Client-Side)](#usage-client-side)
+- [Nick Prefixes & Emoji Mapping](#nick-prefixes--emoji-mapping)
 - [Plugin System](#plugin-system)
 - [IRCv3 Feature Support](#ircv3-feature-support)
 - [IRC Command Reference](#irc-command-reference)
@@ -64,6 +65,7 @@ ant dist
   - Google reCAPTCHA v3
   - Google reCAPTCHA Enterprise
 - **Emoji Picker**: Built-in emoji support for modern chat experience
+- **Nick Status Emojis**: Nicklist shows role emojis (owner/admin/op/halfop/voice) based on IRC prefix modes
 - **Responsive Design**: Bootstrap-based responsive UI that works on desktop and mobile devices
 - **Session Management**: Automatic session handling with configurable timeouts
 - **SSL/TLS Support**: Connect to IRC servers using secure connections
@@ -672,6 +674,40 @@ Access customization options via the **⚙️ Settings** button:
 6. **Emojis**: Click emoji button to insert emojis
 7. **Standard IRC Commands**: `/nick`, `/msg`, `/quit`, `/topic`, etc.
 8. **CTCP Queries**: `/ctcp user VERSION`, `/ctcp user PING`, etc.
+
+## Nick Prefixes & Emoji Mapping
+
+jWebIRC maps IRC channel status prefixes to role emojis in the nicklist and keeps chat rendering consistent with the highest known status.
+
+### Prefix-to-Emoji Mapping
+
+| Mode | Prefix | Nicklist Emoji | Meaning |
+|------|--------|----------------|---------|
+| `q` | `~` | 👑 | Owner / Founder |
+| `a` | `&` | 🛡️ | Admin / Protected |
+| `o` | `@` | ⭐ | Operator |
+| `h` | `%` | ⚡ | Half-Op |
+| `v` | `+` | 💬 | Voice |
+
+### What Is Shown Where
+
+- **Nicklist**: shows emoji + nickname (example: `👑WarPigs`).
+- **Chat line nicks**: show the highest matching IRC prefix symbol (example: `@Nick`), not the full prefix chain.
+- If a user has multiple statuses (for example with `multi-prefix`), jWebIRC keeps all known symbols internally and uses the highest-priority one for compact display in chat.
+
+### Automatic Prefix Detection From Server Welcome
+
+jWebIRC automatically reads the server prefix definition from the IRC welcome/login phase, specifically from numeric `005` (`ISUPPORT`) with `PREFIX=(modes)symbols`.
+
+Example advertised by servers:
+
+- `PREFIX=(qaohv)~&@%+`
+
+This means jWebIRC does not use hardcoded role symbols only. It adapts to what the IRC server reports during welcome and applies the matching prefixes/roles in nicklist and chat automatically.
+
+Note:
+
+- The plugin named `welcome-banner` is unrelated to IRC prefix detection. Prefix mapping comes from IRC protocol messages (`005 ISUPPORT`), not from frontend plugins.
 
 ## Plugin System
 
