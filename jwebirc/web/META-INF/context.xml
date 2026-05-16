@@ -20,8 +20,10 @@
     <!-- IRC Server Connection -->
     <Parameter name="jwebirc.webchatHost" value="localhost" override="false"/>
     <Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false"/>
-    <Parameter name="jwebirc.webchatPort" value="6669" override="false"/>
-    <Parameter name="jwebirc.webchatSsl" value="false" override="false"/>
+    <!-- Default port: 6669 (plaintext), 6697 (TLS/SSL), or your custom port -->
+    <Parameter name="jwebirc.webchatPort" value="6697" override="false"/>
+    <!-- Enable TLS/SSL: set to 'true' for secure connections, 'false' for plaintext -->
+    <Parameter name="jwebirc.webchatSsl" value="true" override="false"/>
     <Parameter name="jwebirc.webchatServerPassword" value="" override="false"/>
     
     <!-- IRC Connection Identity -->
@@ -50,6 +52,8 @@
     <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false"/>
     <Parameter name="jwebirc.webircCgi" value="CGIIRC" override="false"/>
     <Parameter name="jwebirc.hmacTemporal" value="1337" override="false"/>
+    <!-- Include :secure flag in WEBIRC command when TLS/SSL is active (RFC 7194) -->
+    <Parameter name="jwebirc.webircIncludeSecure" value="true" override="false"/>
     
     <!-- ============================================
          AUTHENTICATION

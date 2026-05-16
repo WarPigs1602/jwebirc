@@ -49,6 +49,7 @@
     session.setAttribute("webchat_mode", webircMode);
     session.setAttribute("webchat_cgi", webircCgi);
     session.setAttribute("hmac_temporal", hmacTemporal);
+    session.setAttribute("webirc_include_secure", webircIncludeSecure);
     session.setAttribute("sasl_enabled", saslEnabled);
     session.setAttribute("chatnapping_enabled", chatnappingEnabled);
     session.setAttribute("chatnapping_allowed_domains", chatnappingAllowedDomains);

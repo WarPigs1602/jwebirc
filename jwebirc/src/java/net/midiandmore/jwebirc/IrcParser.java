@@ -202,6 +202,20 @@ public class IrcParser {
     }
 
     /**
+     * @return whether to include :secure flag in WEBIRC command
+     */
+    public boolean isWebircIncludeSecure() {
+        return webircIncludeSecure;
+    }
+
+    /**
+     * @param webircIncludeSecure whether to include :secure flag in WEBIRC command when TLS is active
+     */
+    public void setWebircIncludeSecure(boolean webircIncludeSecure) {
+        this.webircIncludeSecure = webircIncludeSecure;
+    }
+
+    /**
      * @return the serverPassword
      */
     public String getServerPassword() {
@@ -316,6 +330,7 @@ public class IrcParser {
     private String host;
     private int port;
     private boolean ssl;
+    private boolean webircIncludeSecure = true;  // Include :secure flag in WEBIRC command when TLS is active (can be disabled)
     private String serverPassword;
     private String ident;
     private String user;
@@ -649,10 +664,21 @@ public class IrcParser {
                     new Object[]{getPassword(), getUser(), getHostname(), getIp()});
             throw new IOException("WEBIRC requires password, user, hostname and IP");
         }
+        
+        // Build WEBIRC command with optional :secure flag if TLS is active
+        String webircCommand = String.format("WEBIRC %s %s %s %s",
+                getPassword(), getUser(), getHostname(), getIp());
+        
+        if (isSsl() && isWebircIncludeSecure()) {
+            webircCommand += " :secure";
+        }
+        
         Logger.getLogger(IrcParser.class.getName()).log(Level.INFO,
-                "WEBIRC Debug - Password={0}, User={1}, Hostname={2}, IP={3}",
-                new Object[]{getPassword(), getUser(), getHostname(), getIp()});
-        submitMessage("WEBIRC %s %s %s %s", getPassword(), getUser(), getHostname(), getIp());
+                "WEBIRC Debug - Password={0}, User={1}, Hostname={2}, IP={3}, TLS={4}, Secure Flag={5}",
+                new Object[]{getPassword(), getUser(), getHostname(), getIp(), isSsl(), 
+                           (isSsl() && isWebircIncludeSecure())});
+        
+        submitMessage(webircCommand);
     }
 
     protected void parseCommands(String line, Session session) {

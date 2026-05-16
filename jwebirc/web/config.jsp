@@ -35,6 +35,7 @@
     String webircMode = param(ctx, "jwebirc.webircMode", "WEBIRC");
     String webircCgi = param(ctx, "jwebirc.webircCgi", "CGIIRC");
     String hmacTemporal = param(ctx, "jwebirc.hmacTemporal", "1337");
+    String webircIncludeSecure = param(ctx, "jwebirc.webircIncludeSecure", "true");
     String saslEnabled = param(ctx, "jwebirc.saslEnabled", "true");
     String saslMechanism = param(ctx, "jwebirc.saslMechanism", "PLAIN");
 

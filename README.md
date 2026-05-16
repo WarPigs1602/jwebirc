@@ -9,6 +9,7 @@ See a live example at https://chat.midiandmore.net/?channels=dev.
 ## Quick Navigation
 
 - [Features](#features)
+- [Recent Changes & Bug Fixes](#recent-changes--bug-fixes)
 - [Technology Stack](#technology-stack)
 - [Prerequisites](#prerequisites)
 - [Jakarta EE Integration & Correct Version](#jakarta-ee-integration--correct-version)
@@ -46,7 +47,7 @@ ant dist
 ## Features
 
 - **WebSocket-based Communication**: Real-time IRC communication using modern WebSocket technology
-- **WEBIRC/CGIIRC Support**: Supports WEBIRC and CGIIRC protocols for proper IP forwarding
+- **WEBIRC/CGIIRC Support**: Supports WEBIRC (RFC 7194) and CGIIRC protocols for proper IP forwarding with optional `:secure` flag for encrypted connections
 - **SASL Authentication**: Optional SASL authentication support for secure login
 - **IRCv3 Support**: Supports IRCv3 capability negotiation (CAP 302), SASL, message tags, and modern server capabilities such as account-notify, away-notify, batch, cap-notify, chghost, extended-join, invite-notify, labeled-response, multi-prefix, server-time, and userhost-in-names when offered by the server
 - **CTCP Support**: Full CTCP (Client-To-Client Protocol) support including VERSION, TIME, PING, FINGER, USERINFO, SOURCE, and CLIENTINFO
@@ -68,9 +69,26 @@ ant dist
 - **Nick Status Emojis**: Nicklist shows role emojis (owner/admin/op/halfop/voice) based on IRC prefix modes
 - **Responsive Design**: Bootstrap-based responsive UI that works on desktop and mobile devices
 - **Session Management**: Automatic session handling with configurable timeouts
-- **SSL/TLS Support**: Connect to IRC servers using secure connections
+- **SSL/TLS Support**: Connect to IRC servers using secure connections with full certificate validation
 - **Multi-channel Support**: Join and manage multiple IRC channels simultaneously
 - **Private Messages**: Support for private messaging between users
+
+## Recent Changes & Bug Fixes
+
+### SSL/TLS Connection Robustness (May 2026)
+- **Fixed**: SSL flag parsing in Webchat.java now uses case-insensitive comparison with null-safety
+  - Old behavior: Strict `equals("true")` could cause silent fallback to plaintext
+  - New behavior: Accepts `"true"`, `"1"`, `"yes"` (case-insensitive), safely handles null and whitespace
+  - Impact: TLS connections now reliably establish without unexpected fallback
+  - Affected servers: UnrealIRCD, InspIRCd, and other servers requiring encrypted gateway connections
+
+### RFC 7194 WEBIRC :secure Flag Support (May 2026)
+- **Added**: Optional `:secure` flag in WEBIRC protocol command to signal encrypted connections
+  - Configuration: `jwebirc.webircIncludeSecure` (default: `true`)
+  - Behavior: Appends `:secure` to WEBIRC command when TLS is active
+  - Protocol example: `WEBIRC password user hostname ip :secure`
+  - Server support: Recognized by modern IRC daemons (UnrealIRCD, InspIRCd, etc.)
+  - Benefit: Proper encryption status reporting in server logs and user visibility
 
 ## Technology Stack
 
@@ -158,6 +176,7 @@ You have two ways to configure parameters such as IRC host, port, SASL, CAPTCHA,
        <Parameter name="jwebirc.webchatHost" value="irc.example.com" override="false" />
        <Parameter name="jwebirc.webchatPort" value="6697" override="false" />
        <Parameter name="jwebirc.webchatSsl" value="true" override="false" />
+       <Parameter name="jwebirc.webircIncludeSecure" value="true" override="false" />
        <Parameter name="jwebirc.webchatName" value="ExampleNet WebChat" override="false" />
        <Parameter name="jwebirc.ircNetworkName" value="ExampleNet" override="false" />
        <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
@@ -225,6 +244,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
     <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false" />
     <Parameter name="jwebirc.webircCgi" value="CGIIRC" override="false" />
     <Parameter name="jwebirc.hmacTemporal" value="1337" override="false" />
+    <Parameter name="jwebirc.webircIncludeSecure" value="true" override="false" />
     
     <!-- Authentication Configuration -->
     <Parameter name="jwebirc.saslEnabled" value="true" override="false" />
@@ -335,14 +355,15 @@ Quick navigation:
 - [Security Configuration](#security-configuration)
 
 ### IRC Server Settings
+
 ```xml
 <!-- IRC Server Hostname -->
 <Parameter name="jwebirc.webchatHost" value="irc.example.com" override="false" />
 
-<!-- IRC Server Port (default: 6667 for plain, 6697 for SSL) -->
+<!-- IRC Server Port (default: 6667 for plain, 6697 for SSL/TLS) -->
 <Parameter name="jwebirc.webchatPort" value="6667" override="false" />
 
-<!-- Enable SSL/TLS Encryption (true/false) -->
+<!-- Enable SSL/TLS Encryption (true/false) - connects securely to IRC server -->
 <Parameter name="jwebirc.webchatSsl" value="false" override="false" />
 
 <!-- Server Password (if required by IRC server) -->
@@ -351,6 +372,13 @@ Quick navigation:
 <!-- Optional Server Binding Address -->
 <Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false" />
 ```
+
+**SSL/TLS Connection Details:**
+- When `jwebirc.webchatSsl` is `true`, all connections use SSL/TLS encryption (TLSv1.3, TLSv1.2, TLSv1.1, TLSv1)
+- SSL flag is case-insensitive and supports: `"true"`, `"1"`, `"yes"` (also handles null/whitespace safely)
+- Self-signed certificates are automatically accepted for development/private IRC servers
+- Use port `6697` (standard) when enabling SSL, or `6667` for plaintext connections
+- For production UnrealIRCD and similar servers: use port `6697` with `jwebirc.webchatSsl=true`
 
 ### Session Configuration
 
@@ -364,7 +392,8 @@ Quick navigation:
 
 ### WEBIRC/CGIIRC Configuration
 
-For proper IP forwarding to IRC servers:
+For proper IP forwarding to IRC servers using WEBIRC gateway protocol (RFC 7194):
+
 ```xml
 <!-- WEBIRC or CGIIRC mode -->
 <Parameter name="jwebirc.webircMode" value="WEBIRC" override="false" />
@@ -372,9 +401,21 @@ For proper IP forwarding to IRC servers:
 <!-- CGIIRC gateway setting -->
 <Parameter name="jwebirc.webircCgi" value="CGIIRC" override="false" />
 
-<!-- HMAC temporal value for WEBIRC -->
+<!-- HMAC temporal value for WEBIRC authentication -->
 <Parameter name="jwebirc.hmacTemporal" value="1337" override="false" />
+
+<!-- Include :secure flag in WEBIRC command when TLS/SSL is active (RFC 7194) -->
+<!-- This signals to the IRC server that the connection is encrypted -->
+<Parameter name="jwebirc.webircIncludeSecure" value="true" override="false" />
 ```
+
+**WEBIRC :secure Flag Details:**
+- When `jwebirc.webircIncludeSecure` is `true` and SSL/TLS is enabled (`jwebirc.webchatSsl=true`), the WEBIRC command will include the `:secure` suffix
+- Example with secure flag: `WEBIRC password user 10.0.0.100 10.0.0.100 :secure`
+- Example without secure flag: `WEBIRC password user 10.0.0.100 10.0.0.100`
+- The `:secure` flag is recognized by modern IRC servers (UnrealIRCD, Inspircd, etc.) to properly classify encrypted gateway connections
+- Disable this flag only if your IRC server does not support RFC 7194 or if you want to hide the encryption status
+- This parameter is configurable per deployment and defaults to `true` for security
 
 ### Authentication Configuration
 

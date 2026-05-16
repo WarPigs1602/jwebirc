@@ -95,6 +95,7 @@ public class Webchat {
         String webircMode;
         String webircCgi;
         String hmac;
+        boolean webircIncludeSecure;
         String useSasl;
         String saslMechanism;
         String saslUsername;
@@ -118,7 +119,20 @@ public class Webchat {
         }
         config.host = (String) getHttpSession().getAttribute("webchat_host");
         config.port = Integer.parseInt((String) getHttpSession().getAttribute("webchat_port"));
-        config.ssl = getHttpSession().getAttribute("webchat_ssl").equals("true");
+        
+        // Parse SSL flag robustly: case-insensitive, handle null, trim whitespace, and log debug info
+        Object sslAttr = getHttpSession().getAttribute("webchat_ssl");
+        config.ssl = false;
+        if (sslAttr != null) {
+            String sslStr = sslAttr.toString().trim();
+            config.ssl = sslStr.equalsIgnoreCase("true") || sslStr.equalsIgnoreCase("1") || sslStr.equalsIgnoreCase("yes");
+            Logger.getLogger(Webchat.class.getName()).log(Level.FINE, 
+                "Parsed SSL flag from session: {0} (type: {1}) -> {2}", 
+                new Object[]{sslAttr, sslAttr.getClass().getSimpleName(), config.ssl});
+        } else {
+            Logger.getLogger(Webchat.class.getName()).log(Level.FINE, "SSL flag not set in session (null)");
+        }
+        
         config.serverPassword = (String) getHttpSession().getAttribute("webchat_server_password");
         config.ident = (String) getHttpSession().getAttribute("webchat_ident");
         config.user = (String) getHttpSession().getAttribute("webchat_user");
@@ -131,6 +145,15 @@ public class Webchat {
         config.webircMode = (String) getHttpSession().getAttribute("webchat_mode");
         config.webircCgi = (String) getHttpSession().getAttribute("webchat_cgi");
         config.hmac = (String) getHttpSession().getAttribute("hmac_temporal");
+        
+        // Parse WEBIRC :secure flag setting (defaults to true)
+        Object webircSecureAttr = getHttpSession().getAttribute("webirc_include_secure");
+        config.webircIncludeSecure = true;  // Default to true
+        if (webircSecureAttr != null) {
+            String secureStr = webircSecureAttr.toString().trim();
+            config.webircIncludeSecure = secureStr.equalsIgnoreCase("true") || secureStr.equalsIgnoreCase("1") || secureStr.equalsIgnoreCase("yes");
+        }
+        
         config.useSasl = (String) getHttpSession().getAttribute("use_sasl");
         config.saslMechanism = (String) getHttpSession().getAttribute("sasl_mechanism");
         config.saslUsername = (String) getHttpSession().getAttribute("sasl_username");
@@ -186,6 +209,9 @@ public class Webchat {
         try {
             setParser(new IrcParser(config.host, config.port, config.ssl, config.serverPassword, 
                     config.ident, config.user, config.password, config.webircMode, config.webircCgi, config.hmac));
+            
+            // Set WEBIRC :secure flag configuration
+            getParser().setWebircIncludeSecure(config.webircIncludeSecure);
             
             // Set SASL parameters if enabled
             if (config.useSasl != null && config.useSasl.equals("true")) {
