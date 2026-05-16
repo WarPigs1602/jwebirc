@@ -1242,9 +1242,15 @@ class ChatManager {
                 styles.push('text-decoration: line-through');
             }
             if (state.monospace) styles.push('font-family: monospace');
-            if (state.reverse) styles.push('filter: invert(1)');
-            if (state.color) styles.push(`color: ${state.color}`);
-            if (state.bgcolor) styles.push(`background-color: ${state.bgcolor}`);
+            if (state.reverse) {
+                if (state.bgcolor) styles.push(`color: ${state.bgcolor}`);
+                if (state.color) styles.push(`background-color: ${state.color}`);
+                // Fallback when no explicit colors are active.
+                if (!state.color && !state.bgcolor) styles.push('filter: invert(1)');
+            } else {
+                if (state.color) styles.push(`color: ${state.color}`);
+                if (state.bgcolor) styles.push(`background-color: ${state.bgcolor}`);
+            }
             
             if (styles.length > 0) {
                 result.push(`<span style="${styles.join('; ')};">`);
@@ -1316,9 +1322,9 @@ class ChatManager {
                     
                     if (colorStr.length > 0) {
                         const colorIndex = parseInt(colorStr);
-                        if (colorIndex >= 0 && colorIndex < this.colors.length) {
-                            state.color = this.colors[colorIndex];
-                        }
+                        state.color = (colorIndex >= 0 && colorIndex < this.colors.length)
+                            ? this.colors[colorIndex]
+                            : null;
                         
                         // Check for background color
                         if (pos < text.length && text[pos] === ',') {
@@ -1330,10 +1336,15 @@ class ChatManager {
                             }
                             if (bgColorStr.length > 0) {
                                 const bgColorIndex = parseInt(bgColorStr);
-                                if (bgColorIndex >= 0 && bgColorIndex < this.colors.length) {
-                                    state.bgcolor = this.colors[bgColorIndex];
-                                }
+                                state.bgcolor = (bgColorIndex >= 0 && bgColorIndex < this.colors.length)
+                                    ? this.colors[bgColorIndex]
+                                    : null;
+                            } else {
+                                state.bgcolor = null;
                             }
+                        } else {
+                            // \x03NN sets foreground only and clears previous background.
+                            state.bgcolor = null;
                         }
                         applyState();
                     } else {
@@ -1360,11 +1371,10 @@ class ChatManager {
             openTags.pop();
         }
         
-        // Return result and trim trailing whitespace/newlines
+        // Return result and trim according to caller options.
         const output = result.join('');
-        const cleaned = output.replace(/\s+(<\/span>)/g, '$1');
         // Allow callers (e.g. input preview) to preserve trailing whitespace for accurate cursor position
-        return options && options.trim === false ? cleaned : cleaned.trim();
+        return options && options.trim === false ? output : output.trim();
     }
     
     findNextControlCode(text, start) {
@@ -1456,9 +1466,9 @@ class ChatManager {
                     
                     if (colorStr.length > 0) {
                         const colorIndex = parseInt(colorStr);
-                        if (colorIndex >= 0 && colorIndex < this.colors.length) {
-                            state.color = this.colors[colorIndex];
-                        }
+                        state.color = (colorIndex >= 0 && colorIndex < this.colors.length)
+                            ? this.colors[colorIndex]
+                            : null;
                         
                         if (pos < text.length && text[pos] === ',') {
                             pos++;
@@ -1469,10 +1479,15 @@ class ChatManager {
                             }
                             if (bgColorStr.length > 0) {
                                 const bgColorIndex = parseInt(bgColorStr);
-                                if (bgColorIndex >= 0 && bgColorIndex < this.colors.length) {
-                                    state.bgcolor = this.colors[bgColorIndex];
-                                }
+                                state.bgcolor = (bgColorIndex >= 0 && bgColorIndex < this.colors.length)
+                                    ? this.colors[bgColorIndex]
+                                    : null;
+                            } else {
+                                state.bgcolor = null;
                             }
+                        } else {
+                            // \x03NN sets foreground only and clears previous background.
+                            state.bgcolor = null;
                         }
                     } else {
                         state.color = null;

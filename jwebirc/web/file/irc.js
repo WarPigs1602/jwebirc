@@ -34,6 +34,9 @@ class IRCParser {
         this.commandQueue = [];
         this.commandTimer = null;
 
+        // Track channels we have already processed as joined to ignore duplicate self JOIN events.
+        this.selfJoinedChannels = new Set();
+
         // Cache last shown capabilities to avoid duplicate CAP lines
         this.capDisplayLast = { ls: null, ack: null, nak: null };
 
@@ -1302,6 +1305,17 @@ class IRCParser {
         const color = this.chatManager.getNickColor(nick);
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
+            const channelKey = channel.toLowerCase();
+            const isDuplicateSelfJoin = this.selfJoinedChannels.has(channelKey);
+
+            if (isDuplicateSelfJoin) {
+                this.output = channel;
+                const joinMsg = this.i18nSpan('chat.join', '[{host}] has joined {channel}', { host, channel });
+                return ` <span style="color: #ff0000">==</span> <span class="message-nick" data-nick="${nick}" style="color: ${color};">${nick}</span> ${joinMsg}`;
+            }
+
+            this.selfJoinedChannels.add(channelKey);
+
             // Ensure re-joins (e.g. /hop) can queue WHO/HISTORY/MODE again for this channel.
             this.resetChannelCommandState(channel);
 
@@ -1350,6 +1364,7 @@ class IRCParser {
         
         if (window.user.toLowerCase() === nick.toLowerCase()) {
             this.resetChannelCommandState(channel);
+            this.selfJoinedChannels.delete(channel.toLowerCase());
             this.chatManager.delPage(channel);
             // Remove channel from memory when leaving
             this.chatManager.removeFromChannelMemory(channel);
@@ -1378,6 +1393,8 @@ class IRCParser {
         
         // If our user was kicked, remove from channel memory
         if (window.user.toLowerCase() === kickedNick.toLowerCase()) {
+            this.resetChannelCommandState(channel);
+            this.selfJoinedChannels.delete(channel.toLowerCase());
             this.chatManager.delPage(channel);
             this.chatManager.removeFromChannelMemory(channel);
             this.output = this.chatManager.getActiveWindow();
