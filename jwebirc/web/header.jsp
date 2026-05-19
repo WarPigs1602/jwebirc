@@ -19,6 +19,7 @@
     String templateCss = (String) session.getAttribute("template_css_path");
     String templateEnabledHeader = (String) session.getAttribute("template_enabled");
     boolean useTemplate = templateEnabledHeader != null && templateEnabledHeader.equalsIgnoreCase("true") && templateCss != null;
+    boolean debugAssetsEnabled = "true".equalsIgnoreCase(application.getInitParameter("jwebirc.debugAssets"));
     
     if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
         if (allowedDomains != null && !allowedDomains.equals("*")) {
@@ -53,8 +54,12 @@
         <link rel="shortcut icon" href="file/favicon.ico">
         
         <!-- Stylesheets -->
+        <% if (!debugAssetsEnabled) { %>
+        <link rel="stylesheet" href="file/bundles/login.bundle.min.css" type="text/css">
+        <% } else { %>
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
         <link rel="stylesheet" href="file/style.css" type="text/css">
+        <% } %>
         <% if (useTemplate) { %>
         <!-- Template System: Custom Theme -->
         <link rel="stylesheet" href="<%= templateCss %>" type="text/css" data-template="custom">
@@ -64,9 +69,6 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
         
         <!-- Scripts -->
-        <script src="file/jquery.js"></script>
-        <script src="file/i18n.js"></script>
-        <script src="file/login-options.js"></script>
         <script>
             // Template System Configuration
             window.templateSystemConfig = {
@@ -76,7 +78,14 @@
                 available: "<%= session.getAttribute("template_available") != null ? session.getAttribute("template_available") : "dark-theme,light-theme" %>".split(",")
             };
         </script>
+        <% if (!debugAssetsEnabled) { %>
+        <script src="file/bundles/login.bundle.min.js"></script>
+        <% } else { %>
+        <script src="file/jquery.js"></script>
+        <script src="file/i18n.js"></script>
+        <script src="file/login-options.js"></script>
         <script src="file/template-system.js"></script>
+        <% } %>
         <%@include file="plugin-head.jsp"%>
     </head>
     <body>

@@ -14,6 +14,7 @@
     if (uiLang == null) {
         uiLang = "en";
     }
+    boolean debugAssetsEnabled = "true".equalsIgnoreCase(application.getInitParameter("jwebirc.debugAssets"));
     
     if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
         if (allowedDomains != null && !allowedDomains.equals("*")) {
@@ -57,13 +58,17 @@
         <link rel="shortcut icon" href="file/favicon.ico">
         
         <!-- Stylesheets -->
-        <link rel="preload" href="file/style.css" as="style">
+        <link rel="preload" href="<%= debugAssetsEnabled ? "file/style.css" : "file/bundles/chat.bundle.min.css" %>" as="style">
+        <% if (!debugAssetsEnabled) { %>
+        <link rel="stylesheet" media="screen" href="file/bundles/chat.bundle.min.css" type="text/css">
+        <% } else { %>
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
         <link rel="stylesheet" media="screen" href="file/style.css" type="text/css">
+        <link rel="stylesheet" href="file/emoji-picker.css" type="text/css">
+        <% } %>
         <% if ("true".equalsIgnoreCase((String) session.getAttribute("template_enabled"))) { %>
         <link rel="stylesheet" href="<%= session.getAttribute("template_css_path") %>" type="text/css" data-template="custom">
         <% } %>
-        <link rel="stylesheet" href="file/emoji-picker.css" type="text/css">
         <%@include file="plugin-head.jsp"%>
         
         <!-- Icons -->
@@ -71,9 +76,13 @@
         
         <!-- Scripts -->
         <script>window.jwebircLang = "<%= uiLang %>";</script>
+        <% if (!debugAssetsEnabled) { %>
+        <script src="file/bundles/chat-head.bundle.min.js"></script>
+        <% } else { %>
         <script src="file/jquery.js"></script>
         <script src="file/i18n.js"></script>
         <script src="file/emoji-picker.js"></script>
+        <% } %>
         
         <style>
             /* Loading Animation */

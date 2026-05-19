@@ -542,10 +542,15 @@
         }
     });
 </script>
+<% boolean debugAssetsEnabled = "true".equalsIgnoreCase(application.getInitParameter("jwebirc.debugAssets")); %>
+<% if (!debugAssetsEnabled) { %>
+<script src="file/bundles/chat-app.bundle.min.js"></script>
+<% } else { %>
 <script src="file/notifications.js"></script>
 <script src="file/chat.js"></script>
 <script src="file/irc.js"></script> 
 <script src="file/post.js"></script> 
+<% } %>
 <jsp:include page="footer-webchat.jsp"/> 
 <%
 } else {

@@ -1,0 +1,205 @@
+package net.midiandmore.jwebirc.build;
+
+import com.google.javascript.jscomp.CheckLevel;
+import com.google.javascript.jscomp.CompilationLevel;
+import com.google.javascript.jscomp.Compiler;
+import com.google.javascript.jscomp.CompilerOptions;
+import com.google.javascript.jscomp.DiagnosticGroups;
+import com.google.javascript.jscomp.Result;
+import com.google.javascript.jscomp.SourceFile;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+public final class AssetBundler {
+
+    private static final List<Bundle> BUNDLES = List.of(
+            new Bundle(BundleType.CSS, "login.bundle.min.css", List.of(
+                    "file/bootstrap/css/bootstrap.min.css",
+                    "file/style.css"
+            )),
+            new Bundle(BundleType.CSS, "chat.bundle.min.css", List.of(
+                    "file/bootstrap/css/bootstrap.min.css",
+                    "file/style.css",
+                    "file/emoji-picker.css"
+            )),
+            new Bundle(BundleType.JS, "login.bundle.min.js", List.of(
+                    "file/jquery.js",
+                    "file/i18n.js",
+                    "file/login-options.js",
+                    "file/template-system.js"
+            )),
+            new Bundle(BundleType.JS, "chat-head.bundle.min.js", List.of(
+                    "file/jquery.js",
+                    "file/i18n.js",
+                    "file/emoji-picker.js"
+            )),
+            new Bundle(BundleType.JS, "chat-app.bundle.min.js", List.of(
+                    "file/notifications.js",
+                    "file/chat.js",
+                    "file/irc.js",
+                    "file/post.js",
+                    "file/template-system.js"
+            ))
+    );
+
+    private AssetBundler() {
+    }
+
+    public static void main(String[] args) throws IOException {
+        if (args.length != 2) {
+            throw new IllegalArgumentException("Expected arguments: <web-root> <output-root>");
+        }
+
+        Path webRoot = Path.of(args[0]);
+        Path outputRoot = Path.of(args[1]).resolve("file").resolve("bundles");
+        Files.createDirectories(outputRoot);
+
+        for (Bundle bundle : BUNDLES) {
+            String merged = readAndMerge(webRoot, bundle.sourceFiles());
+            String minified = bundle.type() == BundleType.JS ? minifyJavaScript(bundle.fileName(), merged) : minifyCss(merged);
+            Files.writeString(outputRoot.resolve(bundle.fileName()), minified, StandardCharsets.UTF_8);
+        }
+    }
+
+    private static String readAndMerge(Path webRoot, List<String> sourceFiles) throws IOException {
+        StringBuilder builder = new StringBuilder();
+        for (String sourceFile : sourceFiles) {
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            builder.append(Files.readString(webRoot.resolve(sourceFile), StandardCharsets.UTF_8));
+            builder.append('\n');
+        }
+        return builder.toString();
+    }
+
+    private static String minifyJavaScript(String fileName, String source) {
+        Compiler compiler = new Compiler();
+        CompilerOptions options = new CompilerOptions();
+        CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(options);
+        options.setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT_NEXT);
+        options.setLanguageOut(CompilerOptions.LanguageMode.ECMASCRIPT_NEXT);
+        options.setWarningLevel(DiagnosticGroups.NON_STANDARD_JSDOC, CheckLevel.OFF);
+
+        Result result = compiler.compile(List.of(), List.of(SourceFile.fromCode(fileName, source)), options);
+        if (!result.success) {
+            throw new IllegalStateException("JavaScript minification failed for " + fileName + ": " + compiler.getErrors());
+        }
+
+        return compiler.toSource();
+    }
+
+    private static String minifyCss(String source) {
+        StringBuilder stripped = new StringBuilder(source.length());
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean inComment = false;
+
+        for (int i = 0; i < source.length(); i++) {
+            char current = source.charAt(i);
+            char next = i + 1 < source.length() ? source.charAt(i + 1) : '\0';
+            char previous = i > 0 ? source.charAt(i - 1) : '\0';
+
+            if (inComment) {
+                if (current == '*' && next == '/') {
+                    inComment = false;
+                    i++;
+                }
+                continue;
+            }
+
+            if (!inSingleQuote && !inDoubleQuote && current == '/' && next == '*') {
+                inComment = true;
+                i++;
+                continue;
+            }
+
+            if (current == '\'' && !inDoubleQuote && previous != '\\') {
+                inSingleQuote = !inSingleQuote;
+                stripped.append(current);
+                continue;
+            }
+
+            if (current == '"' && !inSingleQuote && previous != '\\') {
+                inDoubleQuote = !inDoubleQuote;
+                stripped.append(current);
+                continue;
+            }
+
+            if (!inSingleQuote && !inDoubleQuote && Character.isWhitespace(current)) {
+                if (stripped.isEmpty() || stripped.charAt(stripped.length() - 1) == ' ') {
+                    continue;
+                }
+                stripped.append(' ');
+                continue;
+            }
+
+            stripped.append(current);
+        }
+
+        StringBuilder minified = new StringBuilder(stripped.length());
+        for (int i = 0; i < stripped.length(); i++) {
+            char current = stripped.charAt(i);
+            if (current == ' ') {
+                char previous = previousNonWhitespace(stripped, i - 1);
+                char next = nextNonWhitespace(stripped, i + 1);
+                if (!requiresSpace(previous, next)) {
+                    continue;
+                }
+            }
+
+            if (current == ';' && nextNonWhitespace(stripped, i + 1) == '}') {
+                continue;
+            }
+
+            minified.append(current);
+        }
+
+        return minified.toString().trim();
+    }
+
+    private static char previousNonWhitespace(CharSequence text, int start) {
+        for (int i = start; i >= 0; i--) {
+            char current = text.charAt(i);
+            if (!Character.isWhitespace(current)) {
+                return current;
+            }
+        }
+        return '\0';
+    }
+
+    private static char nextNonWhitespace(CharSequence text, int start) {
+        for (int i = start; i < text.length(); i++) {
+            char current = text.charAt(i);
+            if (!Character.isWhitespace(current)) {
+                return current;
+            }
+        }
+        return '\0';
+    }
+
+    private static boolean requiresSpace(char previous, char next) {
+        return (isIdentifier(previous) && isIdentifier(next))
+                || (isIdentifier(previous) && isQuote(next))
+                || (isQuote(previous) && isIdentifier(next));
+    }
+
+    private static boolean isIdentifier(char value) {
+        return Character.isLetterOrDigit(value) || value == '-' || value == '_' || value == '.' || value == '#' || value == '%' || value == '@';
+    }
+
+    private static boolean isQuote(char value) {
+        return value == '\'' || value == '"';
+    }
+
+    private enum BundleType {
+        JS,
+        CSS
+    }
+
+    private record Bundle(BundleType type, String fileName, List<String> sourceFiles) {
+    }
+}

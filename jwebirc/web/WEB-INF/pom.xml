@@ -57,6 +57,13 @@
             <artifactId>ipaddress</artifactId>
             <version>5.5.1</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.google.javascript</groupId>
+            <artifactId>closure-compiler</artifactId>
+            <version>v20240317</version>
+            <scope>provided</scope>
+        </dependency>
         
     </dependencies>
     
@@ -86,6 +93,11 @@
                 <configuration>
                     <warSourceDirectory>${project.basedir}/..</warSourceDirectory>
                     <failOnMissingWebXml>false</failOnMissingWebXml>
+                    <webResources>
+                        <resource>
+                            <directory>${project.build.directory}/generated-resources/web-bundles</directory>
+                        </resource>
+                    </webResources>
                     <archive>
                         <manifestEntries>
                             <Built-By>MidiAndMore.Net</Built-By>
@@ -100,6 +112,29 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.5</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>bundle-web-assets</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>net.midiandmore.jwebirc.build.AssetBundler</mainClass>
+                            <classpathScope>compile</classpathScope>
+                            <arguments>
+                                <argument>${project.basedir}/..</argument>
+                                <argument>${project.build.directory}/generated-resources/web-bundles</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             
             <!-- Dependency Check Plugin for security -->

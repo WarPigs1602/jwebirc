@@ -17,8 +17,11 @@
         </script>
         
         <!-- Template System -->
+        <% boolean debugAssetsEnabled = "true".equalsIgnoreCase(application.getInitParameter("jwebirc.debugAssets")); %>
         <% if ("true".equalsIgnoreCase((String) session.getAttribute("template_enabled"))) { %>
+        <% if (debugAssetsEnabled) { %>
         <script src="file/template-system.js"></script>
+        <% } %>
         <script>
             // Configure template system for chat
             window.templateSystemConfig = {

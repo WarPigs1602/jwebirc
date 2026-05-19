@@ -168,6 +168,9 @@
     <!-- Show Stack Traces in Error Pages -->
     <Parameter name="jwebirc.showStackTrace" value="true" override="false"/>
     
+     <!-- Load unminified individual CSS/JS files instead of bundled minified assets -->
+     <Parameter name="jwebirc.debugAssets" value="false" override="false"/>
+    
     <!-- Error Page Style: 'detailed' or 'simple' -->
     <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false"/>
     
@@ -186,6 +189,7 @@
      
      DEVELOPMENT SETUP:
      - Set showStackTrace to 'true'
+     - Set debugAssets to 'true' to load unminified Einzeldateien for debugging
      - Disable CAPTCHA
      - Use test IRC server
      - Enable templateUserSelectable for testing themes

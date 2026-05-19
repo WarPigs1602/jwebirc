@@ -263,6 +263,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
     
     <!-- Error Page Configuration -->
     <Parameter name="jwebirc.showStackTrace" value="true" override="false" />
+    <Parameter name="jwebirc.debugAssets" value="false" override="false" />
     <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false" />
     
     <!-- CAPTCHA Configuration (see CAPTCHA section below) -->
@@ -558,9 +559,14 @@ Notes:
 <!-- Show detailed stack traces on error pages (development) -->
 <Parameter name="jwebirc.showStackTrace" value="true" override="false" />
 
+<!-- Load unminified files instead of bundled minified assets -->
+<Parameter name="jwebirc.debugAssets" value="false" override="false" />
+
 <!-- Error page style: "simple" or "detailed" -->
 <Parameter name="jwebirc.errorPageStyle" value="detailed" override="false" />
 ```
+
+Set `jwebirc.debugAssets` to `true` only for explicit debugging. In normal operation, jWebIRC now always loads the generated minified bundles and no longer falls back automatically just because a bundle file is missing.
 
 ### Chatnapping (Website Embedding)
 
