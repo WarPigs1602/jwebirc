@@ -15,6 +15,7 @@ See a live example at https://chat.midiandmore.net/?channels=dev.
 - [Jakarta EE Integration & Correct Version](#jakarta-ee-integration--correct-version)
 - [Installation](#installation)
 - [Configuration (Server-Side)](#configuration-server-side)
+- [Asset Minification](#asset-minification)
 - [Usage (Client-Side)](#usage-client-side)
 - [Nick Prefixes & Emoji Mapping](#nick-prefixes--emoji-mapping)
 - [Plugin System](#plugin-system)
@@ -567,6 +568,53 @@ Notes:
 ```
 
 Set `jwebirc.debugAssets` to `true` only for explicit debugging. In normal operation, jWebIRC now always loads the generated minified bundles and no longer falls back automatically just because a bundle file is missing.
+
+### Asset Minification
+
+Minification reduces CSS/JS file size by removing comments, whitespace, and other non-essential characters. In jWebIRC this is used to improve page load time and reduce HTTP requests in production.
+
+The behavior is controlled by the server parameter `jwebirc.debugAssets`.
+
+How it works:
+
+- With `jwebirc.debugAssets=false` (default), pages load bundled minified files from `file/bundles/` (for example `login.bundle.min.js`, `chat-head.bundle.min.js`, `chat-app.bundle.min.js`, `login.bundle.min.css`, `chat.bundle.min.css`).
+- With `jwebirc.debugAssets=true`, pages load the original individual files from `file/` to simplify debugging in browser dev tools.
+- Bundle versioning is read from `file/bundles/asset-bundles.properties` and appended as `?v=...` for cache busting.
+
+When to use which mode:
+
+- Production: keep `jwebirc.debugAssets=false`.
+- Local debugging: temporarily set `jwebirc.debugAssets=true`.
+
+Configuration example (`META-INF/context.xml` or server-managed context file):
+
+```xml
+<!-- Production (recommended) -->
+<Parameter name="jwebirc.debugAssets" value="false" override="false" />
+
+<!-- Optional while debugging: load unminified single files -->
+<!-- <Parameter name="jwebirc.debugAssets" value="true" override="false" /> -->
+```
+
+Example Tomcat server-managed file (`conf/Catalina/localhost/jwebirc.xml`):
+
+```xml
+<Context path="/jwebirc" reloadable="false">
+  <Parameter name="jwebirc.debugAssets" value="false" override="false" />
+</Context>
+```
+
+Notes:
+
+- Change the value only in one active config source (WAR internal `context.xml` or server-managed file) to avoid confusion.
+- After changing `jwebirc.debugAssets`, restart or redeploy the application.
+
+If bundled files are missing or outdated, rebuild the WAR with Maven so fresh bundles are generated:
+
+```bash
+cd jwebirc
+mvn -f web/WEB-INF/pom.xml clean package
+```
 
 ### Chatnapping (Website Embedding)
 
