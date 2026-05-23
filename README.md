@@ -599,9 +599,7 @@ Configuration example (`META-INF/context.xml` or server-managed context file):
 Example Tomcat server-managed file (`conf/Catalina/localhost/jwebirc.xml`):
 
 ```xml
-<Context path="/jwebirc" reloadable="false">
-  <Parameter name="jwebirc.debugAssets" value="false" override="false" />
-</Context>
+<Parameter name="jwebirc.debugAssets" value="false" override="false" />
 ```
 
 Notes:
