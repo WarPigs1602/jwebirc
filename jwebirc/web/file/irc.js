@@ -594,6 +594,18 @@ class IRCParser {
                 return this.whoisLine('chat.whois.away', 'away: {nick}{reason}', { nick, reason: reasonSuffix });
             }
 
+            case "335": { // WHOIS bot (UnrealIRCd)
+                this.output = this.chatManager.getActiveWindow();
+                const nick = params[1] || '';
+                const rawInfo = (params.slice(2).join(' ') || '').replace(/^:/, '').trim();
+                const networkMatch = rawInfo.match(/^(?:\S+\s+)?is\s+a\s+bot\s+on\s+(.+)$/i);
+                const network = networkMatch
+                    ? networkMatch[1].trim()
+                    : rawInfo.replace(/^(?:\S+\s+)?is\s+a\s+bot(?:\s+on)?\s*/i, '').trim();
+                const networkSuffix = network ? ` (${network})` : '';
+                return this.whoisLine('chat.whois.bot', 'Bot: {nick}{network}', { nick, network: networkSuffix });
+            }
+
             case "338": { // WHOIS actual host/IP
                 this.output = this.chatManager.getActiveWindow();
                 const info = params[2] || '';

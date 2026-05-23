@@ -543,8 +543,25 @@
     });
 </script>
 <% boolean debugAssetsEnabled = "true".equalsIgnoreCase(application.getInitParameter("jwebirc.debugAssets")); %>
+<%
+String bundleVersion = (String) application.getAttribute("jwebirc.bundleVersion");
+if (bundleVersion == null) {
+    bundleVersion = "";
+    try (java.io.InputStream stream = application.getResourceAsStream("/file/bundles/asset-bundles.properties")) {
+        if (stream != null) {
+            java.util.Properties props = new java.util.Properties();
+            props.load(stream);
+            bundleVersion = props.getProperty("build.id", "").trim();
+        }
+    } catch (Exception ignored) {
+        bundleVersion = "";
+    }
+    application.setAttribute("jwebirc.bundleVersion", bundleVersion);
+}
+String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
+%>
 <% if (!debugAssetsEnabled) { %>
-<script src="file/bundles/chat-app.bundle.min.js"></script>
+<script src="file/bundles/chat-app.bundle.min.js<%= bundleQuery %>"></script>
 <% } else { %>
 <script src="file/notifications.js"></script>
 <script src="file/chat.js"></script>

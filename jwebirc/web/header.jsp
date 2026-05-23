@@ -20,6 +20,21 @@
     String templateEnabledHeader = (String) session.getAttribute("template_enabled");
     boolean useTemplate = templateEnabledHeader != null && templateEnabledHeader.equalsIgnoreCase("true") && templateCss != null;
     boolean debugAssetsEnabled = "true".equalsIgnoreCase(application.getInitParameter("jwebirc.debugAssets"));
+    String bundleVersion = (String) application.getAttribute("jwebirc.bundleVersion");
+    if (bundleVersion == null) {
+        bundleVersion = "";
+        try (java.io.InputStream stream = application.getResourceAsStream("/file/bundles/asset-bundles.properties")) {
+            if (stream != null) {
+                java.util.Properties props = new java.util.Properties();
+                props.load(stream);
+                bundleVersion = props.getProperty("build.id", "").trim();
+            }
+        } catch (Exception ignored) {
+            bundleVersion = "";
+        }
+        application.setAttribute("jwebirc.bundleVersion", bundleVersion);
+    }
+    String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
     
     if (chatnappingEnabled != null && chatnappingEnabled.equalsIgnoreCase("true")) {
         if (allowedDomains != null && !allowedDomains.equals("*")) {
@@ -55,7 +70,7 @@
         
         <!-- Stylesheets -->
         <% if (!debugAssetsEnabled) { %>
-        <link rel="stylesheet" href="file/bundles/login.bundle.min.css" type="text/css">
+        <link rel="stylesheet" href="file/bundles/login.bundle.min.css<%= bundleQuery %>" type="text/css">
         <% } else { %>
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
         <link rel="stylesheet" href="file/style.css" type="text/css">
@@ -79,7 +94,7 @@
             };
         </script>
         <% if (!debugAssetsEnabled) { %>
-        <script src="file/bundles/login.bundle.min.js"></script>
+        <script src="file/bundles/login.bundle.min.js<%= bundleQuery %>"></script>
         <% } else { %>
         <script src="file/jquery.js"></script>
         <script src="file/i18n.js"></script>
