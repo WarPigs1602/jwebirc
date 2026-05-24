@@ -27,6 +27,12 @@ import java.net.UnknownHostException;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -37,6 +43,33 @@ import java.util.logging.Logger;
  */
 @ServerEndpoint(value = "/Webchat", configurator = Webchat.ChatHandshake.class)
 public class Webchat {
+
+    private static final Logger LOGGER = Logger.getLogger(Webchat.class.getName());
+    private static final long DEFAULT_RECONNECT_GRACE_MS = 30000L;
+    private static final Map<String, ReconnectContext> RECONNECT_CONTEXTS = new ConcurrentHashMap<>();
+    private static final ScheduledExecutorService RECONNECT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(new ReconnectThreadFactory());
+
+    private static final class ReconnectContext {
+        private final String key;
+        private final IrcParser parser;
+        private final IrcThread ircThread;
+        private ScheduledFuture<?> cleanupTask;
+
+        private ReconnectContext(String key, IrcParser parser, IrcThread ircThread) {
+            this.key = key;
+            this.parser = parser;
+            this.ircThread = ircThread;
+        }
+    }
+
+    private static final class ReconnectThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = new Thread(runnable, "jwebirc-reconnect-scheduler");
+            thread.setDaemon(true);
+            return thread;
+        }
+    }
 
     private HttpSession httpSession;
     private Session session;
@@ -58,6 +91,11 @@ public class Webchat {
         var hs = (HttpSession) config.getUserProperties()
                 .get(HttpSession.class.getName());
         setHttpSession(hs);
+
+        String reconnectKey = getReconnectKey();
+        if (tryResumeReconnectContext(reconnectKey, session)) {
+            return;
+        }
         
         // Load configuration from HTTP session
         WebchatConfig webchatConfig = loadWebchatConfig();
@@ -113,8 +151,8 @@ public class Webchat {
             try {
                 config.nickLength = Math.max(1, Integer.parseInt(nickLengthValue));
             } catch (NumberFormatException ex) {
-                Logger.getLogger(Webchat.class.getName()).log(Level.FINE,
-                        "Ignoring invalid configured nick length: {0}", nickLengthValue);
+                Logger.getLogger(Webchat.class.getName()).log(Level.FINE, ex,
+                        () -> "Ignoring invalid configured nick length: " + nickLengthValue);
             }
         }
         config.host = (String) getHttpSession().getAttribute("webchat_host");
@@ -170,12 +208,12 @@ public class Webchat {
             try {
                 webchatConfig.ip = InetAddress.getByName(webchatConfig.hostname).getHostAddress();
             } catch (UnknownHostException ex) {
-                // Ignore - use original hostname
+                LOGGER.log(Level.FINE, "Could not resolve forwarded hostname to IP", ex);
             }
             try {
                 webchatConfig.hostname = InetAddress.getByName(webchatConfig.ip).getHostName();
             } catch (UnknownHostException ex) {
-                // Ignore - use IP as hostname
+                LOGGER.log(Level.FINE, "Could not reverse resolve forwarded IP to hostname", ex);
             }
         }
         
@@ -278,6 +316,118 @@ public class Webchat {
         var p = getParser();
         p.setLoginChannels(channel);
         setIrcThread(new IrcThread(p, config.nick, getSession()));
+        registerReconnectContext();
+    }
+
+    private String getReconnectKey() {
+        if (getHttpSession() == null) {
+            return null;
+        }
+        return getHttpSession().getId();
+    }
+
+    private long getReconnectGraceMs() {
+        if (getHttpSession() == null) {
+            return DEFAULT_RECONNECT_GRACE_MS;
+        }
+
+        Object configured = getHttpSession().getAttribute("webchat_reconnect_grace_ms");
+        if (configured == null) {
+            return DEFAULT_RECONNECT_GRACE_MS;
+        }
+
+        try {
+            long parsed = Long.parseLong(configured.toString().trim());
+            return Math.max(1000L, parsed);
+        } catch (NumberFormatException ex) {
+            LOGGER.log(Level.FINE, ex, () -> "Invalid reconnect grace value: " + configured);
+            return DEFAULT_RECONNECT_GRACE_MS;
+        }
+    }
+
+    private boolean tryResumeReconnectContext(String reconnectKey, Session currentSession) {
+        if (reconnectKey == null || reconnectKey.isBlank()) {
+            return false;
+        }
+
+        ReconnectContext context = RECONNECT_CONTEXTS.get(reconnectKey);
+        if (context == null) {
+            return false;
+        }
+
+        synchronized (context) {
+            if (context.cleanupTask != null) {
+                context.cleanupTask.cancel(false);
+                context.cleanupTask = null;
+            }
+
+            if (context.ircThread != null) {
+                context.ircThread.setSession(currentSession);
+            }
+
+            setParser(context.parser);
+            setIrcThread(context.ircThread);
+
+            if (context.parser != null) {
+                context.parser.sendText("NOTICE AUTH *** (jwebirc) WebSocket reconnected. Continuing existing IRC session.\n", currentSession, "chat", "");
+            }
+        }
+
+        LOGGER.log(Level.INFO, "Reattached existing IRC session for HTTP session {0}", reconnectKey);
+        return true;
+    }
+
+    private void registerReconnectContext() {
+        String reconnectKey = getReconnectKey();
+        if (reconnectKey == null || reconnectKey.isBlank() || getParser() == null || getIrcThread() == null) {
+            return;
+        }
+
+        ReconnectContext context = new ReconnectContext(reconnectKey, getParser(), getIrcThread());
+        RECONNECT_CONTEXTS.put(reconnectKey, context);
+    }
+
+    private void scheduleReconnectCleanup(String reasonPrefix) {
+        String reconnectKey = getReconnectKey();
+        if (reconnectKey == null || reconnectKey.isBlank() || getParser() == null) {
+            cleanupResources();
+            return;
+        }
+
+        registerReconnectContext();
+        ReconnectContext context = RECONNECT_CONTEXTS.get(reconnectKey);
+        if (context == null) {
+            cleanupResources();
+            return;
+        }
+
+        synchronized (context) {
+            if (context.cleanupTask != null) {
+                context.cleanupTask.cancel(false);
+            }
+
+            long graceMs = getReconnectGraceMs();
+            context.cleanupTask = RECONNECT_SCHEDULER.schedule(() -> {
+                ReconnectContext latest = RECONNECT_CONTEXTS.get(context.key);
+                if (latest != context) {
+                    return;
+                }
+
+                synchronized (context) {
+                    try {
+                        if (context.parser != null) {
+                            context.parser.logout(reasonPrefix + "Reconnect timeout");
+                        }
+                    } catch (Exception ex) {
+                        LOGGER.log(Level.WARNING, "Error while closing expired reconnect context", ex);
+                    } finally {
+                        RECONNECT_CONTEXTS.remove(context.key, context);
+                    }
+                }
+            }, graceMs, TimeUnit.MILLISECONDS);
+
+            LOGGER.log(Level.INFO, "Scheduled reconnect grace window ({0} ms) for HTTP session {1}", new Object[]{graceMs, reconnectKey});
+        }
     }
 
     private String parseIpv6(String ip) {
@@ -357,17 +507,7 @@ public class Webchat {
      */
     @OnClose
     public synchronized void onClose(Session session) {
-        try {
-            if (parser != null) {
-                try {
-                    parser.logout("Page closed!");
-                } catch (Exception e) {
-                    Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during logout", e);
-                }
-            }
-        } finally {
-            cleanupResources();
-        }
+        scheduleReconnectCleanup("Page closed: ");
     }
 
     /**
@@ -378,30 +518,25 @@ public class Webchat {
      */
     @OnError
     public synchronized void onError(Session session, Throwable throwable) {
-        Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "WebSocket error occurred", throwable);
-        try {
-            if (parser != null) {
-                try {
-                    parser.logout("Error: " + (throwable != null ? throwable.getMessage() : "Unknown error"));
-                } catch (Exception e) {
-                    Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error during error handling logout", e);
-                }
-            }
-        } finally {
-            cleanupResources();
-        }
+        LOGGER.log(Level.SEVERE, "WebSocket error occurred", throwable);
+        scheduleReconnectCleanup("Error: ");
     }
     
     /**
      * Cleanup all resources (parser, threads, sockets) - thread-safe
      */
     private synchronized void cleanupResources() {
+        String reconnectKey = getReconnectKey();
+        if (reconnectKey != null && !reconnectKey.isBlank()) {
+            RECONNECT_CONTEXTS.remove(reconnectKey);
+        }
+
         try {
             if (parser != null) {
                 try {
                     parser.closeConnection();
                 } catch (Exception e) {
-                    Logger.getLogger(Webchat.class.getName()).log(Level.WARNING, "Error closing parser connection", e);
+                    LOGGER.log(Level.WARNING, "Error closing parser connection", e);
                 }
             }
         } finally {

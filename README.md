@@ -174,6 +174,7 @@ You have two ways to configure parameters such as IRC host, port, SASL, CAPTCHA,
 
    ```xml
    <Context path="/jwebirc" reloadable="false">
+       <Parameter name="jwebirc.webchatReconnectGraceMs" value="30000" override="false" />
        <Parameter name="jwebirc.webchatHost" value="irc.example.com" override="false" />
        <Parameter name="jwebirc.webchatPort" value="6697" override="false" />
        <Parameter name="jwebirc.webchatSsl" value="true" override="false" />
@@ -228,6 +229,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
 <Context path="/jwebirc" reloadable="false">
     <!-- Session Configuration -->
     <Parameter name="jwebirc.webchatSessionTimeout" value="300000" override="false" />
+    <Parameter name="jwebirc.webchatReconnectGraceMs" value="30000" override="false" />
     <Parameter name="jwebirc.sessionTimeout" value="500" override="false" />
     
     <!-- IRC Server Configuration -->
@@ -388,9 +390,14 @@ Quick navigation:
 <!-- WebSocket Session Timeout (milliseconds) -->
 <Parameter name="jwebirc.webchatSessionTimeout" value="300000" override="false" />
 
+<!-- Grace period for reconnect before IRC session cleanup (milliseconds) -->
+<Parameter name="jwebirc.webchatReconnectGraceMs" value="30000" override="false" />
+
 <!-- HTTP Session Timeout (seconds) -->
 <Parameter name="jwebirc.sessionTimeout" value="500" override="false" />
 ```
+
+- `jwebirc.webchatReconnectGraceMs` controls how long an existing IRC connection is kept alive after a WebSocket disconnect to allow session re-entry.
 
 ### WEBIRC/CGIIRC Configuration
 

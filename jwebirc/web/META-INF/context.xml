@@ -15,6 +15,8 @@
     
     <!-- Session Timeouts (milliseconds) -->
     <Parameter name="jwebirc.webchatSessionTimeout" value="300000" override="false"/>
+     <!-- Grace period for WebSocket reconnect before IRC session cleanup (milliseconds) -->
+     <Parameter name="jwebirc.webchatReconnectGraceMs" value="30000" override="false"/>
     <Parameter name="jwebirc.sessionTimeout" value="500" override="false"/>
     
     <!-- IRC Server Connection -->

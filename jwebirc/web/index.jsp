@@ -31,6 +31,7 @@
     
     var nick = (String) session.getAttribute("nick");
     session.setAttribute("webchat_session_timout", webchatSessionTimeout);
+    session.setAttribute("webchat_reconnect_grace_ms", webchatReconnectGraceMs);
     session.setAttribute("webchat_host", webchatHost);
     session.setAttribute("webchat_bind", webchatBind);
     session.setAttribute("webchat_port", webchatPort);

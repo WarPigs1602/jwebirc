@@ -14,6 +14,7 @@
     ServletContext ctx = application;
 
     String webchatSessionTimeout = param(ctx, "jwebirc.webchatSessionTimeout", "300000");
+    String webchatReconnectGraceMs = param(ctx, "jwebirc.webchatReconnectGraceMs", "30000");
     String sessionTimeout = param(ctx, "jwebirc.sessionTimeout", "500");
     String webchatHost = param(ctx, "jwebirc.webchatHost", "localhost");
     String webchatBind = param(ctx, "jwebirc.webchatBind", "127.0.0.1");

@@ -26,6 +26,12 @@ class ChatManager {
         this.highlight = false;
         this.keepAliveInterval = null; // Keep-alive timer
         this.keepAliveTimeout = 240000; // Send keep-alive every 4 minutes (240 seconds)
+        this.reconnectTimer = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 8;
+        this.reconnectBaseDelay = 1500;
+        this.reconnectMaxDelay = 20000;
+        this.reconnectInProgress = false;
         
         // DOM elements
         this.navWindow = null;
@@ -578,11 +584,7 @@ class ChatManager {
         }
         
         // Initialize WebSocket
-        const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsPath = location.pathname.split('/')[1];
-        this.socket = new WebSocket(wsProtocol + '//' + location.host + '/' + wsPath + '/Webchat');
-        
-        this.setupWebSocket();
+        this.connectWebSocket();
         this.initializePages();
         this.initNickContextMenu(); // Initialize context menu once
         
@@ -595,6 +597,14 @@ class ChatManager {
             });
         }
     }
+
+    connectWebSocket() {
+        const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsPath = location.pathname.split('/')[1];
+
+        this.socket = new WebSocket(wsProtocol + '//' + location.host + '/' + wsPath + '/Webchat');
+        this.setupWebSocket();
+    }
     
     setupWebSocket() {
         this.socket.onopen = (event) => {
@@ -602,6 +612,21 @@ class ChatManager {
             this.requestCapabilities();
             // Start keep-alive mechanism
             this.startKeepAlive();
+
+            const wasReconnect = this.reconnectInProgress || this.reconnectAttempts > 0;
+            this.reconnectInProgress = false;
+            this.reconnectAttempts = 0;
+            if (this.reconnectTimer) {
+                clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+            }
+
+            if (wasReconnect) {
+                const reconnected = this.buildI18nSpan('chat.reconnected', 'Reconnected. Restoring previous channels...');
+                this.parsePage(this.getTimestamp() + " <span style='color: #00aa00'>==</span> " + reconnected + "\n");
+                this.addWindow();
+                setTimeout(() => this.rejoinSavedChannels(), 1500);
+            }
         };
         
         this.socket.onerror = (errorEvent) => {
@@ -646,11 +671,9 @@ class ChatManager {
             this.addWindow();
             this.scrollToEnd("#chat_window", 100);
             
-            // Optional: Attempt reconnection
+            // Attempt automatic reconnection on unexpected disconnects.
             if (!closeEvent.wasClean && closeEvent.code !== 1000) {
-                const connLost = this.buildI18nSpan('chat.connectionLost', 'Connection lost unexpectedly. Please reload the page to reconnect.');
-                this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> " + connLost + "\n");
-                this.addWindow();
+                this.scheduleReconnect();
             }
         };
         
@@ -700,6 +723,46 @@ class ChatManager {
                 this.addWindow();
             }
         };
+    }
+
+    scheduleReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            const reconnectFailed = this.buildI18nSpan('chat.reconnectFailed', 'Automatic reconnect failed. Please reload the page.');
+            this.parsePage(this.getTimestamp() + " <span style='color: #ff0000'>==</span> " + reconnectFailed + "\n");
+            this.addWindow();
+            return;
+        }
+
+        this.reconnectInProgress = true;
+        this.reconnectAttempts += 1;
+
+        const expDelay = this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts - 1);
+        const delay = Math.min(expDelay, this.reconnectMaxDelay);
+        const reconnectMsg = this.buildI18nSpan(
+            'chat.reconnecting',
+            'Connection lost. Reconnect attempt {attempt}/{max} in {seconds}s...',
+            {
+                attempt: this.reconnectAttempts,
+                max: this.maxReconnectAttempts,
+                seconds: Math.round(delay / 1000)
+            }
+        );
+
+        this.parsePage(this.getTimestamp() + " <span style='color: #ffaa00'>==</span> " + reconnectMsg + "\n");
+        this.addWindow();
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+        }
+
+        this.reconnectTimer = setTimeout(() => {
+            try {
+                this.connectWebSocket();
+            } catch (error) {
+                console.error('[WebSocket] Reconnect attempt failed:', error);
+                this.scheduleReconnect();
+            }
+        }, delay);
     }
     
     /**
