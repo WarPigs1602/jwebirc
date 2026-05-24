@@ -1,3 +1,5 @@
 /jwebirc/dist/
 /jwebirc/build/
 /jwebirc/target/
+.vscode/tasks.json
+jwebirc/web/WEB-INF/.vscode/tasks.json

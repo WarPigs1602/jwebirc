@@ -751,14 +751,26 @@ class PostManager {
             return null;
         }
         
-        if (text.startsWith("/quit ")) {
-            const content = text.substring(6);
+        if (loweredText === '/quit' || loweredText.startsWith('/quit ')) {
+            const content = text.length > 5 ? text.substring(5).trim() : '';
             if (window.ircParser) {
                 window.ircParser.output = activeWindow;
-                window.ircParser.parseOutput("*** " + window.user + " has quit IRC (Quit: " + this.escapeHtml(content) + ")");
+                if (content.length > 0) {
+                    window.ircParser.parseOutput("*** " + window.user + " has quit IRC (Quit: " + this.escapeHtml(content) + ")");
+                } else {
+                    window.ircParser.parseOutput("*** " + window.user + " has quit IRC");
+                }
             }
+
+            // /quit is an intentional disconnect, so suppress reconnect logic on close.
+            if (this.chatManager) {
+                this.chatManager.intentionalDisconnect = true;
+            }
+
             this.chatManager.addWindow();
-            return this.ircText("/quit " + this.escapeHtml(content));
+            return content.length > 0
+                ? this.ircText("/quit " + this.escapeHtml(content))
+                : this.ircText('/quit');
         }
         
         // CTCP commands

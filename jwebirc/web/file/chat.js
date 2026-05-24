@@ -32,6 +32,7 @@ class ChatManager {
         this.reconnectBaseDelay = 1500;
         this.reconnectMaxDelay = 20000;
         this.reconnectInProgress = false;
+        this.intentionalDisconnect = false;
         
         // DOM elements
         this.navWindow = null;
@@ -586,6 +587,7 @@ class ChatManager {
         // Initialize WebSocket
         this.connectWebSocket();
         this.initializePages();
+        this.setupUnloadDisconnect();
         this.initNickContextMenu(); // Initialize context menu once
         
         // Add click handler to focus on message input when user clicks on chat window
@@ -608,6 +610,7 @@ class ChatManager {
     
     setupWebSocket() {
         this.socket.onopen = (event) => {
+            this.intentionalDisconnect = false;
             // Request IRCv3 capabilities
             this.requestCapabilities();
             // Start keep-alive mechanism
@@ -641,6 +644,10 @@ class ChatManager {
         this.socket.onclose = (closeEvent) => {
             // Stop keep-alive
             this.stopKeepAlive();
+
+            if (this.intentionalDisconnect) {
+                return;
+            }
             
             // Hide loading screen on disconnect
             if (window.ircParser && window.ircParser.hideLoadingScreen) {
@@ -794,6 +801,51 @@ class ChatManager {
         if (this.keepAliveInterval) {
             clearInterval(this.keepAliveInterval);
             this.keepAliveInterval = null;
+        }
+    }
+
+    setupUnloadDisconnect() {
+        const closeConnection = () => {
+            this.gracefulDisconnect('Client closed');
+        };
+
+        window.addEventListener('beforeunload', closeConnection);
+        window.addEventListener('pagehide', closeConnection);
+    }
+
+    gracefulDisconnect(reason = 'Client closed') {
+        if (this.intentionalDisconnect) {
+            return;
+        }
+
+        this.intentionalDisconnect = true;
+        this.reconnectInProgress = false;
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        this.stopKeepAlive();
+
+        if (!this.socket) {
+            return;
+        }
+
+        try {
+            if (this.socket.readyState === WebSocket.OPEN && window.postManager) {
+                window.postManager.sendRawMessage('/QUIT :' + reason);
+            }
+        } catch (e) {
+            console.warn('[WebSocket] Error sending QUIT during disconnect:', e);
+        }
+
+        try {
+            if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
+                this.socket.close(1000, reason);
+            }
+        } catch (e) {
+            console.warn('[WebSocket] Error closing socket during disconnect:', e);
         }
     }
     
