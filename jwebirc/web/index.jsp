@@ -1121,7 +1121,9 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
     }
     
     function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft, overrideNotifications, overrideNotificationSound) {
-        const baseUrl = window.location.pathname;
+        const baseUrl = new URL(window.location.href);
+        baseUrl.search = '';
+        baseUrl.hash = '';
         const currentLangInput = document.getElementById('uiLang');
         const currentLang = (currentLangInput && currentLangInput.value) || (typeof window.jwebircLang === 'string' ? window.jwebircLang : 'en');
         
@@ -1152,7 +1154,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         const notifications = overrideNotifications !== false;
         const notificationSound = overrideNotificationSound !== false;
         
-        let url = baseUrl + '?';
+        let url = baseUrl.toString() + '?';
         let hasParams = false;
         
         if (currentLang) {
