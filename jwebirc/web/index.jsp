@@ -6,7 +6,7 @@
 
 <%@page import="java.util.ArrayList"%>
 <%@page import = "net.midiandmore.jwebirc.*" %>
-<%@page contentType="text/html" pageEncoding="UTF-8"%>
+<%@page contentType="text/html" pageEncoding="UTF-8" trimDirectiveWhitespaces="true"%>
 <%@include file="init.jsp"%>
 <%
     int nickMaxLength = 15;
@@ -1121,7 +1121,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
     }
     
     function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft, overrideNotifications, overrideNotificationSound) {
-        const baseUrl = window.location.origin + window.location.pathname;
+        const baseUrl = window.location.pathname;
         const currentLangInput = document.getElementById('uiLang');
         const currentLang = (currentLangInput && currentLangInput.value) || (typeof window.jwebircLang === 'string' ? window.jwebircLang : 'en');
         

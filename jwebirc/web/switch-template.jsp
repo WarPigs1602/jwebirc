@@ -64,7 +64,8 @@
                     
                     // Set cookie for persistence (expires in 1 year)
                     Cookie templateCookie = new Cookie("jwebirc_template", requestedTemplate);
-                    templateCookie.setPath("/");
+                    String cookiePath = request.getContextPath();
+                    templateCookie.setPath((cookiePath == null || cookiePath.isEmpty()) ? "/" : cookiePath);
                     templateCookie.setMaxAge(365 * 24 * 60 * 60); // 1 year
                     templateCookie.setHttpOnly(false); // Allow JavaScript access
                     response.addCookie(templateCookie);

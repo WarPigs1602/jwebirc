@@ -602,9 +602,10 @@ class ChatManager {
 
     connectWebSocket() {
         const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsPath = location.pathname.split('/')[1];
+        const wsUrl = new URL('Webchat', window.location.href);
+        wsUrl.protocol = wsProtocol;
 
-        this.socket = new WebSocket(wsProtocol + '//' + location.host + '/' + wsPath + '/Webchat');
+        this.socket = new WebSocket(wsUrl.toString());
         this.setupWebSocket();
     }
     

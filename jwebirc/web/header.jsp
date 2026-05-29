@@ -5,7 +5,7 @@
     Updated    : 31.12.2025
 --%>
 
-<%@page contentType="text/html" pageEncoding="UTF-8"%>
+<%@page contentType="text/html" pageEncoding="UTF-8" trimDirectiveWhitespaces="true"%>
 <%
     // Set X-Frame-Options based on chatnapping configuration
     String chatnappingEnabled = (String) session.getAttribute("chatnapping_enabled");

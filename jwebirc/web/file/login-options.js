@@ -389,7 +389,7 @@ class LoginOptionsManager {
      * @returns {string} URL with preferences as parameters
      */
     getShareableLink() {
-        const baseUrl = window.location.origin + window.location.pathname;
+        const baseUrl = window.location.pathname;
         const params = new URLSearchParams();
         params.append('fontSize', this.uiPrefs.fontSize);
         params.append('hue', this.uiPrefs.hue);

@@ -197,8 +197,8 @@ window.NotificationManager = class NotificationManager {
         }
         
         const defaultOptions = {
-            icon: '/file/bootstrap/favicon.ico',
-            badge: '/file/bootstrap/favicon.ico',
+            icon: 'file/bootstrap/favicon.ico',
+            badge: 'file/bootstrap/favicon.ico',
             requireInteraction: false,
             ...notificationOptions
         };
