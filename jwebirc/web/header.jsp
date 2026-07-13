@@ -145,14 +145,6 @@
                             <input type="checkbox" id="loginOptHideNicklist" class="nav-toggle">
                         </label>
                         <div class="nav-dropdown-divider"></div>
-                        <label class="nav-dropdown-item nav-sidebar-mode-item" for="loginOptNavLeft">
-                            <div class="nav-dropdown-item-left">
-                                <i class="fas fa-align-left"></i>
-                                <span data-i18n="nav.sidebarMode">Sidebar Mode</span>
-                            </div>
-                            <input type="checkbox" id="loginOptNavLeft" class="nav-toggle">
-                        </label>
-                        <div class="nav-dropdown-divider"></div>
                         <label class="nav-dropdown-item" for="loginOptNotifications">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-bell"></i>

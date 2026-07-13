@@ -288,14 +288,6 @@
                             <input type="checkbox" id="optHideNicklist" class="nav-toggle">
                         </label>
                         <div class="nav-dropdown-divider"></div>
-                        <label class="nav-dropdown-item nav-sidebar-mode-item" for="optNavLeft">
-                            <div class="nav-dropdown-item-left">
-                                <i class="fas fa-align-left"></i>
-                                <span data-i18n="nav.sidebarMode">Sidebar Mode</span>
-                            </div>
-                            <input type="checkbox" id="optNavLeft" class="nav-toggle">
-                        </label>
-                        <div class="nav-dropdown-divider"></div>
                         <label class="nav-dropdown-item" for="optNotifications">
                             <div class="nav-dropdown-item-left">
                                 <i class="fas fa-bell"></i>
@@ -1053,7 +1045,6 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         let defaultHue = 0;
         let defaultHideTopic = false;
         let defaultHideNicklist = false;
-        let defaultNavLeft = false;
         let defaultNotifications = true;
         let defaultNotificationSound = true;
         try {
@@ -1064,7 +1055,6 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
                 defaultHue = parsed.hue || 0;
                 defaultHideTopic = parsed.hideTopic || false;
                 defaultHideNicklist = parsed.hideNicklist || false;
-                defaultNavLeft = parsed.navLeft || false;
                 defaultNotifications = parsed.notificationsEnabled !== false;
                 defaultNotificationSound = parsed.notificationSound !== false;
             }
@@ -1144,7 +1134,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
             const channels = document.getElementById('embedChannel').value;
             
             configModal.remove();
-            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultNavLeft, defaultNotifications, defaultNotificationSound);
+            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultNotifications, defaultNotificationSound);
         };
         
         // Handle Cancel button
@@ -1160,7 +1150,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         };
     }
     
-    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNavLeft, overrideNotifications, overrideNotificationSound) {
+    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNotifications, overrideNotificationSound) {
         const baseUrl = new URL(window.location.href);
         baseUrl.search = '';
         baseUrl.hash = '';
@@ -1190,7 +1180,6 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         const hue = overrideHue !== undefined ? overrideHue : 0;
         const hideTopic = overrideHideTopic !== undefined ? overrideHideTopic : false;
         const hideNicklist = overrideHideNicklist !== undefined ? overrideHideNicklist : false;
-        const navLeft = overrideNavLeft !== undefined ? overrideNavLeft : false;
         const notifications = overrideNotifications !== false;
         const notificationSound = overrideNotificationSound !== false;
         
@@ -1223,9 +1212,6 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         }
         if (hideNicklist) {
             url += '&hideNicklist=true';
-        }
-        if (navLeft) {
-            url += '&navLeft=true';
         }
         // Add notification preferences
         if (!notifications) {
@@ -1276,7 +1262,6 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         let uiDisplay = 'Font Size: ' + fontSize + 'px, Hue: ' + hue + '°';
         if (hideTopic) uiDisplay += ', Hide Topic: ✓';
         if (hideNicklist) uiDisplay += ', Hide Nicklist: ✓';
-        if (navLeft) uiDisplay += ', Sidebar Mode: ✓';
         if (notifications) uiDisplay += ', Notifications: ✓';
         if (notificationSound) uiDisplay += ', Sound: ✓';
         uiInfo.style.cssText = 'background: rgba(243, 156, 18, 0.15); padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #d0d0d0;';

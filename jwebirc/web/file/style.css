@@ -479,18 +479,6 @@ a:focus {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Vertical Mode (Sidebar) */
-.top_frame.vertical {
-    flex-direction: column;
-    align-items: stretch;
-    max-height: none;
-    min-height: 0;
-    height: 100%;
-    border: none;
-    border-radius: 8px;
-    background: rgba(45, 45, 61, 1);
-}
-
 /* Navigation Container */
 .nav-container {
     display: flex;
@@ -499,13 +487,6 @@ a:focus {
     height: 100%;
     padding: 0 8px;
     gap: 12px;
-}
-
-.top_frame.vertical .nav-container {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 16px 12px;
-    gap: 16px;
 }
 
 /* ===== Brand Section ===== */
@@ -583,11 +564,6 @@ a:focus {
     position: relative;
 }
 
-.top_frame.vertical .nav-tabs-wrapper {
-    flex-direction: column;
-    align-items: stretch;
-}
-
 .nav-scroll-btn {
     width: 24px;
     height: 24px;
@@ -614,10 +590,6 @@ a:focus {
     transform: scale(0.95);
 }
 
-.top_frame.vertical .nav-scroll-btn {
-    display: none;
-}
-
 .nav-tabs {
     display: flex;
     align-items: center;
@@ -635,23 +607,9 @@ a:focus {
     display: none;
 }
 
-.top_frame.vertical .nav-tabs {
-    flex-direction: column;
-    align-items: stretch;
-    overflow-x: hidden;
-    overflow-y: auto;
-    flex: 1 1 auto;
-    gap: 4px;
-}
-
 .nav-tab-strip {
     display: flex;
     gap: 6px;
-}
-
-.top_frame.vertical .nav-tab-strip {
-    flex-direction: column;
-    gap: 4px;
 }
 
 /* ===== Actions Section ===== */
@@ -661,12 +619,6 @@ a:focus {
     gap: 6px;
     flex-shrink: 0;
     position: relative;
-}
-
-.top_frame.vertical .nav-actions {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
 }
 
 .nav-action-btn {
@@ -761,18 +713,6 @@ a:focus {
 .nav-dropdown.open {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0);
-}
-
-.top_frame.vertical .nav-dropdown {
-    top: calc(100% + 12px);
-    bottom: auto;
-    left: auto;
-    right: 0;
-    transform: translateY(-10px);
-}
-
-.top_frame.vertical .nav-dropdown.open {
     transform: translateY(0);
 }
 
@@ -1055,42 +995,6 @@ button.nav-dropdown-item {
         "input" !important;
 }
 
-.chat-container.nav-left {
-    grid-template-columns: 200px 1fr 220px;
-    grid-template-rows: 48px 1fr 64px;
-    grid-template-areas:
-        "nav topic users"
-        "nav chat users"
-        "nav input users";
-}
-
-.chat-container.nav-left.hide-topic {
-    grid-template-rows: 1fr 64px;
-    grid-template-areas:
-        "nav chat users"
-        "nav input users";
-}
-
-.chat-container.nav-left.hide-nicklist {
-    grid-template-columns: 200px 1fr;
-    grid-template-areas:
-        "nav topic"
-        "nav chat"
-        "nav input";
-}
-
-.chat-container.nav-left.hide-topic.hide-nicklist {
-    grid-template-rows: 1fr 64px;
-    grid-template-columns: 200px 1fr;
-    grid-template-areas:
-        "nav chat"
-        "nav input";
-}
-
-.chat-container.nav-left .top_frame {
-    align-self: stretch;
-}
-
 /* ===== Modern Navigation Tab Items (nv elements) ===== */
 nv {
     position: relative;
@@ -1272,25 +1176,6 @@ nv.highlighted:not(.unread)::after {
         transform: scale(1.2);
         opacity: 1;
     }
-}
-
-/* Vertical Mode Tab Styling */
-.top_frame.vertical nv {
-    width: 100%;
-    justify-content: flex-start;
-}
-
-.top_frame.vertical nv::before {
-    width: 3px;
-    height: 100%;
-    left: 0;
-    top: 0;
-    bottom: auto;
-    transform: scaleY(0);
-}
-
-.top_frame.vertical nv.active::before {
-    transform: scaleY(1);
 }
 
 /* ===== Topic Bar ===== */
@@ -3928,10 +3813,6 @@ a:hover {
 
 /* ===== Final Mobile Chat Fixes ===== */
 @media (max-width: 768px) {
-    .nav-sidebar-mode-item {
-        display: none !important;
-    }
-
     html,
     body {
         overflow-x: hidden;
@@ -3988,7 +3869,7 @@ a:hover {
         padding: 0 6px;
     }
 
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist):not(.hide-topic) {
+    .chat-container:not(.status-view):not(.hide-nicklist):not(.hide-topic) {
         grid-template-columns: minmax(0, 1fr) clamp(92px, 28vw, 132px) !important;
         grid-template-rows: 32px 28px minmax(0, 1fr) 56px !important;
         grid-template-areas:
@@ -3998,7 +3879,7 @@ a:hover {
             "input input" !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist).hide-topic {
+    .chat-container:not(.status-view):not(.hide-nicklist).hide-topic {
         grid-template-columns: minmax(0, 1fr) clamp(92px, 28vw, 132px) !important;
         grid-template-rows: 32px minmax(0, 1fr) 56px !important;
         grid-template-areas:
@@ -4007,7 +3888,7 @@ a:hover {
             "input input" !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view).hide-nicklist:not(.hide-topic) {
+    .chat-container:not(.status-view).hide-nicklist:not(.hide-topic) {
         grid-template-columns: 1fr !important;
         grid-template-rows: 32px 28px minmax(0, 1fr) 56px !important;
         grid-template-areas:
@@ -4017,7 +3898,7 @@ a:hover {
             "input" !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view).hide-nicklist.hide-topic,
+    .chat-container:not(.status-view).hide-nicklist.hide-topic,
     .chat-container.status-view {
         grid-template-columns: 1fr !important;
         grid-template-rows: 32px minmax(0, 1fr) 56px !important;
@@ -4075,8 +3956,8 @@ a:hover {
         grid-row: 3 !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist).hide-topic .right_frame,
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist).hide-topic .chat_frame {
+    .chat-container:not(.status-view):not(.hide-nicklist).hide-topic .right_frame,
+    .chat-container:not(.status-view):not(.hide-nicklist).hide-topic .chat_frame {
         grid-row: 2 !important;
     }
 
@@ -4169,21 +4050,21 @@ a:hover {
         gap: 4px;
     }
 
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist):not(.hide-topic) {
+    .chat-container:not(.status-view):not(.hide-nicklist):not(.hide-topic) {
         grid-template-columns: minmax(0, 1fr) clamp(84px, 30vw, 116px) !important;
         grid-template-rows: 26px 22px minmax(0, 1fr) 50px !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist).hide-topic {
+    .chat-container:not(.status-view):not(.hide-nicklist).hide-topic {
         grid-template-columns: minmax(0, 1fr) clamp(84px, 30vw, 116px) !important;
         grid-template-rows: 26px minmax(0, 1fr) 50px !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view).hide-nicklist:not(.hide-topic) {
+    .chat-container:not(.status-view).hide-nicklist:not(.hide-topic) {
         grid-template-rows: 26px 22px minmax(0, 1fr) 50px !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view).hide-nicklist.hide-topic,
+    .chat-container:not(.status-view).hide-nicklist.hide-topic,
     .chat-container.status-view {
         grid-template-rows: 26px minmax(0, 1fr) 50px !important;
     }
@@ -4267,11 +4148,11 @@ a:hover {
 }
 
 @media (max-width: 400px) {
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist):not(.hide-topic) {
+    .chat-container:not(.status-view):not(.hide-nicklist):not(.hide-topic) {
         grid-template-columns: minmax(0, 1fr) clamp(76px, 31vw, 104px) !important;
     }
 
-    .chat-container:not(.nav-left):not(.status-view):not(.hide-nicklist).hide-topic {
+    .chat-container:not(.status-view):not(.hide-nicklist).hide-topic {
         grid-template-columns: minmax(0, 1fr) clamp(76px, 31vw, 104px) !important;
     }
 

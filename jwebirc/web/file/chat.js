@@ -75,7 +75,6 @@ class ChatManager {
         this.uiPrefs = {
             hideTopic: false,
             hideNicklist: false,
-            navLeft: false,
             fontSize: 14,
             hue: 0
         };
@@ -1006,7 +1005,6 @@ class ChatManager {
         const paramMap = {
             'hidetopic': 'hideTopic',
             'hidenicklist': 'hideNicklist',
-            'navleft': 'navLeft',
             'fontsize': 'fontSize',
             'hue': 'hue'
         };
@@ -1016,7 +1014,7 @@ class ChatManager {
                 const value = params.get(urlParam);
                 
                 // Parse boolean parameters
-                if (['hidetopic', 'hidenicklist', 'navleft'].includes(urlParam)) {
+                if (['hidetopic', 'hidenicklist'].includes(urlParam)) {
                     this.uiPrefs[prefKey] = value === 'true' || value === '1' || value === 'yes';
                 } else if (['fontsize', 'hue'].includes(urlParam)) {
                     // Parse numeric parameters
@@ -1040,7 +1038,6 @@ class ChatManager {
     bindUiControls() {
         const hideTopicToggle = document.getElementById('optHideTopic');
         const hideNicklistToggle = document.getElementById('optHideNicklist');
-        const navLeftToggle = document.getElementById('optNavLeft');
         const fontSizeControl = document.getElementById('optFontSize');
         const fontSizeValue = document.getElementById('fontSizeValue');
         const menu = this.optionsMenu;
@@ -1059,15 +1056,6 @@ class ChatManager {
             hideNicklistToggle.checked = this.uiPrefs.hideNicklist;
             hideNicklistToggle.addEventListener('change', () => {
                 this.uiPrefs.hideNicklist = hideNicklistToggle.checked;
-                this.applyLayoutPreferences();
-            });
-        }
-
-        if (navLeftToggle) {
-            navLeftToggle.checked = !isMobileViewport && this.uiPrefs.navLeft;
-            navLeftToggle.disabled = isMobileViewport;
-            navLeftToggle.addEventListener('change', () => {
-                this.uiPrefs.navLeft = !window.matchMedia('(max-width: 768px)').matches && navLeftToggle.checked;
                 this.applyLayoutPreferences();
             });
         }
@@ -1202,64 +1190,36 @@ class ChatManager {
         const isPhoneViewport = window.matchMedia('(max-width: 480px)').matches;
         const isCompactViewport = window.matchMedia('(max-width: 600px)').matches;
         const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
-        const navLeft = !isMobileViewport && this.uiPrefs.navLeft;
         const fontSize = Math.min(Math.max(this.uiPrefs.fontSize, 12), 18);
-        const navLeftToggle = document.getElementById('optNavLeft');
-
-        if (navLeftToggle) {
-            navLeftToggle.checked = navLeft;
-            navLeftToggle.disabled = isMobileViewport;
-        }
 
         if (container) {
             // Toggle helper classes
             container.classList.toggle('hide-topic', !showTopic);
             container.classList.toggle('hide-nicklist', !showNicklist);
-            container.classList.toggle('nav-left', navLeft);
 
             // Adjust grid layout based on active view
-            if (navLeft) {
-                if (showTopic && showNicklist) {
-                    container.style.gridTemplateColumns = '200px 1fr 220px';
-                    container.style.gridTemplateRows = '48px 1fr 64px';
-                    container.style.gridTemplateAreas = '"nav topic users" "nav chat users" "nav input users"';
-                } else if (!showTopic && showNicklist) {
-                    container.style.gridTemplateColumns = '200px 1fr 220px';
-                    container.style.gridTemplateRows = '1fr 64px';
-                    container.style.gridTemplateAreas = '"nav chat users" "nav input users"';
-                } else if (showTopic && !showNicklist) {
-                    container.style.gridTemplateColumns = '200px 1fr';
-                    container.style.gridTemplateRows = '48px 1fr 64px';
-                    container.style.gridTemplateAreas = '"nav topic" "nav chat" "nav input"';
-                } else {
-                    container.style.gridTemplateColumns = '200px 1fr';
-                    container.style.gridTemplateRows = '1fr 64px';
-                    container.style.gridTemplateAreas = '"nav chat" "nav input"';
-                }
-            } else {
-                const mobileNicklistWidth = isCompactViewport
-                    ? 'clamp(92px, 28vw, 132px)'
-                    : 'clamp(108px, 30vw, 180px)';
-                const mobileRowsWithTopic = isPhoneViewport ? '26px 22px 1fr 50px' : '32px 28px 1fr 56px';
-                const mobileRowsWithoutTopic = isPhoneViewport ? '26px 1fr 50px' : '32px 1fr 56px';
+            const mobileNicklistWidth = isCompactViewport
+                ? 'clamp(92px, 28vw, 132px)'
+                : 'clamp(108px, 30vw, 180px)';
+            const mobileRowsWithTopic = isPhoneViewport ? '26px 22px 1fr 50px' : '32px 28px 1fr 56px';
+            const mobileRowsWithoutTopic = isPhoneViewport ? '26px 1fr 50px' : '32px 1fr 56px';
 
-                if (showTopic && showNicklist) {
-                    container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
-                    container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
-                } else if (!showTopic && showNicklist) {
-                    container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
-                    container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
-                } else if (showTopic && !showNicklist) {
-                    container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
-                    container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
-                } else {
-                    container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
-                    container.style.gridTemplateAreas = '"nav" "chat" "input"';
-                }
+            if (showTopic && showNicklist) {
+                container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
+                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
+                container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
+            } else if (!showTopic && showNicklist) {
+                container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
+                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
+            } else if (showTopic && !showNicklist) {
+                container.style.gridTemplateColumns = '1fr';
+                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
+                container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
+            } else {
+                container.style.gridTemplateColumns = '1fr';
+                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                container.style.gridTemplateAreas = '"nav" "chat" "input"';
             }
         }
 
@@ -1275,14 +1235,6 @@ class ChatManager {
             const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
             const hideNicklistForWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
             this.right.style.display = (showNicklist && !hideNicklistForWindow) ? '' : 'none';
-        }
-
-        // Navbar orientation
-        if (this.navWindow) {
-            this.navWindow.classList.toggle('vertical', navLeft);
-        }
-        if (this.navTabs) {
-            this.navTabs.classList.toggle('vertical', navLeft);
         }
 
         // Apply font size to CSS variable

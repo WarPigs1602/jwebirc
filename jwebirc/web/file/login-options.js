@@ -13,7 +13,6 @@ class LoginOptionsManager {
             hue: 0,
             hideTopic: false,
             hideNicklist: false,
-            navLeft: false,
             notificationsEnabled: true,
             notificationSound: true
         };
@@ -82,9 +81,6 @@ class LoginOptionsManager {
                 if (parsed.hideNicklist !== undefined) {
                     this.uiPrefs.hideNicklist = parsed.hideNicklist;
                 }
-                if (parsed.navLeft !== undefined) {
-                    this.uiPrefs.navLeft = parsed.navLeft;
-                }
                 if (parsed.notificationsEnabled !== undefined) {
                     this.uiPrefs.notificationsEnabled = parsed.notificationsEnabled;
                 }
@@ -104,7 +100,6 @@ class LoginOptionsManager {
      * - hue: 0-360 (degrees)
      * - hideTopic: true/false
      * - hideNicklist: true/false
-     * - navLeft: true/false
      */
     applyUrlParameters() {
         const params = new URLSearchParams(window.location.search);
@@ -134,20 +129,12 @@ class LoginOptionsManager {
             this.uiPrefs.hideNicklist = params.get('hideNicklist') === 'true';
         }
         
-        if (params.has('navLeft')) {
-            this.uiPrefs.navLeft = params.get('navLeft') === 'true';
-        }
-        
         if (params.has('notificationsEnabled')) {
             this.uiPrefs.notificationsEnabled = params.get('notificationsEnabled') === 'true';
         }
         
         if (params.has('notificationSound')) {
             this.uiPrefs.notificationSound = params.get('notificationSound') === 'true';
-        }
-
-        if (window.matchMedia('(max-width: 768px)').matches) {
-            this.uiPrefs.navLeft = false;
         }
     }
     
@@ -209,19 +196,6 @@ class LoginOptionsManager {
         if (hideNicklistControl) {
             hideNicklistControl.addEventListener('change', (e) => {
                 this.uiPrefs.hideNicklist = e.target.checked;
-                this.savePreferences();
-            });
-        }
-        
-        // Sidebar Mode toggle
-        const navLeftControl = document.getElementById('loginOptNavLeft');
-        if (navLeftControl) {
-            navLeftControl.addEventListener('change', (e) => {
-                this.uiPrefs.navLeft = !window.matchMedia('(max-width: 768px)').matches && e.target.checked;
-                if (window.matchMedia('(max-width: 768px)').matches) {
-                    e.target.checked = false;
-                    e.target.disabled = true;
-                }
                 this.savePreferences();
             });
         }
@@ -292,7 +266,6 @@ class LoginOptionsManager {
         const hueControl = document.getElementById('loginOptHue');
         const hideTopicControl = document.getElementById('loginOptHideTopic');
         const hideNicklistControl = document.getElementById('loginOptHideNicklist');
-        const navLeftControl = document.getElementById('loginOptNavLeft');
         const notificationsControl = document.getElementById('loginOptNotifications');
         const notificationSoundControl = document.getElementById('loginOptNotificationSound');
         
@@ -320,12 +293,6 @@ class LoginOptionsManager {
             hideNicklistControl.checked = this.uiPrefs.hideNicklist;
         }
         
-        if (navLeftControl) {
-            const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
-            navLeftControl.checked = !isMobileViewport && this.uiPrefs.navLeft;
-            navLeftControl.disabled = isMobileViewport;
-        }
-        
         if (notificationsControl) {
             notificationsControl.checked = this.uiPrefs.notificationsEnabled;
         }
@@ -346,7 +313,6 @@ class LoginOptionsManager {
      */
     savePreferences() {
         try {
-            const navLeftEnabled = !window.matchMedia('(max-width: 768px)').matches && this.uiPrefs.navLeft;
             // Get existing chat preferences if any
             const existing = localStorage.getItem('jwebirc_ui');
             let allPrefs = {
@@ -354,7 +320,6 @@ class LoginOptionsManager {
                 hue: this.uiPrefs.hue,
                 hideTopic: this.uiPrefs.hideTopic,
                 hideNicklist: this.uiPrefs.hideNicklist,
-                navLeft: navLeftEnabled,
                 notificationsEnabled: this.uiPrefs.notificationsEnabled,
                 notificationSound: this.uiPrefs.notificationSound
             };
@@ -369,7 +334,6 @@ class LoginOptionsManager {
                         hue: this.uiPrefs.hue,
                         hideTopic: this.uiPrefs.hideTopic,
                         hideNicklist: this.uiPrefs.hideNicklist,
-                        navLeft: navLeftEnabled,
                         notificationsEnabled: this.uiPrefs.notificationsEnabled,
                         notificationSound: this.uiPrefs.notificationSound
                     };
