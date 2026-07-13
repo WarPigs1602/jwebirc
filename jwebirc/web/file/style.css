@@ -765,15 +765,15 @@ a:focus {
 }
 
 .top_frame.vertical .nav-dropdown {
-    top: auto;
-    bottom: 0;
-    left: calc(100% + 12px);
-    right: auto;
-    transform: translateX(-10px);
+    top: calc(100% + 12px);
+    bottom: auto;
+    left: auto;
+    right: 0;
+    transform: translateY(-10px);
 }
 
 .top_frame.vertical .nav-dropdown.open {
-    transform: translateX(0);
+    transform: translateY(0);
 }
 
 .nav-dropdown-header {
@@ -1508,14 +1508,13 @@ nv.highlighted:not(.unread)::after {
 
 /* ===== Format Help Tooltip ===== */
 .format-help {
-    position: absolute;
-    bottom: 70px;
-    right: 10px;
+    position: fixed;
     background: var(--background-secondary);
     border: 2px solid var(--primary-color);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-lg);
     width: 320px;
+    max-width: calc(100vw - 16px);
     z-index: 1000;
     animation: slideUp 0.3s ease-out;
 }
@@ -3683,18 +3682,19 @@ a:hover {
         z-index: 1001;
     }
 
-    .nav-dropdown {
-        position: fixed;
-        top: 32px;
-        right: 8px;
-        left: 8px;
-        width: auto;
-        max-width: none;
-        max-height: calc(100dvh - 40px);
+    #navLanguageMenu,
+    #navOptionsMenu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        left: auto;
+        width: min(320px, calc(100vw - 16px));
+        max-width: calc(100vw - 16px);
+        max-height: calc(100dvh - 44px);
         overflow-y: auto;
         overscroll-behavior: contain;
-        border-top-left-radius: 0;
-        border-top-right-radius: 0;
+        border-top-left-radius: var(--border-radius-lg);
+        border-top-right-radius: var(--border-radius-lg);
     }
 }
 
@@ -3915,10 +3915,13 @@ a:hover {
         font-size: 0.85rem;
     }
 
-    .nav-dropdown {
-        top: 26px;
-        right: 6px;
-        left: 6px;
+    #navLanguageMenu,
+    #navOptionsMenu {
+        top: calc(100% + 6px);
+        right: 0;
+        left: auto;
+        width: min(300px, calc(100vw - 12px));
+        max-width: calc(100vw - 12px);
         max-height: calc(100dvh - 32px);
     }
 }

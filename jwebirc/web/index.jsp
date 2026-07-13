@@ -244,7 +244,7 @@
                     <i class="fas fa-bell"></i>
                     <span class="nav-badge" id="notificationBadge" style="display: none;">0</span>
                 </button>
-                <button class="nav-action-btn lang-btn" id="navLanguageToggle" aria-haspopup="true" aria-expanded="false" title="Language" data-i18n-title="lang.menu">
+                <button class="nav-action-btn lang-btn" id="navLanguageToggle" aria-haspopup="true" aria-controls="navLanguageMenu" aria-expanded="false" title="Language" data-i18n-title="lang.menu">
                     <i class="fas fa-language"></i>
                     <span id="navLanguageLabel"><%= uiLang.toUpperCase() %></span>
                 </button>
@@ -262,7 +262,7 @@
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="pt" data-i18n="lang.portuguese">Português</button>
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="tr" data-i18n="lang.turkish">Türkçe</button>
                 </div>
-                <button class="nav-action-btn" id="navOptionsToggle" aria-haspopup="true" aria-expanded="false" title="Settings" data-i18n-title="nav.settings">
+                <button class="nav-action-btn" id="navOptionsToggle" aria-haspopup="true" aria-controls="navOptionsMenu" aria-expanded="false" title="Settings" data-i18n-title="nav.settings">
                     <i class="fas fa-cog"></i>
                 </button>
                 
@@ -350,6 +350,7 @@
                 if (e && (langMenu.contains(e.target) || langToggle.contains(e.target))) return;
                 langMenu.classList.remove('open');
                 langToggle.setAttribute('aria-expanded', 'false');
+                window.jwebircResetNavDropdown(langMenu);
             }
             
             if (langToggle && langMenu) {
@@ -358,6 +359,11 @@
                     const willOpen = !langMenu.classList.contains('open');
                     langMenu.classList.toggle('open', willOpen);
                     langToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                    if (willOpen) {
+                        window.jwebircPositionNavDropdown(langToggle, langMenu);
+                    } else {
+                        window.jwebircResetNavDropdown(langMenu);
+                    }
                 });
                 document.addEventListener('click', closeMenu);
             }
@@ -525,11 +531,45 @@
         const formatHelp = document.getElementById('formatHelp');
         
         if (formatHelpBtn && formatHelp) {
+            function positionFormatHelp() {
+                const input = document.getElementById('message');
+                if (!input) return;
+                const rect = input.getBoundingClientRect();
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const margin = 8;
+                const fw = formatHelp.offsetWidth;
+                const fh = formatHelp.offsetHeight;
+
+                let top = rect.top - margin - fh;
+                if (top < margin) top = rect.bottom + margin;
+                top = Math.max(margin, Math.min(top, vh - margin - fh));
+
+                let left = rect.left;
+                if (left + fw > vw - margin) left = Math.max(margin, vw - fw - margin);
+                left = Math.max(margin, left);
+
+                formatHelp.style.top = top + 'px';
+                formatHelp.style.left = left + 'px';
+            }
+
             formatHelpBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 const isVisible = formatHelp.style.display !== 'none';
-                formatHelp.style.display = isVisible ? 'none' : 'block';
+                if (isVisible) {
+                    formatHelp.style.display = 'none';
+                } else {
+                    if (formatHelp.parentElement !== document.body) {
+                        document.body.appendChild(formatHelp);
+                    }
+                    formatHelp.style.display = 'block';
+                    positionFormatHelp();
+                }
+            });
+
+            window.addEventListener('resize', function() {
+                if (formatHelp.style.display !== 'none') positionFormatHelp();
             });
             
             // Close format help when clicking outside

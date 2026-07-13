@@ -1107,6 +1107,7 @@ class ChatManager {
             const closeMenu = () => {
                 menu.classList.remove('open');
                 toggle.setAttribute('aria-expanded', 'false');
+                window.jwebircResetNavDropdown(menu);
             };
 
             toggle.addEventListener('click', (e) => {
@@ -1114,6 +1115,11 @@ class ChatManager {
                 const willOpen = !menu.classList.contains('open');
                 menu.classList.toggle('open', willOpen);
                 toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                if (willOpen) {
+                    window.jwebircPositionNavDropdown(toggle, menu);
+                } else {
+                    window.jwebircResetNavDropdown(menu);
+                }
             });
 
             document.addEventListener('click', (e) => {
@@ -3447,3 +3453,66 @@ function del_page(page) { chatManager.delPage(page); }
 function parse_output(text) { if (window.ircParser) window.ircParser.parseOutput(text); }
 function add_nick(channel, nick, host, color) { chatManager.addNick(channel, nick, host, color); }
 function getRandomColor() { return chatManager.getRandomColor(); }
+
+// Position a nav dropdown so it always opens downward and stays fully within
+// the viewport. Flips upward only when there is not enough space below, and
+// clamps to the viewport edges so it is never clipped at the top or bottom.
+window.jwebircPositionNavDropdown = function (toggle, menu) {
+    if (!toggle || !menu) return;
+
+    const rect = toggle.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 8;
+
+    menu.style.position = 'fixed';
+    menu.style.left = 'auto';
+    menu.style.bottom = 'auto';
+    menu.style.transform = 'none';
+    menu.style.transition = 'opacity 0.2s ease, visibility 0.2s ease';
+
+    // Right-align the menu with the toggle's right edge, kept inside the viewport.
+    const menuWidth = menu.offsetWidth || menu.getBoundingClientRect().width;
+    let right = vw - rect.right;
+    if (right < margin) right = margin;
+    if (right + menuWidth > vw - margin) right = Math.max(margin, vw - menuWidth - margin);
+    menu.style.right = right + 'px';
+
+    const menuHeight = menu.offsetHeight || menu.getBoundingClientRect().height;
+    let top = rect.bottom + margin;
+    if (top + menuHeight > vh - margin) {
+        const aboveTop = rect.top - margin - menuHeight;
+        top = aboveTop >= margin ? aboveTop : Math.max(margin, Math.min(top, vh - margin - menuHeight));
+    }
+    menu.style.top = top + 'px';
+};
+
+window.jwebircResetNavDropdown = function (menu) {
+    if (!menu) return;
+    menu.style.position = '';
+    menu.style.top = '';
+    menu.style.left = '';
+    menu.style.right = '';
+    menu.style.bottom = '';
+    menu.style.transform = '';
+    menu.style.transition = '';
+};
+
+// Keep any open, JS-positioned dropdown correctly placed while scrolling/resizing.
+(function () {
+    let repositioning = false;
+    function repositionOpenMenus() {
+        if (repositioning) return;
+        repositioning = true;
+        document.querySelectorAll('.nav-dropdown.open').forEach((menu) => {
+            if (menu.style.position === 'fixed') {
+                const toggle = document.querySelector('[aria-haspopup="true"][aria-controls="' + menu.id + '"]')
+                    || menu.previousElementSibling;
+                window.jwebircPositionNavDropdown(toggle, menu);
+            }
+        });
+        repositioning = false;
+    }
+    window.addEventListener('resize', repositionOpenMenus);
+    window.addEventListener('scroll', repositionOpenMenus, true);
+})();

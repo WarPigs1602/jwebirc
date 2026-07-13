@@ -224,6 +224,11 @@ class EmojiPickerHandler {
                 this.closePicker();
             }
         });
+
+        // Keep the dropup correctly placed while scrolling/resizing
+        const reposition = () => { if (this.isOpen) this.positionPicker(); };
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
     }
     
     createModal() {
@@ -529,7 +534,36 @@ class EmojiPickerHandler {
         this.pickerModal.classList.add('show');
         this.isOpen = true;
         this.emojiBtn.setAttribute('aria-expanded', 'true');
+        this.positionPicker();
         this.searchInput.focus();
+    }
+
+    positionPicker() {
+        if (!this.pickerModal || !this.emojiBtn) return;
+        const rect = this.emojiBtn.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const margin = 8;
+        const mw = this.pickerModal.offsetWidth;
+        const mh = this.pickerModal.offsetHeight;
+
+        // Prefer a dropup above the button; fall back below or clamp into view.
+        let top = rect.top - margin - mh;
+        if (top < margin) {
+            if (rect.bottom + mh + margin <= vh - margin) {
+                top = rect.bottom + margin;
+            } else {
+                top = Math.max(margin, Math.min(rect.top - margin - mh, vh - margin - mh));
+            }
+        }
+        top = Math.max(margin, Math.min(top, vh - margin - mh));
+
+        let left = rect.left;
+        if (left + mw > vw - margin) left = Math.max(margin, vw - mw - margin);
+        left = Math.max(margin, left);
+
+        this.pickerModal.style.top = top + 'px';
+        this.pickerModal.style.left = left + 'px';
     }
     
     closePicker() {

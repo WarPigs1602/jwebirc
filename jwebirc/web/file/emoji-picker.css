@@ -6,29 +6,21 @@
 /* Modal Overlay and Container */
 .emoji-picker-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: none;
     z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(2px);
+    display: none;
 }
 
 .emoji-picker-modal.show {
-    display: flex;
+    display: block;
 }
 
 .emoji-picker-container {
     background: var(--background-main);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-lg);
-    width: 90%;
-    max-width: 500px;
-    max-height: 600px;
+    width: 360px;
+    max-width: calc(100vw - 16px);
+    max-height: min(600px, 70vh);
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border-color);
