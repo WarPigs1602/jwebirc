@@ -7,6 +7,7 @@ import jakarta.json.Json;
 import java.io.IOException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import jakarta.websocket.CloseReason;
 import jakarta.websocket.EndpointConfig;
 import jakarta.websocket.HandshakeResponse;
 import jakarta.websocket.OnClose;
@@ -506,7 +507,14 @@ public class Webchat {
      * @throws IOException
      */
     @OnClose
-    public synchronized void onClose(Session session) {
+    public synchronized void onClose(Session session, CloseReason closeReason) {
+        if (closeReason != null) {
+            CloseReason.CloseCode code = closeReason.getCloseCode();
+            if (code == CloseReason.CloseCodes.NORMAL_CLOSURE || code == CloseReason.CloseCodes.GOING_AWAY) {
+                cleanupResources();
+                return;
+            }
+        }
         scheduleReconnectCleanup("Page closed: ");
     }
 

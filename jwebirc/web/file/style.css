@@ -521,7 +521,7 @@ a:focus {
 .chat-container.sidebar-mode .sidebar-tabs .nav-tabs-wrapper {
     display: flex !important;
     flex-direction: column !important;
-    align-items: stretch !important;
+    align-items: center !important;
     width: 100% !important;
     overflow: hidden !important;
 }
@@ -531,6 +531,7 @@ a:focus {
     align-items: stretch !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
+    width: 100% !important;
 }
 
 .chat-container.sidebar-mode .sidebar-tabs .nav-tab-strip {
@@ -698,7 +699,7 @@ a:focus {
 .chat-container.sidebar-mode .sidebar-tabs .nav-tabs-wrapper {
     display: flex !important;
     flex-direction: column !important;
-    align-items: stretch !important;
+    align-items: center !important;
     width: 100% !important;
     overflow: hidden !important;
 }
@@ -708,6 +709,7 @@ a:focus {
     align-items: stretch !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
+    width: 100% !important;
 }
 
 .chat-container.sidebar-mode .sidebar-tabs .nav-tab-strip {
@@ -3830,6 +3832,15 @@ a:hover {
     height: 1px;
     background: var(--border-color);
     margin: 8px 0;
+}
+
+/* Desktop placement is handled by JS (position: fixed, viewport-clamped)
+   so the menu is never clipped. Keep it scrollable on short viewports. */
+#languageMenu,
+#loginOptionsMenu {
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 @media (min-width: 769px) {

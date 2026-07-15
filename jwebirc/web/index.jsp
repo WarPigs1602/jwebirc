@@ -16,15 +16,21 @@
         nickMaxLength = 15;
     }
 
-    // Persist UI language in session (supports en/de)
+    // Persist UI language in session (supports en/de/fr/it/es/sv/pt/tr/nl)
     String uiLang = (String) session.getAttribute("ui_lang");
     String langParam = request.getParameter("lang");
-    if (langParam != null && ("en".equalsIgnoreCase(langParam) || "de".equalsIgnoreCase(langParam))) {
-        uiLang = langParam.toLowerCase();
+    if (langParam != null) {
+        String lower = langParam.toLowerCase();
+        if ("en".equals(lower) || "de".equals(lower) || "fr".equals(lower) || "it".equals(lower) || "es".equals(lower) || "sv".equals(lower) || "pt".equals(lower) || "tr".equals(lower) || "nl".equals(lower)) {
+            uiLang = lower;
+        }
     }
     if (uiLang == null) {
         String browserLang = request.getLocale() != null ? request.getLocale().getLanguage() : "en";
-        uiLang = "de".equalsIgnoreCase(browserLang) ? "de" : "en";
+        uiLang = browserLang;
+        if (!"en".equals(uiLang) && !"de".equals(uiLang) && !"fr".equals(uiLang) && !"it".equals(uiLang) && !"es".equals(uiLang) && !"sv".equals(uiLang) && !"pt".equals(uiLang) && !"tr".equals(uiLang) && !"nl".equals(uiLang)) {
+            uiLang = "en";
+        }
     }
     session.setAttribute("ui_lang", uiLang);
     request.setAttribute("ui_lang", uiLang);
@@ -162,6 +168,9 @@
     if (paramConnect != null) {
         var paramNick = request.getParameter("nick");
         if (paramNick == null) {
+            paramNick = request.getParameter("name");
+        }
+        if (paramNick == null) {
             paramNick = "";
         }
         if (paramNick.length() > nickMaxLength) {
@@ -169,6 +178,9 @@
         }
         session.setAttribute("param-nick", paramNick);
         var paramChannel = request.getParameter("channel");
+        if (paramChannel == null) {
+            paramChannel = request.getParameter("channels");
+        }
         if (paramChannel == null) {
             paramChannel = "";
         } else {
@@ -234,12 +246,12 @@
             
             <!-- Tabs Section -->
             <div class="nav-tabs-wrapper">
-                <button class="nav-scroll-btn nav-scroll-left" id="navScrollLeft" aria-label="Scroll left">
-                    <i class="fas fa-chevron-left"></i>
+                <button class="nav-scroll-btn nav-scroll-left" id="navScrollLeft" aria-label="Scroll up">
+                    <i class="fas fa-chevron-up"></i>
                 </button>
                 <div class="nav-tabs" id="nav_tabs"></div>
-                <button class="nav-scroll-btn nav-scroll-right" id="navScrollRight" aria-label="Scroll right">
-                    <i class="fas fa-chevron-right"></i>
+                <button class="nav-scroll-btn nav-scroll-right" id="navScrollRight" aria-label="Scroll down">
+                    <i class="fas fa-chevron-down"></i>
                 </button>
             </div>
             
@@ -266,6 +278,7 @@
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="sv" data-i18n="lang.swedish">Svenska</button>
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="pt" data-i18n="lang.portuguese">Português</button>
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="tr" data-i18n="lang.turkish">Türkçe</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="nl" data-i18n="lang.dutch">Nederlands</button>
                 </div>
                 <button class="nav-action-btn" id="navOptionsToggle" aria-haspopup="true" aria-controls="navOptionsMenu" aria-expanded="false" title="Settings" data-i18n-title="nav.settings">
                     <i class="fas fa-cog"></i>
@@ -1058,16 +1071,18 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         let defaultHue = 0;
         let defaultHideTopic = false;
         let defaultHideNicklist = false;
+        let defaultEnableSidebar = false;
         let defaultNotifications = true;
         let defaultNotificationSound = true;
         try {
-            const stored = localStorage.getItem('jwebirc_ui');
+            const stored = getCookie('jwebirc_ui') || localStorage.getItem('jwebirc_ui');
             if (stored) {
                 const parsed = JSON.parse(stored);
                 defaultFontSize = parsed.fontSize || 14;
                 defaultHue = parsed.hue || 0;
                 defaultHideTopic = parsed.hideTopic || false;
                 defaultHideNicklist = parsed.hideNicklist || false;
+                defaultEnableSidebar = parsed.enableSidebar || false;
                 defaultNotifications = parsed.notificationsEnabled !== false;
                 defaultNotificationSound = parsed.notificationSound !== false;
             }
@@ -1147,7 +1162,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
             const channels = document.getElementById('embedChannel').value;
             
             configModal.remove();
-            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultNotifications, defaultNotificationSound);
+            showGeneratedLink(nickname, channels, defaultFontSize, defaultHue, defaultHideTopic, defaultHideNicklist, defaultEnableSidebar, defaultNotifications, defaultNotificationSound);
         };
         
         // Handle Cancel button
@@ -1163,7 +1178,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         };
     }
     
-    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideNotifications, overrideNotificationSound) {
+    function showGeneratedLink(nickname, channels, overrideFontSize, overrideHue, overrideHideTopic, overrideHideNicklist, overrideEnableSidebar, overrideNotifications, overrideNotificationSound) {
         const baseUrl = new URL(window.location.href);
         baseUrl.search = '';
         baseUrl.hash = '';
@@ -1193,6 +1208,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         const hue = overrideHue !== undefined ? overrideHue : 0;
         const hideTopic = overrideHideTopic !== undefined ? overrideHideTopic : false;
         const hideNicklist = overrideHideNicklist !== undefined ? overrideHideNicklist : false;
+        const enableSidebar = overrideEnableSidebar !== undefined ? overrideEnableSidebar : false;
         const notifications = overrideNotifications !== false;
         const notificationSound = overrideNotificationSound !== false;
         
@@ -1226,6 +1242,10 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         if (hideNicklist) {
             url += '&hideNicklist=true';
         }
+        // Add sidebar preference
+        if (enableSidebar) {
+            url += '&enableSidebar=true';
+        }
         // Add notification preferences
         if (!notifications) {
             url += '&notificationsEnabled=false';
@@ -1233,7 +1253,13 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         if (!notificationSound) {
             url += '&notificationSound=false';
         }
-        
+
+        // Auto-connect the embedded chat (skip if CAPTCHA is required, since
+        // an iframe cannot solve one - the user would just see the form).
+        if (typeof captchaEnabled !== 'undefined' && !captchaEnabled) {
+            url += '&connect=true';
+        }
+
         const embedCode = '<iframe src="' + url.replace(/"/g, '&quot;') + '" width="800" height="600" frameborder="0" style="border: 1px solid #555;"></iframe>';
         
         // Get primary color for theming

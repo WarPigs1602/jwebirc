@@ -164,13 +164,20 @@
                             <div class="nav-dropdown-item-header">
                                 <i class="fas fa-palette"></i>
                                 <span data-i18n="nav.hue">Hue</span>
-                                <span class="nav-slider-value" id="loginHueValue">0°</span>
                             </div>
                             <div class="nav-slider-wrapper">
                                 <input type="range" id="loginOptHue" min="0" max="360" step="1" value="0" class="nav-range-slider hue-slider">
                                 <div class="nav-slider-track hue-track"></div>
                             </div>
                         </div>
+                        <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="loginOptEnableSidebar">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-columns"></i>
+                                <span data-i18n="nav.enableSidebar">Sidebar</span>
+                            </div>
+                            <input type="checkbox" id="loginOptEnableSidebar" class="nav-toggle">
+                        </label>
                         <% if (useTemplate && session.getAttribute("template_user_selectable") != null && session.getAttribute("template_user_selectable").toString().equalsIgnoreCase("true")) { %>
                         <!-- Template Selector -->
                         <div class="nav-dropdown-divider"></div>
@@ -211,28 +218,92 @@
         </div>
 
         <script>
+            // Reusable, viewport-aware dropdown positioning (mirrors the chat behaviour
+            // so the login menus are never clipped by the viewport - fixes the
+            // language dropdown being cut off at the top on the login page).
+            window.jwebircPositionLoginDropdown = function (toggle, menu) {
+                if (!toggle || !menu) return;
+
+                const rect = toggle.getBoundingClientRect();
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const margin = 8;
+
+                menu.style.position = 'fixed';
+                menu.style.left = 'auto';
+                menu.style.bottom = 'auto';
+                menu.style.transform = 'none';
+                menu.style.transition = 'opacity 0.2s ease, visibility 0.2s ease';
+
+                // Right-align the menu with the toggle's right edge, kept inside the viewport.
+                const menuWidth = menu.offsetWidth || menu.getBoundingClientRect().width;
+                let right = vw - rect.right;
+                if (right < margin) right = margin;
+                if (right + menuWidth > vw - margin) right = Math.max(margin, vw - menuWidth - margin);
+                menu.style.right = right + 'px';
+
+                // Open below the toggle, flip above if there is not enough room.
+                const menuHeight = menu.offsetHeight || menu.getBoundingClientRect().height;
+                let top = rect.bottom + margin;
+                if (top + menuHeight > vh - margin) {
+                    const aboveTop = rect.top - margin - menuHeight;
+                    top = aboveTop >= margin ? aboveTop : Math.max(margin, Math.min(top, vh - margin - menuHeight));
+                }
+                menu.style.top = top + 'px';
+            };
+
+            window.jwebircResetLoginDropdown = function (menu) {
+                if (!menu) return;
+                menu.style.position = '';
+                menu.style.top = '';
+                menu.style.left = '';
+                menu.style.right = '';
+                menu.style.bottom = '';
+                menu.style.transform = '';
+                menu.style.transition = '';
+            };
+
             (function() {
                 const langToggle = document.getElementById('languageToggle');
                 const langMenu = document.getElementById('languageMenu');
                 const langOptions = langMenu ? langMenu.querySelectorAll('.lang-option') : [];
-            
+
                 function closeMenu(e) {
                     if (!langMenu || !langToggle) return;
                     if (e && (langMenu.contains(e.target) || langToggle.contains(e.target))) return;
                     langMenu.classList.remove('open');
                     langToggle.setAttribute('aria-expanded', 'false');
+                    window.jwebircResetLoginDropdown(langMenu);
                 }
-            
+
                 if (langToggle && langMenu) {
                     langToggle.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const willOpen = !langMenu.classList.contains('open');
                         langMenu.classList.toggle('open', willOpen);
                         langToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                        if (willOpen) {
+                            window.jwebircPositionLoginDropdown(langToggle, langMenu);
+                        } else {
+                            window.jwebircResetLoginDropdown(langMenu);
+                        }
                     });
                     document.addEventListener('click', closeMenu);
                 }
-            
+
+                // Keep the open menu correctly placed while scrolling/resizing.
+                let repositioning = false;
+                function repositionOpenMenus() {
+                    if (repositioning) return;
+                    repositioning = true;
+                    if (langMenu && langMenu.classList.contains('open') && langMenu.style.position === 'fixed') {
+                        window.jwebircPositionLoginDropdown(langToggle, langMenu);
+                    }
+                    repositioning = false;
+                }
+                window.addEventListener('resize', repositionOpenMenus);
+                window.addEventListener('scroll', repositionOpenMenus, true);
+
                 if (langOptions && langOptions.length && window.jwebircSetLanguage) {
                     langOptions.forEach((btn) => {
                         btn.addEventListener('click', (e) => {

@@ -13,6 +13,7 @@ class LoginOptionsManager {
             hue: 0,
             hideTopic: false,
             hideNicklist: false,
+            enableSidebar: false,
             notificationsEnabled: true,
             notificationSound: true
         };
@@ -45,6 +46,21 @@ class LoginOptionsManager {
         // Setup event listeners
         this.setupEventListeners();
 
+        // Keep the open options menu correctly placed while scrolling/resizing.
+        this._repositioning = false;
+        this._reposition = () => {
+            if (this._repositioning) return;
+            this._repositioning = true;
+            if (this.optionsMenu && this.optionsMenu.classList.contains('open') && this.optionsMenu.style.position === 'fixed') {
+                if (typeof window.jwebircPositionLoginDropdown === 'function') {
+                    window.jwebircPositionLoginDropdown(this.optionsToggle, this.optionsMenu);
+                }
+            }
+            this._repositioning = false;
+        };
+        window.addEventListener('resize', this._reposition);
+        window.addEventListener('scroll', this._reposition, true);
+
         // Re-apply translations when language changes at runtime
         window.addEventListener('jwebirc:languageChanged', () => {
             if (typeof window.jwebircApplyTranslations === 'function') {
@@ -59,13 +75,38 @@ class LoginOptionsManager {
     }
     
     /**
-     * Load preferences from localStorage
-     * Uses same key as chat (jwebirc_ui) for consistency
+     * Read a cookie value by name.
+     */
+    getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for (let c = 0; c < ca.length; c++) {
+            let s = ca[c];
+            while (s.charAt(0) === ' ') s = s.substring(1, s.length);
+            if (s.indexOf(nameEQ) === 0) return decodeURIComponent(s.substring(nameEQ.length, s.length));
+        }
+        return null;
+    }
+
+    /**
+     * Write a cookie value (long-lived, same path as the app).
+     */
+    setCookie(name, value, days = 365) {
+        const d = new Date();
+        d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+        const expires = "expires=" + d.toUTCString();
+        document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/;SameSite=Lax";
+    }
+
+    /**
+     * Load preferences from a cookie (primary) with a localStorage fallback.
+     * Uses the same key as chat (jwebirc_ui) for consistency.
      */
     loadPreferences() {
         try {
-            // Try to load from shared chat key first
-            let stored = localStorage.getItem('jwebirc_ui');
+            // Cookies are the primary store so the backend / error pages can read them.
+            const cookieValue = this.getCookie('jwebirc_ui');
+            let stored = cookieValue || localStorage.getItem('jwebirc_ui');
             if (stored) {
                 const parsed = JSON.parse(stored);
                 // Extract all preferences
@@ -80,6 +121,9 @@ class LoginOptionsManager {
                 }
                 if (parsed.hideNicklist !== undefined) {
                     this.uiPrefs.hideNicklist = parsed.hideNicklist;
+                }
+                if (parsed.enableSidebar !== undefined) {
+                    this.uiPrefs.enableSidebar = parsed.enableSidebar;
                 }
                 if (parsed.notificationsEnabled !== undefined) {
                     this.uiPrefs.notificationsEnabled = parsed.notificationsEnabled;
@@ -119,6 +163,11 @@ class LoginOptionsManager {
                 this.uiPrefs.hue = hueVal;
             }
         }
+
+        // Sidebar parameter
+        if (params.has('enableSidebar')) {
+            this.uiPrefs.enableSidebar = params.get('enableSidebar') === 'true' || params.get('enableSidebar') === '1';
+        }
         
         // Boolean parameters
         if (params.has('hideTopic')) {
@@ -154,6 +203,9 @@ class LoginOptionsManager {
                 this.optionsMenu.classList.remove('open');
                 this.optionsMenu.classList.remove('show');
                 this.optionsMenu.style.display = '';
+                if (typeof window.jwebircResetLoginDropdown === 'function') {
+                    window.jwebircResetLoginDropdown(this.optionsMenu);
+                }
                 this.optionsToggle.setAttribute('aria-expanded', 'false');
             }
         });
@@ -217,6 +269,15 @@ class LoginOptionsManager {
                 this.savePreferences();
             });
         }
+
+        // Sidebar toggle
+        const sidebarControl = document.getElementById('loginOptEnableSidebar');
+        if (sidebarControl) {
+            sidebarControl.addEventListener('change', (e) => {
+                this.uiPrefs.enableSidebar = e.target.checked;
+                this.savePreferences();
+            });
+        }
     }
     
     /**
@@ -229,6 +290,15 @@ class LoginOptionsManager {
         const isVisible = this.optionsMenu.classList.contains('open');
         this.optionsMenu.style.display = isVisible ? 'block' : '';
         this.optionsToggle.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+        if (isVisible) {
+            if (typeof window.jwebircPositionLoginDropdown === 'function') {
+                window.jwebircPositionLoginDropdown(this.optionsToggle, this.optionsMenu);
+            }
+        } else {
+            if (typeof window.jwebircResetLoginDropdown === 'function') {
+                window.jwebircResetLoginDropdown(this.optionsMenu);
+            }
+        }
     }
     
     /**
@@ -300,6 +370,12 @@ class LoginOptionsManager {
         if (notificationSoundControl) {
             notificationSoundControl.checked = this.uiPrefs.notificationSound;
         }
+
+        // Sidebar toggle
+        const sidebarControl = document.getElementById('loginOptEnableSidebar');
+        if (sidebarControl) {
+            sidebarControl.checked = this.uiPrefs.enableSidebar;
+        }
         
         // Apply styles
         this.applyFontSize();
@@ -320,6 +396,7 @@ class LoginOptionsManager {
                 hue: this.uiPrefs.hue,
                 hideTopic: this.uiPrefs.hideTopic,
                 hideNicklist: this.uiPrefs.hideNicklist,
+                enableSidebar: this.uiPrefs.enableSidebar,
                 notificationsEnabled: this.uiPrefs.notificationsEnabled,
                 notificationSound: this.uiPrefs.notificationSound
             };
@@ -334,6 +411,7 @@ class LoginOptionsManager {
                         hue: this.uiPrefs.hue,
                         hideTopic: this.uiPrefs.hideTopic,
                         hideNicklist: this.uiPrefs.hideNicklist,
+                        enableSidebar: this.uiPrefs.enableSidebar,
                         notificationsEnabled: this.uiPrefs.notificationsEnabled,
                         notificationSound: this.uiPrefs.notificationSound
                     };
@@ -342,7 +420,17 @@ class LoginOptionsManager {
                 }
             }
             
-            localStorage.setItem('jwebirc_ui', JSON.stringify(allPrefs));
+            const serialized = JSON.stringify(allPrefs);
+
+            // Primary store: cookie (readable by the backend / error pages and
+            // shared with the chat frame which may run in a different context).
+            this.setCookie('jwebirc_ui', serialized);
+            // Individual cookies expected by the server-side error page.
+            this.setCookie('jwebirc_fontSize', String(allPrefs.fontSize));
+            this.setCookie('jwebirc_hue', String(allPrefs.hue));
+
+            // Keep localStorage as a fallback for client-only pages.
+            localStorage.setItem('jwebirc_ui', serialized);
         } catch (e) {
             console.warn('Could not save login preferences:', e);
         }

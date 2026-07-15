@@ -77,7 +77,9 @@ class ChatManager {
             hideNicklist: false,
             fontSize: 14,
             hue: 0,
-            enableSidebar: false
+            enableSidebar: false,
+            notificationsEnabled: true,
+            notificationSound: true
         };
         this.optionsMenu = null;
         this.optionsToggle = null;
@@ -567,10 +569,16 @@ class ChatManager {
         // Initialize browser notification manager
         this.notificationManager = new NotificationManager(this);
 
-        // Restore and apply UI preferences
-        this.loadUiPreferences();
-        this.bindUiControls();
-        this.applyLayoutPreferences();
+        // Restore and apply UI preferences.
+        // Guarded so a failure in layout/sidebar handling can never prevent the
+        // WebSocket connection from being established below.
+        try {
+            this.loadUiPreferences();
+            this.bindUiControls();
+            this.applyLayoutPreferences();
+        } catch (layoutError) {
+            console.error('[Chat] Failed to apply UI layout preferences:', layoutError);
+        }
 
         // Track current template for color recalculation
         this.activeTemplate = this.detectActiveTemplate();
@@ -582,6 +590,30 @@ class ChatManager {
         // Setup notification button
         if (this.notificationButton) {
             this.notificationButton.addEventListener('click', () => this.toggleNotifications());
+        }
+        
+        // Setup scroll buttons
+        const scrollLeftBtn = document.getElementById('navScrollLeft');
+        const scrollRightBtn = document.getElementById('navScrollRight');
+        if (scrollLeftBtn && this.navTabs) {
+            scrollLeftBtn.addEventListener('click', () => {
+                const isSidebar = this.chatContainer && this.chatContainer.classList.contains('sidebar-mode');
+                if (isSidebar) {
+                    this.navTabs.scrollBy({ top: -120, behavior: 'smooth' });
+                } else {
+                    this.navTabs.scrollBy({ left: -120, behavior: 'smooth' });
+                }
+            });
+        }
+        if (scrollRightBtn && this.navTabs) {
+            scrollRightBtn.addEventListener('click', () => {
+                const isSidebar = this.chatContainer && this.chatContainer.classList.contains('sidebar-mode');
+                if (isSidebar) {
+                    this.navTabs.scrollBy({ top: 120, behavior: 'smooth' });
+                } else {
+                    this.navTabs.scrollBy({ left: 120, behavior: 'smooth' });
+                }
+            });
         }
         
         // Initialize WebSocket
@@ -972,7 +1004,10 @@ class ChatManager {
 
     loadUiPreferences() {
         try {
-            const saved = localStorage.getItem('jwebirc_ui');
+            // Cookies are the primary store (written by the login page and
+            // readable by the backend); fall back to localStorage.
+            const cookieValue = this.getCookie ? this.getCookie('jwebirc_ui') : null;
+            const saved = cookieValue || localStorage.getItem('jwebirc_ui');
             const hasSavedPreferences = !!saved;
             if (saved) {
                 const parsed = JSON.parse(saved);
@@ -998,27 +1033,67 @@ class ChatManager {
         
         return this.uiPrefs;
     }
+
+    getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for (let c = 0; c < ca.length; c++) {
+            let s = ca[c];
+            while (s.charAt(0) === ' ') s = s.substring(1, s.length);
+            if (s.indexOf(nameEQ) === 0) return decodeURIComponent(s.substring(nameEQ.length, s.length));
+        }
+        return null;
+    }
+
+    setCookie(name, value, days = 365) {
+        const d = new Date();
+        d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+        const expires = "expires=" + d.toUTCString();
+        document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/;SameSite=Lax";
+    }
+
+    /**
+     * Persist a single preference and flush the whole preference set.
+     * Mirrors the behaviour of the login page so chat changes survive a
+     * return to the start page (which reads cookies, not localStorage).
+     */
+    saveUiPreference(key, value) {
+        if (key !== undefined) {
+            this.uiPrefs[key] = value;
+        }
+        this.saveUiPreferences();
+    }
     
     loadUrlParameters() {
         const params = new URLSearchParams(window.location.search);
         
-        // Map URL parameters to uiPrefs
+        // Map URL parameters to uiPrefs.
+        // Both lowercase (legacy) and camelCase (login page / chatnapping generator) forms are accepted.
         const paramMap = {
             'hidetopic': 'hideTopic',
             'hidenicklist': 'hideNicklist',
             'fontsize': 'fontSize',
             'hue': 'hue',
-            'enablesidebar': 'enableSidebar'
+            'enablesidebar': 'enableSidebar',
+            'hideTopic': 'hideTopic',
+            'hideNicklist': 'hideNicklist',
+            'fontSize': 'fontSize',
+            'enableSidebar': 'enableSidebar',
+            'notificationsEnabled': 'notificationsEnabled',
+            'notificationSound': 'notificationSound'
         };
-        
+
+        const booleanParams = ['hidetopic', 'hidenicklist', 'enablesidebar', 'hideTopic', 'hideNicklist', 'enableSidebar', 'notificationsEnabled', 'notificationSound'];
+        const numericParams = ['fontsize', 'hue', 'fontSize'];
+
         for (const [urlParam, prefKey] of Object.entries(paramMap)) {
             if (params.has(urlParam)) {
                 const value = params.get(urlParam);
-                
+
                 // Parse boolean parameters
-                if (['hidetopic', 'hidenicklist', 'enablesidebar'].includes(urlParam)) {
+                if (booleanParams.includes(urlParam)) {
                     this.uiPrefs[prefKey] = value === 'true' || value === '1' || value === 'yes';
-                } else if (['fontsize', 'hue'].includes(urlParam)) {
+                } else if (numericParams.includes(urlParam)) {
                     // Parse numeric parameters
                     const num = parseInt(value, 10);
                     if (!isNaN(num)) {
@@ -1031,7 +1106,15 @@ class ChatManager {
 
     saveUiPreferences() {
         try {
-            localStorage.setItem('jwebirc_ui', JSON.stringify(this.uiPrefs));
+            const serialized = JSON.stringify(this.uiPrefs);
+            // Persist as a cookie as well. The start page (and the backend's
+            // error-page styling) read cookies via request.getCookies(), not
+            // localStorage, so preferences changed inside the chat (font size,
+            // hue, sidebar, etc.) must be written here to be applied there.
+            this.setCookie('jwebirc_ui', serialized);
+            this.setCookie('jwebirc_fontSize', String(this.uiPrefs.fontSize));
+            this.setCookie('jwebirc_hue', String(this.uiPrefs.hue));
+            localStorage.setItem('jwebirc_ui', serialized);
         } catch (e) {
             console.warn('Could not save UI preferences:', e);
         }
