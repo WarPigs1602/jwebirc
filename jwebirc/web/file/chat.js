@@ -76,7 +76,8 @@ class ChatManager {
             hideTopic: false,
             hideNicklist: false,
             fontSize: 14,
-            hue: 0
+            hue: 0,
+            enableSidebar: false
         };
         this.optionsMenu = null;
         this.optionsToggle = null;
@@ -1006,7 +1007,8 @@ class ChatManager {
             'hidetopic': 'hideTopic',
             'hidenicklist': 'hideNicklist',
             'fontsize': 'fontSize',
-            'hue': 'hue'
+            'hue': 'hue',
+            'enablesidebar': 'enableSidebar'
         };
         
         for (const [urlParam, prefKey] of Object.entries(paramMap)) {
@@ -1014,7 +1016,7 @@ class ChatManager {
                 const value = params.get(urlParam);
                 
                 // Parse boolean parameters
-                if (['hidetopic', 'hidenicklist'].includes(urlParam)) {
+                if (['hidetopic', 'hidenicklist', 'enablesidebar'].includes(urlParam)) {
                     this.uiPrefs[prefKey] = value === 'true' || value === '1' || value === 'yes';
                 } else if (['fontsize', 'hue'].includes(urlParam)) {
                     // Parse numeric parameters
@@ -1089,6 +1091,15 @@ class ChatManager {
             if (hueValue) {
                 hueValue.textContent = `${this.uiPrefs.hue}°`;
             }
+        }
+
+        const sidebarToggle = document.getElementById('optEnableSidebar');
+        if (sidebarToggle) {
+            sidebarToggle.checked = this.uiPrefs.enableSidebar;
+            sidebarToggle.addEventListener('change', () => {
+                this.uiPrefs.enableSidebar = sidebarToggle.checked;
+                this.applyLayoutPreferences();
+            });
         }
 
         if (toggle && menu) {
@@ -1204,22 +1215,35 @@ class ChatManager {
             const mobileRowsWithTopic = isPhoneViewport ? '26px 22px 1fr 50px' : '32px 28px 1fr 56px';
             const mobileRowsWithoutTopic = isPhoneViewport ? '26px 1fr 50px' : '32px 1fr 56px';
 
-            if (showTopic && showNicklist) {
-                container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
-                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
-                container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
-            } else if (!showTopic && showNicklist) {
-                container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
-                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
-                container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
-            } else if (showTopic && !showNicklist) {
-                container.style.gridTemplateColumns = '1fr';
-                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
-                container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
+            if (!this.uiPrefs.enableSidebar || isMobileViewport) {
+                const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
+                const isStatusOrQuery = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
+
+                if (isStatusOrQuery) {
+                    container.style.gridTemplateColumns = '1fr';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav" "chat" "input"';
+                } else if (showTopic && showNicklist) {
+                    container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
+                } else if (!showTopic && showNicklist) {
+                    container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
+                } else if (showTopic && !showNicklist) {
+                    container.style.gridTemplateColumns = '1fr';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
+                } else {
+                    container.style.gridTemplateColumns = '1fr';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                    container.style.gridTemplateAreas = '"nav" "chat" "input"';
+                }
             } else {
-                container.style.gridTemplateColumns = '1fr';
-                container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
-                container.style.gridTemplateAreas = '"nav" "chat" "input"';
+                container.style.gridTemplateColumns = '';
+                container.style.gridTemplateRows = '';
+                container.style.gridTemplateAreas = '';
             }
         }
 
@@ -1228,13 +1252,21 @@ class ChatManager {
             // Hide topic for Status and Query windows
             const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
             const hideTopicForWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
-            this.topicWindow.style.display = (showTopic && !hideTopicForWindow) ? '' : 'none';
+            const topicHidden = (showTopic && !hideTopicForWindow) ? '' : 'none';
+            this.topicWindow.style.display = topicHidden;
+            if (this.chatContainer) {
+                this.chatContainer.classList.toggle('hide-topic', topicHidden === 'none');
+            }
         }
         if (this.right) {
             // Hide nicklist for Status and Query windows
             const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
             const hideNicklistForWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
-            this.right.style.display = (showNicklist && !hideNicklistForWindow) ? '' : 'none';
+            const nicklistHidden = (showNicklist && !hideNicklistForWindow) ? '' : 'none';
+            this.right.style.display = nicklistHidden;
+            if (this.chatContainer) {
+                this.chatContainer.classList.toggle('hide-nicklist', nicklistHidden === 'none');
+            }
         }
 
         // Apply font size to CSS variable
@@ -1252,7 +1284,56 @@ class ChatManager {
         const hue = this.uiPrefs.hue || 0;
         document.documentElement.style.setProperty('--hue-rotate', hue + 'deg');
 
+        // Sidebar mode
+        if (this.uiPrefs.enableSidebar && !isMobileViewport) {
+            this.enableSidebarMode();
+        } else {
+            this.disableSidebarMode();
+        }
+
         this.saveUiPreferences();
+    }
+
+    enableSidebarMode() {
+        const container = this.chatContainer;
+        const sidebar = document.getElementById('sidebar_window');
+        const topFrame = document.getElementById('nav_window');
+        if (!container || !sidebar || !topFrame) return;
+
+        container.classList.add('sidebar-mode');
+
+        const brand = topFrame.querySelector('.nav-brand');
+        const tabsWrapper = topFrame.querySelector('.nav-tabs-wrapper');
+        const actions = topFrame.querySelector('.nav-actions');
+        const sidebarBrand = sidebar.querySelector('.sidebar-brand');
+        const sidebarTabs = sidebar.querySelector('.sidebar-tabs');
+        const sidebarActions = sidebar.querySelector('.sidebar-actions');
+
+        if (brand && sidebarBrand) sidebarBrand.appendChild(brand);
+        if (tabsWrapper && sidebarTabs) sidebarTabs.appendChild(tabsWrapper);
+        if (actions && sidebarActions) sidebarActions.appendChild(actions);
+    }
+
+    disableSidebarMode() {
+        const container = this.chatContainer;
+        const sidebar = document.getElementById('sidebar_window');
+        const topFrame = document.getElementById('nav_window');
+        if (!container || !sidebar || !topFrame) return;
+
+        container.classList.remove('sidebar-mode');
+
+        const brand = sidebar.querySelector('.nav-brand');
+        const tabsWrapper = sidebar.querySelector('.nav-tabs-wrapper');
+        const actions = sidebar.querySelector('.nav-actions');
+        const navContainer = topFrame.querySelector('.nav-container');
+
+        if (brand && navContainer) navContainer.insertBefore(brand, navContainer.firstChild);
+        if (tabsWrapper && navContainer) {
+            const existingTabs = navContainer.querySelector('.nav-tabs-wrapper');
+            if (existingTabs) navContainer.replaceChild(tabsWrapper, existingTabs);
+            else navContainer.appendChild(tabsWrapper);
+        }
+        if (actions && navContainer) navContainer.appendChild(actions);
     }
     
     addToChannelMemory(channel) {
@@ -2415,10 +2496,6 @@ class ChatManager {
             right.forEach(frame => {
                 frame.style.display = 'none';
             });
-            cf.forEach(frame => {
-                frame.style.right = '3px';
-                frame.style.top = '25px';
-            });
             tf.forEach(frame => {
                 frame.style.display = 'none';
             });
@@ -2428,10 +2505,6 @@ class ChatManager {
             if (container) container.classList.remove('status-view');
             right.forEach(frame => {
                 frame.style.display = shouldShowNicklist ? '' : 'none';
-            });
-            cf.forEach(frame => {
-                frame.style.right = '';
-                frame.style.top = '';
             });
             tf.forEach(frame => {
                 frame.style.display = '';
@@ -2952,17 +3025,8 @@ class ChatManager {
         this.refreshNav(); // Update navigation to show active tab
         this.updateTypingBar(win); // Update typing indicator for new channel
         
-        // Hide topic and nicklist for Status and Query windows
-        if (this.chatContainer) {
-            const currentChannel = this.channels.find(ch => ch.page === win);
-            const isNoUserListWindow = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
-            
-            if (isNoUserListWindow) {
-                this.chatContainer.classList.add('status-view');
-            } else {
-                this.chatContainer.classList.remove('status-view');
-            }
-        }
+        // Recompute layout (grid + visibility) for the new window type
+        this.applyLayoutPreferences();
         
         // Set focus to the message input field
         if (window.postManager && window.postManager.messageInput) {

@@ -213,6 +213,11 @@
 <jsp:include page="header-webchat.jsp"/>
 
     <div class="chat-container">
+    <aside class="sidebar_frame" id="sidebar_window" aria-label="Sidebar Navigation">
+        <div class="sidebar-brand"></div>
+        <div class="sidebar-tabs" id="sidebar_tabs"></div>
+        <div class="sidebar-actions" id="sidebar_actions"></div>
+    </aside>
     <!-- Navigation Bar - Modern Design -->
     <nav class="top_frame" id="nav_window" role="navigation" aria-label="Channel Navigation">
         <div class="nav-container">
@@ -326,6 +331,14 @@
                                 <div class="nav-slider-track hue-track"></div>
                             </div>
                         </div>
+                        <div class="nav-dropdown-divider"></div>
+                        <label class="nav-dropdown-item" for="optEnableSidebar">
+                            <div class="nav-dropdown-item-left">
+                                <i class="fas fa-columns"></i>
+                                <span data-i18n="nav.enableSidebar">Sidebar</span>
+                            </div>
+                            <input type="checkbox" id="optEnableSidebar" class="nav-toggle">
+                        </label>
                     </div>
                 </div>
             </div>
