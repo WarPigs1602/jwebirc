@@ -213,6 +213,7 @@
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="sv" data-i18n="lang.swedish">Svenska</button>
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="pt" data-i18n="lang.portuguese">Português</button>
                     <button type="button" class="nav-dropdown-item lang-option" data-lang="tr" data-i18n="lang.turkish">Türkçe</button>
+                    <button type="button" class="nav-dropdown-item lang-option" data-lang="nl" data-i18n="lang.dutch">Nederlands</button>
                 </div>
             </div>
         </div>
