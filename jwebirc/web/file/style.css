@@ -2727,13 +2727,12 @@ a:hover {
     padding: var(--spacing-sm);
     font-size: 0.95rem;
     line-height: 1.4;
-    font-family: inherit;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twitter Color Emoji", sans-serif;
     color: var(--text-primary);
     pointer-events: none;
-    white-space: pre-wrap;
+    white-space: pre;
     overflow: hidden;
-    display: flex;
-    align-items: center;
+    display: block;
     z-index: 2;
 }
 
@@ -2742,11 +2741,12 @@ a:hover {
 }
 
 .post-preview .preview-caret {
-    display: inline-block;
-    width: 1px;
-    height: 1.2em;
-    background: #ffffff;
-    vertical-align: middle;
+    display: inline;
+    border-left: 1px solid #ffffff;
+    margin: 0;
+    padding: 0;
+    font-size: inherit;
+    line-height: inherit;
     animation: preview-caret-blink 1s step-end infinite;
 }
 
@@ -4623,4 +4623,184 @@ a:hover {
     .post_frame .post_field {
         font-size: max(16px, 1rem) !important;
     }
+}
+/* ===== HWebChat-style Emoji Picker (vanilla) ===== */
+.emoji-wrapper {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twitter Color Emoji", sans-serif;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface-elevated, var(--background-secondary, #1e1e2e));
+    color: var(--text-primary, #e0e0e0);
+}
+
+.emoji-wrapper .emoji-menu.nav-tabs,
+.emoji-wrapper .emoji-menu {
+    order: 1;
+    flex: 0 0 auto !important;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 0 !important;
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)) !important;
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0.15rem 0.25rem !important;
+    gap: 0.15rem;
+    background: var(--surface-elevated, var(--background-secondary, #1e1e2e));
+    min-height: 0 !important;
+    height: auto !important;
+    line-height: 0;
+}
+
+.emoji-wrapper .emoji-menu .nav-item {
+    flex-shrink: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 0;
+}
+
+.emoji-wrapper .emoji-menu .nav-link {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary, #aaa);
+    border: 1px solid transparent !important;
+    border-radius: 4px !important;
+    margin: 0 !important;
+    padding: 0.2rem 0.4rem !important;
+    font-size: 1.15rem;
+    line-height: 1 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: transparent;
+    text-decoration: none;
+}
+
+.emoji-wrapper .emoji-menu .nav-link:hover {
+    color: var(--text-primary, #fff);
+    background: var(--background-hover, rgba(255,255,255,0.06));
+    border-color: var(--border-color, rgba(255,255,255,0.15)) !important;
+}
+
+.emoji-wrapper .emoji-menu .nav-link.active {
+    color: var(--text-primary, #fff);
+    background: var(--primary-color, #5865f2);
+    border-color: var(--primary-color, #5865f2) !important;
+}
+
+.emoji-wrapper .emoji-filters {
+    order: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.15rem 0.25rem;
+    background: var(--surface-elevated, var(--background-secondary, #1e1e2e));
+    border-top: 0;
+    border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1));
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    justify-content: flex-start;
+    margin: 0;
+}
+
+.emoji-wrapper .emoji-filters .btn-group {
+    margin: 0 !important;
+}
+
+.emoji-wrapper .emoji-list {
+    order: 3;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.25rem;
+    background: var(--surface, var(--background-main, #12121a));
+    min-height: 0;
+    margin: 0;
+}
+
+.emoji-wrapper .tab-pane {
+    display: none;
+    margin: 0;
+    padding: 0;
+}
+
+.emoji-wrapper .tab-pane.active.show {
+    display: block;
+}
+
+.emoji-wrapper .emoji-list-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem;
+}
+
+.emoji-wrapper .emoji {
+    font-size: 1.45rem;
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0.15rem;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.emoji-wrapper .emoji:hover {
+    background: var(--background-hover, rgba(88, 101, 242, 0.2));
+    border-color: var(--primary-color, #5865f2);
+}
+
+.emoji-wrapper .btn-group-toggle .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-input, rgba(255,255,255,0.06));
+    border-color: var(--border-color, rgba(255,255,255,0.15));
+    color: var(--text-primary, #e0e0e0);
+    font-size: 1.15rem;
+    padding: 0.2rem 0.4rem;
+    line-height: 1;
+    border-radius: 4px;
+}
+
+.emoji-wrapper .btn-group-toggle .btn.active,
+.emoji-wrapper .btn-group-toggle .btn:hover {
+    background: var(--primary-color, #5865f2);
+    border-color: var(--primary-color, #5865f2);
+    color: #fff;
+}
+
+.emoji-wrapper .btn-group-toggle input[type=radio] {
+    position: absolute;
+    clip: rect(0, 0, 0, 0);
+    pointer-events: none;
+}
+
+.custom-emoji-popover {
+    background: var(--surface-elevated, var(--background-secondary, #1e1e2e)) !important;
+    color: var(--text-primary, #e0e0e0) !important;
+    border: 1px solid var(--border-color, rgba(255,255,255,0.12)) !important;
+}
+
+.custom-emoji-popover .popover-body {
+    padding: 0 !important;
+    background: transparent !important;
+    color: inherit !important;
+}
+
+.hidden {
+    display: none !important;
 }

@@ -127,12 +127,20 @@ class PostManager {
         const caretHtml = '<span class="preview-caret"></span>';
         parsed = parsed.split(this.caretMarker).join(caretHtml);
 
-        if (!parsed || parsed.trim() === '') {
+        // Strip empty formatting wrappers that only contain the caret (open control codes)
+        // so unclosed IRC format codes don't create an extra visual line.
+        parsed = parsed.replace(/<span style="[^"]*">(\s*<span class="preview-caret"><\/span>\s*)<\/span>/g, '$1');
+
+        const visibleText = parsed.replace(/<[^>]*>/g, '').replace(/\u00a0/g, ' ').trim();
+        if (!visibleText && parsed.indexOf('preview-caret') === -1) {
             const placeholder = (this.messageInput.placeholder || '')
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
             parsed = placeholder ? `<span class="preview-placeholder">${placeholder}</span>` : '&nbsp;';
+        } else if (!visibleText && parsed.indexOf('preview-caret') !== -1 && !rawText) {
+            // Empty input with caret only: keep caret, no extra wrapper height
+            parsed = caretHtml;
         }
 
         this.messagePreview.innerHTML = parsed;

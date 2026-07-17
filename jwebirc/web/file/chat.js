@@ -2906,6 +2906,19 @@ class ChatManager {
             .replace(/^<span style=(['"])\s*color\s*:\s*[^'"]*\1>\s*==\s*<\/span>\s*/i, '');
     }
 
+    stripEmptyFormatSpans(html) {
+        // Remove empty formatting wrappers left by unclosed IRC control codes.
+        // Also collapse accidental whitespace-only contents that would create blank lines.
+        let out = String(html || '');
+        let prev;
+        do {
+            prev = out;
+            out = out.replace(/<span style="[^"]*">\s*<\/span>/gi, '');
+            out = out.replace(/<span style="[^"]*">(\s+)<\/span>/gi, '$1');
+        } while (out !== prev);
+        return out.replace(/[\r\n]+/g, '');
+    }
+
     parsePages(text, pg) {
         for (const elem of this.channels) {
             if (elem.page.toLowerCase() === pg.toLowerCase()) {
@@ -2913,10 +2926,15 @@ class ChatManager {
                 const isQuery = elem.type === 'query';
                 const shouldLineHighlight = this.highlight && !isQuery;
                 
+                // Drop trailing line breaks here; each message is rendered as one <br> line.
+                // Otherwise unclosed IRC format spans can capture "\n" and create an empty extra line.
+                const lineText = String(text || '').replace(/[\r\n]+$/g, '');
+
                 // Parse control codes first, then convert URLs to links
-                let parsed = this.parseControl(text);
+                let parsed = this.parseControl(lineText);
                 parsed = this.parseUrls(parsed, false, pg);
                 parsed = this.stripSystemMessageMarker(parsed);
+                parsed = this.stripEmptyFormatSpans(parsed);
                 
                 // Filter empty output (only control codes, no visible text)
                 if (!this.hasVisibleText(parsed)) {
@@ -2976,12 +2994,14 @@ class ChatManager {
     
     parsePage(text) {
         const shouldLineHighlight = this.highlight;
+        const lineText = String(text || '').replace(/[\r\n]+$/g, '');
         
         for (const elem of this.channels) {
             // Parse control codes first, then convert URLs to links
-            let parsed = this.parseControl(text);
+            let parsed = this.parseControl(lineText);
             parsed = this.parseUrls(parsed, false, elem.page);
             parsed = this.stripSystemMessageMarker(parsed);
+            parsed = this.stripEmptyFormatSpans(parsed);
             
             if (shouldLineHighlight) {
                 parsed = `<span class="irc-highlight-line">${parsed}</span>`;

@@ -24,8 +24,7 @@ public final class AssetBundler {
             )),
             new Bundle(BundleType.CSS, "chat.bundle.min.css", List.of(
                     "file/bootstrap/css/bootstrap.min.css",
-                    "file/style.css",
-                    "file/emoji-picker.css"
+                    "file/style.css"
             )),
             new Bundle(BundleType.JS, "login.bundle.min.js", List.of(
                     "file/jquery.js",
@@ -36,7 +35,7 @@ public final class AssetBundler {
             new Bundle(BundleType.JS, "chat-head.bundle.min.js", List.of(
                     "file/jquery.js",
                     "file/i18n.js",
-                    "file/emoji-picker.js"
+                    "file/emoji.js"
             )),
             new Bundle(BundleType.JS, "chat-app.bundle.min.js", List.of(
                     "file/notifications.js",

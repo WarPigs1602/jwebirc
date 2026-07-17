@@ -79,7 +79,6 @@
         <% } else { %>
         <link rel="stylesheet" href="file/bootstrap/css/bootstrap.min.css" type="text/css">
         <link rel="stylesheet" media="screen" href="file/style.css" type="text/css">
-        <link rel="stylesheet" href="file/emoji-picker.css" type="text/css">
         <% } %>
         <% if ("true".equalsIgnoreCase((String) session.getAttribute("template_enabled"))) { %>
         <link rel="stylesheet" href="<%= session.getAttribute("template_css_path") %>" type="text/css" data-template="custom">
@@ -96,7 +95,7 @@
         <% } else { %>
         <script src="file/jquery.js"></script>
         <script src="file/i18n.js"></script>
-        <script src="file/emoji-picker.js"></script>
+        <script src="file/emoji.js"></script>
         <% } %>
         
         <style>
