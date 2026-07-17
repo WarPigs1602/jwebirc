@@ -55,6 +55,8 @@ public class Webchat {
         private final IrcParser parser;
         private final IrcThread ircThread;
         private ScheduledFuture<?> cleanupTask;
+        private boolean attached;
+        private Session attachedSession;
 
         private ReconnectContext(String key, IrcParser parser, IrcThread ircThread) {
             this.key = key;
@@ -93,6 +95,12 @@ public class Webchat {
                 .get(HttpSession.class.getName());
         setHttpSession(hs);
 
+        if (hs == null) {
+            LOGGER.log(Level.SEVERE, "WebSocket opened without HTTP session; cannot continue");
+            closeSessionWithError(session, "No HTTP session available");
+            return;
+        }
+
         String reconnectKey = getReconnectKey();
         if (tryResumeReconnectContext(reconnectKey, session)) {
             return;
@@ -100,6 +108,10 @@ public class Webchat {
         
         // Load configuration from HTTP session
         WebchatConfig webchatConfig = loadWebchatConfig();
+        if (webchatConfig == null) {
+            closeSessionWithError(session, "Failed to load webchat configuration");
+            return;
+        }
         
         // Process forwarded headers and IP addresses
         processForwardedHeaders(config, webchatConfig);
@@ -114,6 +126,21 @@ public class Webchat {
         
         // Setup login parameters
         setupLoginParameters(webchatConfig);
+    }
+
+    private void closeSessionWithError(Session session, String message) {
+        try {
+            if (session != null && session.isOpen()) {
+                session.getBasicRemote().sendText(Json.createObjectBuilder()
+                        .add("category", "error")
+                        .add("target", "")
+                        .add("message", message)
+                        .build().toString());
+                session.close();
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Error closing session after null session error", e);
+        }
     }
     
     private static class WebchatConfig {
@@ -144,9 +171,14 @@ public class Webchat {
     }
     
     private WebchatConfig loadWebchatConfig() {
+        HttpSession hs = getHttpSession();
+        if (hs == null) {
+            LOGGER.log(Level.SEVERE, "Cannot load webchat config: HTTP session is null");
+            return null;
+        }
         WebchatConfig config = new WebchatConfig();
-        config.sessionTimeout = Integer.parseInt((String) getHttpSession().getAttribute("webchat_session_timout"));
-        Object nickLengthAttr = getHttpSession().getAttribute("webchat_nick_length");
+        config.sessionTimeout = Integer.parseInt((String) hs.getAttribute("webchat_session_timout"));
+        Object nickLengthAttr = hs.getAttribute("webchat_nick_length");
         config.nickLength = 15;
         if (nickLengthAttr instanceof String nickLengthValue) {
             try {
@@ -156,11 +188,11 @@ public class Webchat {
                         () -> "Ignoring invalid configured nick length: " + nickLengthValue);
             }
         }
-        config.host = (String) getHttpSession().getAttribute("webchat_host");
-        config.port = Integer.parseInt((String) getHttpSession().getAttribute("webchat_port"));
+        config.host = (String) hs.getAttribute("webchat_host");
+        config.port = Integer.parseInt((String) hs.getAttribute("webchat_port"));
         
         // Parse SSL flag robustly: case-insensitive, handle null, trim whitespace, and log debug info
-        Object sslAttr = getHttpSession().getAttribute("webchat_ssl");
+        Object sslAttr = hs.getAttribute("webchat_ssl");
         config.ssl = false;
         if (sslAttr != null) {
             String sslStr = sslAttr.toString().trim();
@@ -172,39 +204,43 @@ public class Webchat {
             Logger.getLogger(Webchat.class.getName()).log(Level.FINE, "SSL flag not set in session (null)");
         }
         
-        config.serverPassword = (String) getHttpSession().getAttribute("webchat_server_password");
-        config.ident = (String) getHttpSession().getAttribute("webchat_ident");
-        config.user = (String) getHttpSession().getAttribute("webchat_user");
-        config.password = (String) getHttpSession().getAttribute("webchat_password");
-        config.hostname = (String) getHttpSession().getAttribute("hostname");
-        config.ip = (String) getHttpSession().getAttribute("ip");
-        config.realname = (String) getHttpSession().getAttribute("webchat_realname");
-        config.forwardedForHeader = (String) getHttpSession().getAttribute("forwarded_for_header");
-        config.forwardedForIps = (String) getHttpSession().getAttribute("forwarded_for_ips");
-        config.webircMode = (String) getHttpSession().getAttribute("webchat_mode");
-        config.webircCgi = (String) getHttpSession().getAttribute("webchat_cgi");
-        config.hmac = (String) getHttpSession().getAttribute("hmac_temporal");
+        config.serverPassword = (String) hs.getAttribute("webchat_server_password");
+        config.ident = (String) hs.getAttribute("webchat_ident");
+        config.user = (String) hs.getAttribute("webchat_user");
+        config.password = (String) hs.getAttribute("webchat_password");
+        config.hostname = (String) hs.getAttribute("hostname");
+        config.ip = (String) hs.getAttribute("ip");
+        config.realname = (String) hs.getAttribute("webchat_realname");
+        config.forwardedForHeader = (String) hs.getAttribute("forwarded_for_header");
+        config.forwardedForIps = (String) hs.getAttribute("forwarded_for_ips");
+        config.webircMode = (String) hs.getAttribute("webchat_mode");
+        config.webircCgi = (String) hs.getAttribute("webchat_cgi");
+        config.hmac = (String) hs.getAttribute("hmac_temporal");
         
         // Parse WEBIRC :secure flag setting (defaults to true)
-        Object webircSecureAttr = getHttpSession().getAttribute("webirc_include_secure");
+        Object webircSecureAttr = hs.getAttribute("webirc_include_secure");
         config.webircIncludeSecure = true;  // Default to true
         if (webircSecureAttr != null) {
             String secureStr = webircSecureAttr.toString().trim();
             config.webircIncludeSecure = secureStr.equalsIgnoreCase("true") || secureStr.equalsIgnoreCase("1") || secureStr.equalsIgnoreCase("yes");
         }
         
-        config.useSasl = (String) getHttpSession().getAttribute("use_sasl");
-        config.saslMechanism = (String) getHttpSession().getAttribute("sasl_mechanism");
-        config.saslUsername = (String) getHttpSession().getAttribute("sasl_username");
-        config.saslPassword = (String) getHttpSession().getAttribute("sasl_password");
-        config.nick = (String) getHttpSession().getAttribute("param-nick");
-        config.channel = (String) getHttpSession().getAttribute("param-channel");
+        config.useSasl = (String) hs.getAttribute("use_sasl");
+        config.saslMechanism = (String) hs.getAttribute("sasl_mechanism");
+        config.saslUsername = (String) hs.getAttribute("sasl_username");
+        config.saslPassword = (String) hs.getAttribute("sasl_password");
+        config.nick = (String) hs.getAttribute("param-nick");
+        config.channel = (String) hs.getAttribute("param-channel");
         return config;
     }
     
     private void processForwardedHeaders(EndpointConfig config, WebchatConfig webchatConfig) {
+        if (webchatConfig.forwardedForHeader == null || webchatConfig.forwardedForHeader.isBlank()
+                || webchatConfig.forwardedForIps == null || webchatConfig.forwardedForIps.isBlank()) {
+            return;
+        }
         if (config.getUserProperties().containsKey(webchatConfig.forwardedForHeader.toLowerCase()) 
-                && webchatConfig.ip.contains(webchatConfig.forwardedForIps)) {
+                && webchatConfig.ip != null && webchatConfig.ip.contains(webchatConfig.forwardedForIps)) {
             webchatConfig.hostname = (String) config.getUserProperties().getOrDefault(webchatConfig.forwardedForHeader.toLowerCase(), "127.0.0.1");
             try {
                 webchatConfig.ip = InetAddress.getByName(webchatConfig.hostname).getHostAddress();
@@ -224,14 +260,14 @@ public class Webchat {
     }
     
     private String normalizeIpAddress(String address) {
-        if (address.contains(":")) {
-            // Remove zone ID if present (e.g., fe80::1%eth0 -> fe80::1)
-            if (address.contains("%")) {
-                address = address.substring(0, address.indexOf("%"));
-            }
-            address = parseIpv6(address);
+        if (address == null || !address.contains(":")) {
+            return address;
         }
-        return address;
+        // Remove zone ID if present (e.g., fe80::1%eth0 -> fe80::1)
+        if (address.contains("%")) {
+            address = address.substring(0, address.indexOf("%"));
+        }
+        return parseIpv6(address);
     }
     
     private void configureSessionTimeout(int sessionTimeout) {
@@ -241,10 +277,27 @@ public class Webchat {
             Logger.getLogger(Webchat.class.getName()).log(Level.INFO, 
                 "Session timeout adjusted from {0}ms to {1}ms", new Object[]{sessionTimeout, timeoutMillis});
         }
-        getSession().setMaxIdleTimeout(timeoutMillis);
+        Session currentSession = getSession();
+        if (currentSession != null && currentSession.isOpen()) {
+            currentSession.setMaxIdleTimeout(timeoutMillis);
+        }
     }
     
     private boolean initializeIrcParser(Session session, WebchatConfig config) {
+        if (config.host == null || config.host.isBlank()) {
+            Logger.getLogger(Webchat.class.getName()).log(Level.SEVERE, "IRC host is not configured");
+            try {
+                session.getBasicRemote().sendText(Json.createObjectBuilder()
+                        .add("category", "error")
+                        .add("target", "")
+                        .add("message", "IRC host is not configured")
+                        .build().toString());
+                session.close();
+            } catch (IOException e) {
+                // Ignore
+            }
+            return false;
+        }
         try {
             setParser(new IrcParser(config.host, config.port, config.ssl, config.serverPassword, 
                     config.ident, config.user, config.password, config.webircMode, config.webircCgi, config.hmac));
@@ -315,6 +368,10 @@ public class Webchat {
             }
         }
         var p = getParser();
+        if (p == null) {
+            LOGGER.log(Level.SEVERE, "Cannot setup login parameters: parser is null");
+            return;
+        }
         p.setLoginChannels(channel);
         setIrcThread(new IrcThread(p, config.nick, getSession()));
         registerReconnectContext();
@@ -357,21 +414,28 @@ public class Webchat {
         }
 
         synchronized (context) {
+            if (context.attached && context.attachedSession != null && context.attachedSession.isOpen()) {
+                LOGGER.log(Level.FINE, "Reconnect context for HTTP session {0} is already attached to an open session, skipping", reconnectKey);
+                return false;
+            }
+            if (context.parser == null || context.ircThread == null) {
+                LOGGER.log(Level.WARNING, "Reconnect context for HTTP session {0} is missing parser or thread, discarding", reconnectKey);
+                RECONNECT_CONTEXTS.remove(reconnectKey, context);
+                return false;
+            }
+
             if (context.cleanupTask != null) {
                 context.cleanupTask.cancel(false);
                 context.cleanupTask = null;
             }
 
-            if (context.ircThread != null) {
-                context.ircThread.setSession(currentSession);
-            }
-
+            context.attached = true;
+            context.attachedSession = currentSession;
+            context.ircThread.setSession(currentSession);
             setParser(context.parser);
             setIrcThread(context.ircThread);
 
-            if (context.parser != null) {
-                context.parser.sendText("NOTICE AUTH *** (jwebirc) WebSocket reconnected. Continuing existing IRC session.\n", currentSession, "chat", "");
-            }
+            context.parser.sendText("NOTICE AUTH *** (jwebirc) WebSocket reconnected. Continuing existing IRC session.\n", currentSession, "chat", "");
         }
 
         LOGGER.log(Level.INFO, "Reattached existing IRC session for HTTP session {0}", reconnectKey);
@@ -382,6 +446,16 @@ public class Webchat {
         String reconnectKey = getReconnectKey();
         if (reconnectKey == null || reconnectKey.isBlank() || getParser() == null || getIrcThread() == null) {
             return;
+        }
+
+        ReconnectContext existing = RECONNECT_CONTEXTS.get(reconnectKey);
+        if (existing != null) {
+            synchronized (existing) {
+                if (existing.attached && existing.attachedSession != null && existing.attachedSession.isOpen()) {
+                    LOGGER.log(Level.FINE, "Reconnect context for HTTP session {0} already attached to an open session, not overwriting", reconnectKey);
+                    return;
+                }
+            }
         }
 
         ReconnectContext context = new ReconnectContext(reconnectKey, getParser(), getIrcThread());
@@ -395,6 +469,17 @@ public class Webchat {
             return;
         }
 
+        Session closingSession = getSession();
+        ReconnectContext existing = RECONNECT_CONTEXTS.get(reconnectKey);
+        if (existing != null) {
+            synchronized (existing) {
+                if (existing.attached && existing.attachedSession != null && existing.attachedSession != closingSession) {
+                    LOGGER.log(Level.FINE, "Reconnect context for HTTP session {0} is attached to another session, skipping cleanup scheduling", reconnectKey);
+                    return;
+                }
+            }
+        }
+
         registerReconnectContext();
         ReconnectContext context = RECONNECT_CONTEXTS.get(reconnectKey);
         if (context == null) {
@@ -403,6 +488,12 @@ public class Webchat {
         }
 
         synchronized (context) {
+            if (context.attached && context.attachedSession != null && context.attachedSession != closingSession) {
+                LOGGER.log(Level.FINE, "Reconnect context for HTTP session {0} was attached to another session while scheduling cleanup, skipping", reconnectKey);
+                return;
+            }
+            context.attached = false;
+            context.attachedSession = null;
             if (context.cleanupTask != null) {
                 context.cleanupTask.cancel(false);
             }
@@ -415,6 +506,10 @@ public class Webchat {
                 }
 
                 synchronized (context) {
+                    if (context.attached && context.attachedSession != null && context.attachedSession.isOpen()) {
+                        LOGGER.log(Level.FINE, "Reconnect context for HTTP session {0} is attached to an open session, aborting cleanup", reconnectKey);
+                        return;
+                    }
                     try {
                         if (context.parser != null) {
                             context.parser.logout(reasonPrefix + "Reconnect timeout");
@@ -536,6 +631,16 @@ public class Webchat {
     private synchronized void cleanupResources() {
         String reconnectKey = getReconnectKey();
         if (reconnectKey != null && !reconnectKey.isBlank()) {
+            Session closingSession = getSession();
+            ReconnectContext context = RECONNECT_CONTEXTS.get(reconnectKey);
+            if (context != null) {
+                synchronized (context) {
+                    if (context.attached && context.attachedSession != null && context.attachedSession != closingSession) {
+                        LOGGER.log(Level.FINE, "Reconnect context for HTTP session {0} is attached to another session, skipping cleanup", reconnectKey);
+                        return;
+                    }
+                }
+            }
             RECONNECT_CONTEXTS.remove(reconnectKey);
         }
 

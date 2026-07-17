@@ -404,24 +404,40 @@ class PostManager {
     submitText() {
         const text = this.parseText(this.messageInput.value);
         if (text) {
-            const msg = {
+            this.sendMessage({
                 category: "chat",
                 message: text,
                 target: ""
-            };
-            this.chatManager.socket.send(JSON.stringify(msg));
+            });
         }
     }
     
     submitTextMessage(text) {
         const parsed = this.parseText(text);
         if (parsed) {
-            const msg = {
+            this.sendMessage({
                 category: "chat",
                 message: parsed,
                 target: ""
-            };
+            });
+        }
+    }
+
+    sendMessage(msg) {
+        if (!this.chatManager || !this.chatManager.socket) {
+            console.warn('[Post] Cannot send message: socket not available');
+            return false;
+        }
+        if (this.chatManager.socket.readyState !== WebSocket.OPEN) {
+            console.warn('[Post] Cannot send message: socket is not open');
+            return false;
+        }
+        try {
             this.chatManager.socket.send(JSON.stringify(msg));
+            return true;
+        } catch (e) {
+            console.error('[Post] Error sending message:', e);
+            return false;
         }
     }
     
@@ -500,17 +516,17 @@ class PostManager {
      * @param {string} rawMessage - The raw IRC message
      */
     sendRawMessage(rawMessage) {
-        if (rawMessage && this.chatManager.socket) {
-            if (window.ircParser && typeof window.ircParser.logRawLine === 'function') {
-                window.ircParser.logRawLine('OUT', rawMessage);
-            }
-            const msg = {
-                category: "chat",
-                message: rawMessage,
-                target: ""
-            };
-            this.chatManager.socket.send(JSON.stringify(msg));
+        if (!rawMessage) {
+            return;
         }
+        if (window.ircParser && typeof window.ircParser.logRawLine === 'function') {
+            window.ircParser.logRawLine('OUT', rawMessage);
+        }
+        this.sendMessage({
+            category: "chat",
+            message: rawMessage,
+            target: ""
+        });
     }
     
     parseText(text) {
@@ -736,23 +752,21 @@ class PostManager {
             
             // Send both commands
             if (partCommand) {
-                const msg = {
+                this.sendMessage({
                     category: "chat",
                     message: partCommand,
                     target: ""
-                };
-                this.chatManager.socket.send(JSON.stringify(msg));
+                });
             }
             
             // Delay JOIN to ensure PART completes first
             setTimeout(() => {
                 if (joinCommand) {
-                    const msg = {
+                    this.sendMessage({
                         category: "chat",
                         message: joinCommand,
                         target: ""
-                    };
-                    this.chatManager.socket.send(JSON.stringify(msg));
+                    });
                 }
             }, 500);
             

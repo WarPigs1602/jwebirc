@@ -1035,21 +1035,15 @@ class ChatManager {
     }
 
     getCookie(name) {
-        const nameEQ = name + "=";
-        const ca = document.cookie.split(';');
-        for (let c = 0; c < ca.length; c++) {
-            let s = ca[c];
-            while (s.charAt(0) === ' ') s = s.substring(1, s.length);
-            if (s.indexOf(nameEQ) === 0) return decodeURIComponent(s.substring(nameEQ.length, s.length));
-        }
-        return null;
+        return typeof window.jwebircGetCookie === 'function'
+            ? window.jwebircGetCookie(name)
+            : null;
     }
 
     setCookie(name, value, days = 365) {
-        const d = new Date();
-        d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-        const expires = "expires=" + d.toUTCString();
-        document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/;SameSite=Lax";
+        if (typeof window.jwebircSetCookie === 'function') {
+            window.jwebircSetCookie(name, value, days);
+        }
     }
 
     /**
@@ -1304,23 +1298,23 @@ class ChatManager {
 
                 if (isStatusOrQuery) {
                     container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '40px 1fr 60px';
                     container.style.gridTemplateAreas = '"nav" "chat" "input"';
                 } else if (showTopic && showNicklist) {
                     container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '40px auto 1fr 60px';
                     container.style.gridTemplateAreas = '"nav nav" "topic topic" "chat users" "input input"';
                 } else if (!showTopic && showNicklist) {
                     container.style.gridTemplateColumns = isMobileViewport ? `minmax(0, 1fr) ${mobileNicklistWidth}` : '1fr 220px';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '40px 1fr 60px';
                     container.style.gridTemplateAreas = '"nav nav" "chat users" "input input"';
                 } else if (showTopic && !showNicklist) {
                     container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '36px auto 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithTopic : '40px auto 1fr 60px';
                     container.style.gridTemplateAreas = '"nav" "topic" "chat" "input"';
                 } else {
                     container.style.gridTemplateColumns = '1fr';
-                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '36px 1fr 60px';
+                    container.style.gridTemplateRows = isMobileViewport ? mobileRowsWithoutTopic : '40px 1fr 60px';
                     container.style.gridTemplateAreas = '"nav" "chat" "input"';
                 }
             } else {
@@ -2520,8 +2514,9 @@ class ChatManager {
         
         this.channels.forEach(elem => {
             if (elem.page.toLowerCase() === channel.toLowerCase()) {
-                const doc = document.createElement("ulist_" + content);
-                doc.innerHTML = "";
+                const doc = document.createElement('div');
+                doc.className = 'user-list';
+                doc.setAttribute('role', 'list');
                 
                 elem.nicks.forEach(nick => {
                     const nickParts = this.extractNickParts(nick.nick);
@@ -2534,7 +2529,9 @@ class ChatManager {
                         const emoji = this.getStatusEmoji(statusSymbol);
                         const statusLabel = this.getStatusLabel(statusSymbol);
                         const statusTitle = this.escapeAttribute(statusLabel);
-                        statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusTitle}">${emoji}</span>`;
+                        statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusTitle}" aria-hidden="true">${emoji}</span>`;
+                    } else {
+                        statusHtml = '<span class="status-symbol status-none" aria-hidden="true"></span>';
                     }
                     
                     // Add away/account indicator via tooltip metadata
@@ -2552,7 +2549,7 @@ class ChatManager {
                     }
                     const tooltip = tooltipParts.length > 0 ? ` title="${this.escapeAttribute(tooltipParts.join(' | '))}"` : '';
                     
-                    doc.innerHTML += `<span class="nick-entry${awayClass}" data-nick="${displayNick}" style="color: ${nick.color};"${tooltip}>${statusHtml}<span class="nick-name">${displayNick}</span></span>\n`;
+                    doc.innerHTML += `<div class="nick-entry${awayClass}" role="listitem" data-nick="${this.escapeAttribute(displayNick)}" style="color: ${nick.color};"${tooltip}>${statusHtml}<span class="nick-name">${this.escapeHtml(displayNick)}</span></div>`;
                 });
                 
                 while (this.right.firstChild) {
@@ -3583,21 +3580,37 @@ window.jwebircPositionNavDropdown = function (toggle, menu) {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const margin = 8;
+    const inSidebar = !!(toggle.closest && toggle.closest('.sidebar_frame, .sidebar-actions'));
 
     menu.style.position = 'fixed';
-    menu.style.left = 'auto';
     menu.style.bottom = 'auto';
     menu.style.transform = 'none';
     menu.style.transition = 'opacity 0.2s ease, visibility 0.2s ease';
+    menu.style.maxHeight = (vh - margin * 2) + 'px';
+    menu.style.overflowY = 'auto';
 
-    // Right-align the menu with the toggle's right edge, kept inside the viewport.
-    const menuWidth = menu.offsetWidth || menu.getBoundingClientRect().width;
-    let right = vw - rect.right;
-    if (right < margin) right = margin;
-    if (right + menuWidth > vw - margin) right = Math.max(margin, vw - menuWidth - margin);
-    menu.style.right = right + 'px';
+    const menuWidth = menu.offsetWidth || menu.getBoundingClientRect().width || 320;
+    const menuHeight = menu.offsetHeight || menu.getBoundingClientRect().height || 240;
 
-    const menuHeight = menu.offsetHeight || menu.getBoundingClientRect().height;
+    if (inSidebar) {
+        // Open to the right of the sidebar control when possible.
+        let left = rect.right + margin;
+        if (left + menuWidth > vw - margin) {
+            left = Math.max(margin, rect.left - margin - menuWidth);
+        }
+        if (left < margin) left = margin;
+        menu.style.left = left + 'px';
+        menu.style.right = 'auto';
+    } else {
+        let right = vw - rect.right;
+        if (right < margin) right = margin;
+        if (right + menuWidth > vw - margin) {
+            right = Math.max(margin, vw - menuWidth - margin);
+        }
+        menu.style.right = right + 'px';
+        menu.style.left = 'auto';
+    }
+
     let top = rect.bottom + margin;
     if (top + menuHeight > vh - margin) {
         const aboveTop = rect.top - margin - menuHeight;
@@ -3615,6 +3628,8 @@ window.jwebircResetNavDropdown = function (menu) {
     menu.style.bottom = '';
     menu.style.transform = '';
     menu.style.transition = '';
+    menu.style.maxHeight = '';
+    menu.style.overflowY = '';
 };
 
 // Keep any open, JS-positioned dropdown correctly placed while scrolling/resizing.

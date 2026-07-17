@@ -98,6 +98,7 @@
         <% } else { %>
         <script src="file/jquery.js"></script>
         <script src="file/i18n.js"></script>
+        <script src="file/cookie-utils.js"></script>
         <script src="file/login-options.js"></script>
         <script src="file/template-system.js"></script>
         <% } %>

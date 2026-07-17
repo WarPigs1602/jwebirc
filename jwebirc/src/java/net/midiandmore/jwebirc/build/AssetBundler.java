@@ -29,6 +29,7 @@ public final class AssetBundler {
             new Bundle(BundleType.JS, "login.bundle.min.js", List.of(
                     "file/jquery.js",
                     "file/i18n.js",
+                    "file/cookie-utils.js",
                     "file/login-options.js",
                     "file/template-system.js"
             )),
@@ -38,6 +39,7 @@ public final class AssetBundler {
                     "file/emoji.js"
             )),
             new Bundle(BundleType.JS, "chat-app.bundle.min.js", List.of(
+                    "file/cookie-utils.js",
                     "file/notifications.js",
                     "file/chat.js",
                     "file/irc.js",

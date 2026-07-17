@@ -246,12 +246,12 @@
             
             <!-- Tabs Section -->
             <div class="nav-tabs-wrapper">
-                <button class="nav-scroll-btn nav-scroll-left" id="navScrollLeft" aria-label="Scroll up">
-                    <i class="fas fa-chevron-up"></i>
+                <button class="nav-scroll-btn nav-scroll-left" id="navScrollLeft" aria-label="Scroll left" title="Scroll left">
+                    <i class="fas fa-chevron-left"></i>
                 </button>
                 <div class="nav-tabs" id="nav_tabs"></div>
-                <button class="nav-scroll-btn nav-scroll-right" id="navScrollRight" aria-label="Scroll down">
-                    <i class="fas fa-chevron-down"></i>
+                <button class="nav-scroll-btn nav-scroll-right" id="navScrollRight" aria-label="Scroll right" title="Scroll right">
+                    <i class="fas fa-chevron-right"></i>
                 </button>
             </div>
             
@@ -622,6 +622,7 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
 <% if (!debugAssetsEnabled) { %>
 <script src="file/bundles/chat-app.bundle.min.js<%= bundleQuery %>"></script>
 <% } else { %>
+<script src="file/cookie-utils.js"></script>
 <script src="file/notifications.js"></script>
 <script src="file/chat.js"></script>
 <script src="file/irc.js"></script> 
@@ -741,25 +742,14 @@ String bundleQuery = bundleVersion.isEmpty() ? "" : "?v=" + bundleVersion;
         %>
         
         <script>
-            // Cookie management
             function setCookie(name, value, days = 365) {
-                const d = new Date();
-                d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
-                const expires = "expires=" + d.toUTCString();
-                document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/;SameSite=Lax";
+                return window.jwebircSetCookie(name, value, days);
             }
-            
+
             function getCookie(name) {
-                const nameEQ = name + "=";
-                const ca = document.cookie.split(';');
-                for(let i = 0; i < ca.length; i++) {
-                    let c = ca[i];
-                    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-                    if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
-                }
-                return null;
+                return window.jwebircGetCookie(name);
             }
-            
+
             // Read URL parameters
             function getUrlParameter(name) {
                 const urlParams = new URLSearchParams(window.location.search);

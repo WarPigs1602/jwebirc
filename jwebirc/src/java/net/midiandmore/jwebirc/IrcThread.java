@@ -207,15 +207,15 @@ public class IrcThread implements Runnable {
             String ip = p.getIp();
             String currentHostname = p.getHostname();
             
-            // Only perform reverse DNS lookup if hostname equals IP
-            // (meaning no hostname was provided or detected yet)
-            if (ip != null && !ip.isBlank() && ip.equalsIgnoreCase(currentHostname)) {
+            if (ip == null || ip.isBlank()) {
+                p.sendText(HOSTNAME_NOT_FOUND, getSession(), "chat", "");
+            } else if (currentHostname == null || currentHostname.isBlank()) {
+                p.sendText(HOSTNAME_NOT_FOUND, getSession(), "chat", "");
+            } else if (ip.equalsIgnoreCase(currentHostname)) {
                 performReverseDnsLookup(p, ip);
-            } else if (!ip.equalsIgnoreCase(currentHostname)) {
+            } else {
                 // Hostname was already resolved/provided
                 p.sendText("NOTICE AUTH *** (jwebirc) Found your hostname: " + currentHostname, getSession(), "chat", "");
-            } else {
-                p.sendText(HOSTNAME_NOT_FOUND, getSession(), "chat", "");
             }
         } catch (Exception ex) {
             p.sendText("NOTICE AUTH *** (jwebirc) DNS lookup error: " + ex.getMessage(), getSession(), "chat", "");
