@@ -671,16 +671,11 @@ class PostManager {
             const content = text.substring(6).trim();
             this.chatManager.addWindow();
             
-            // Parse the content to check if channel is already specified
             const parts = content.split(' ');
-            
             let finalCommand;
-            // If first part starts with # or &, it's already a full command
             if (parts.length > 0 && (parts[0].startsWith('#') || parts[0].startsWith('&'))) {
-                // Already has channel: /kick #channel nick [reason]
                 finalCommand = "/kick " + content;
             } else {
-                // No channel, add current window: /kick nick [reason]
                 finalCommand = "/kick " + activeWindow + " " + content;
             }
             

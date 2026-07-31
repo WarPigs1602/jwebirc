@@ -561,6 +561,19 @@ Notes:
 
 `jwebirc.webchatNickLength` defines the maximum nickname length accepted in the login form, applied by the backend before connect, and used as the fallback limit for automatic alternative nicknames when the IRC server rejects the requested nick before advertising its own `NICKLEN` value.
 
+### /LIST Command Configuration
+
+```xml
+<!-- Enable /LIST command (results are shown in a dedicated tab) -->
+<Parameter name="jwebirc.listCommandEnabled" value="true" override="false" />
+```
+
+When `jwebirc.listCommandEnabled` is `true`, users can type `/LIST` in the chat input. The IRC server response is routed to a dedicated "Channel List" tab instead of the status window. The tab label and column headers are automatically translated according to the selected interface language.
+
+When `false`, `/LIST` is blocked client-side and users see a localized message indicating the command is disabled.
+
+The default value is `true`.
+
 ### Error Page Configuration
 
 ```xml

@@ -2073,28 +2073,33 @@ nv.highlighted:not(.unread)::after {
 }
 
 /* Owner/Founder (~) 👑 - Gold glow */
-.right_frame .status-q {
+.right_frame .status-symbol-q {
     filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 /* Admin/Protected (&) 🛡️ - Red glow */
-.right_frame .status-a {
+.right_frame .status-symbol-a {
     filter: drop-shadow(0 0 4px rgba(255, 68, 68, 0.6)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 /* Operator (@) ⭐ - Green/Yellow glow */
-.right_frame .status-o {
+.right_frame .status-symbol-o {
     filter: drop-shadow(0 0 4px rgba(255, 223, 0, 0.6)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 /* Half-op (%) ⚡ - Cyan/Electric glow */
-.right_frame .status-h {
+.right_frame .status-symbol-h {
     filter: drop-shadow(0 0 4px rgba(0, 188, 212, 0.6)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 /* Voice (+) 💬 - Light Blue glow */
-.right_frame .status-v {
+.right_frame .status-symbol-v {
     filter: drop-shadow(0 0 4px rgba(100, 181, 246, 0.5)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* Unavailable / special status (!) 🔔 - Purple glow */
+.right_frame .status-symbol-%21 {
+    filter: drop-shadow(0 0 4px rgba(171, 71, 188, 0.6)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 .right_frame .status-none {
@@ -3668,7 +3673,7 @@ nv.highlighted:not(.unread)::after {
 
 .list-table-header {
     display: grid;
-    grid-template-columns: 70px 240px 50px 1fr;
+    grid-template-columns: 90px 220px 90px 1fr;
     gap: 6px;
     padding: 4px 10px;
     background: var(--background-secondary);
@@ -3715,7 +3720,7 @@ nv.highlighted:not(.unread)::after {
 
 .list-entry-row {
     display: grid;
-    grid-template-columns: 70px 240px 50px 1fr;
+    grid-template-columns: 90px 220px 90px 1fr;
     gap: 6px;
     padding: 4px 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
@@ -3737,7 +3742,7 @@ nv.highlighted:not(.unread)::after {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 70px;
+    max-width: 90px;
     position: relative;
 }
 
@@ -3764,7 +3769,7 @@ nv.highlighted:not(.unread)::after {
     cursor: pointer;
     font-size: var(--font-size-base);
     font-family: inherit;
-    max-width: 240px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

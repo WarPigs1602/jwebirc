@@ -124,9 +124,12 @@ class ChatManager {
             if (typeof window.jwebircApplyTranslations === 'function') {
                 window.jwebircApplyTranslations();
             }
-            // Refresh dynamic UI text such as typing bar in current language
+            const listChannel = this.channels.find(ch => ch.type === 'list');
+            if (listChannel) {
+                listChannel.label = this.t('chat.rpl.listTab', 'Channel List');
+            }
+            this.refreshNav();
             this.updateTypingBar(this.activeWindow);
-            // Refresh already-rendered system lines without reload
             this.refreshLogTranslations();
         });
     }
@@ -262,7 +265,7 @@ class ChatManager {
      */
     parseServerPrefix(prefixString) {
         // Expected format: PREFIX=(modes)symbols
-        const match = prefixString.match(/^PREFIX=\(([a-z]+)\)(\S+)/i);
+        const match = prefixString.match(/^PREFIX=\(([a-zA-Z]+)\)(\S+)/i);
         if (match) {
             const modes = match[1];
             const decodedSymbols = this.decodeNickToken(match[2]);
@@ -404,26 +407,37 @@ class ChatManager {
      */
     getStatusEmoji(symbol) {
         const mode = this.getSymbolMode(symbol);
-        const emojiMap = {
-            'q': '👑', // Owner/Founder - Crown
-            'a': '🛡️', // Admin/Protected - Shield
-            'o': '⭐', // Operator - Star
-            'h': '⚡', // Half-op - Lightning
-            'v': '💬'  // Voice - Speech bubble
+        const modeEmojis = {
+            'q': '👑',
+            'a': '🛡️',
+            'o': '⭐',
+            'h': '⚡',
+            'v': '💬'
         };
-        return emojiMap[mode] || symbol;
+        const symbolEmojis = {
+            '!': '🔔'
+        };
+        if (mode && modeEmojis[mode]) return modeEmojis[mode];
+        if (symbolEmojis[symbol]) return symbolEmojis[symbol];
+        return symbol;
     }
     
     getStatusLabel(symbol) {
         const mode = this.getSymbolMode(symbol);
-        const labelMap = {
+        const modeLabels = {
             'q': this.t('nicklist.role.owner', 'Owner'),
             'a': this.t('nicklist.role.admin', 'Admin'),
             'o': this.t('nicklist.role.op', 'Operator'),
             'h': this.t('nicklist.role.halfop', 'Half-op'),
             'v': this.t('nicklist.role.voice', 'Voice')
         };
-        return labelMap[mode] || symbol;
+        const symbolLabels = {
+            '!': this.t('nicklist.role.unavailable', 'Unavailable')
+        };
+        if (mode && modeLabels[mode]) return modeLabels[mode];
+        if (symbolLabels[symbol]) return symbolLabels[symbol];
+        if (mode) return `Mode ${mode}`;
+        return symbol;
     }
     
     /**
@@ -2536,19 +2550,18 @@ class ChatManager {
                     const statusSymbol = this.getPrimaryStatusSymbol(nickParts.status);
                     const displayNick = nickParts.nick;
                     
-                    // Create colored status emoji/icon combined with nick
-                    let statusHtml = '';
-                    if (statusSymbol) {
-                        const emoji = this.getStatusEmoji(statusSymbol);
-                        const statusLabel = this.getStatusLabel(statusSymbol);
-                        const statusTitle = this.escapeAttribute(statusLabel);
-                        statusHtml = `<span class="status-symbol status-${this.getSymbolMode(statusSymbol)}" title="${statusTitle}" aria-hidden="true">${emoji}</span>`;
-                    } else {
-                        statusHtml = '<span class="status-symbol status-none" aria-hidden="true"></span>';
-                    }
-                    
-                    // Add away/account indicator via tooltip metadata
-                    const awayClass = nick.away ? ' away' : '';
+                      // Create colored status emoji/icon combined with nick
+                      let statusHtml = '';
+                      if (statusSymbol) {
+                          const emoji = this.getStatusEmoji(statusSymbol);
+                          const statusLabel = this.getStatusLabel(statusSymbol);
+                          const statusTitle = this.escapeAttribute(statusLabel);
+                          statusHtml = `<span class="status-symbol status-symbol-${encodeURIComponent(this.getSymbolMode(statusSymbol))}" title="${statusTitle}" aria-hidden="true">${emoji}</span>`;
+                      } else {
+                          statusHtml = '<span class="status-symbol status-none" aria-hidden="true"></span>';
+                      }
+                     
+                     const awayClass = nick.away ? ' away' : '';
                     let tooltipParts = [];
                     if (nick.account && nick.account.length > 0) {
                         tooltipParts.push(this.t('nicklist.account', 'Account: {account}', { account: nick.account }));
@@ -2562,7 +2575,7 @@ class ChatManager {
                     }
                     const tooltip = tooltipParts.length > 0 ? ` title="${this.escapeAttribute(tooltipParts.join(' | '))}"` : '';
                     
-                    doc.innerHTML += `<div class="nick-entry${awayClass}" role="listitem" data-nick="${this.escapeAttribute(displayNick)}" style="color: ${nick.color};"${tooltip}>${statusHtml}<span class="nick-name">${this.escapeHtml(displayNick)}</span></div>`;
+                     doc.innerHTML += `<div class="nick-entry${awayClass}" role="listitem" data-nick="${this.escapeAttribute(displayNick)}" style="color: ${nick.color};"${tooltip}>${statusHtml}<span class="nick-name">${this.escapeHtml(displayNick)}</span></div>`;
                 });
                 
                 while (this.right.firstChild) {
@@ -2632,6 +2645,28 @@ class ChatManager {
             }
         }
         return "";
+    }
+    
+    canManageNick(channel, targetNick) {
+        const myModes = this.getStatusModes(channel, window.user);
+        const targetModes = this.getStatusModes(channel, targetNick);
+        
+        const opIndex = this.serverPrefixes.modes.indexOf('o');
+        if (opIndex === -1) return false;
+        
+        if (!myModes || myModes.length === 0) return false;
+        if (!targetModes || targetModes.length === 0) return true;
+        
+        for (let i = 0; i < this.serverPrefixes.modes.length; i++) {
+            const symbol = this.serverPrefixes.symbols[i];
+            const hasMyMode = myModes.includes(symbol);
+            const hasTargetMode = targetModes.includes(symbol);
+            
+            if (hasMyMode && !hasTargetMode) return true;
+            if (hasTargetMode && !hasMyMode) return false;
+        }
+        
+        return true;
     }
     
     getColor(channel, nickname) {
@@ -2863,6 +2898,7 @@ class ChatManager {
             this.channels.push({
                 type: 'list',
                 page: 'Channel List',
+                label: this.t('chat.rpl.listTab', 'Channel List'),
                 elem: document.createElement('div'),
                 topic: '',
                 setted: 0,
@@ -2979,7 +3015,7 @@ class ChatManager {
 
         const tableHeader = document.createElement('div');
         tableHeader.className = 'list-table-header';
-        tableHeader.innerHTML = `<span class="list-flags">Flags</span><span class="list-channel">Channel</span><span class="list-users">Users</span><span class="list-topic">Topic</span>`;
+        tableHeader.innerHTML = `<span class="list-flags" data-i18n-log="true" data-i18n-key="chat.rpl.listFlags" data-i18n-fallback="Flags">${this.t('chat.rpl.listFlags', 'Flags')}</span><span class="list-channel" data-i18n-log="true" data-i18n-key="chat.rpl.listChannel" data-i18n-fallback="Channel">${this.t('chat.rpl.listChannel', 'Channel')}</span><span class="list-users" data-i18n-log="true" data-i18n-key="chat.rpl.listUsers" data-i18n-fallback="Users">${this.t('chat.rpl.listUsers', 'Users')}</span><span class="list-topic" data-i18n-log="true" data-i18n-key="chat.rpl.listTopic" data-i18n-fallback="Topic">${this.t('chat.rpl.listTopic', 'Topic')}</span>`;
         listChannel.elem.appendChild(tableHeader);
 
         if (this.activeWindow === 'Channel List') {
@@ -3043,13 +3079,13 @@ class ChatManager {
             
             if (i === 0) {
                 if (sortedChannels[i].type === 'list') {
-                    this.navElement.innerHTML = `<nv class="${classes} list-tab" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><i class="fas fa-list-ul"></i> ${sortedChannels[i].page}<span class="list-tab-close" onclick="event.stopPropagation(); chatManager.closeListTab();">✕</span></nv> `;
+                    this.navElement.innerHTML = `<nv class="${classes} list-tab" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><i class="fas fa-list-ul"></i> ${sortedChannels[i].label || sortedChannels[i].page}<span class="list-tab-close" onclick="event.stopPropagation(); chatManager.closeListTab();">✕</span></nv> `;
                 } else {
                     this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;">${sortedChannels[i].page}</nv> `;
                 }
             } else {
                 if (sortedChannels[i].type === 'list') {
-                    this.navElement.innerHTML += `<nv class="${classes} list-tab" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><i class="fas fa-list-ul"></i> ${sortedChannels[i].page}<span class="list-tab-close" onclick="event.stopPropagation(); chatManager.closeListTab();">✕</span></nv> `;
+                    this.navElement.innerHTML += `<nv class="${classes} list-tab" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><i class="fas fa-list-ul"></i> ${sortedChannels[i].label || sortedChannels[i].page}<span class="list-tab-close" onclick="event.stopPropagation(); chatManager.closeListTab();">✕</span></nv> `;
                 } else if (sortedChannels[i].page.startsWith("#") || sortedChannels[i].page.startsWith("&")) {
                     this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${sortedChannels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${safePage} Closed tab!');">✕</span></nv> `;
                 } else {
@@ -3479,12 +3515,13 @@ class ChatManager {
                     }
                 }
                 
-                // Kick/Ban options (needs op or higher)
+                // Kick/Ban options (needs op or higher, and target must not have higher status)
                 const myModeIndex = myStatus ? this.serverPrefixes.symbols.indexOf(myStatus) : -1;
                 const opIndex = this.serverPrefixes.modes.indexOf('o');
                 const hasOpOrHigher = myModeIndex >= 0 && (opIndex === -1 || myModeIndex <= opIndex);
+                const canManage = this.canManageNick(channel, nick);
                 
-                if (hasOpOrHigher) {
+                if (hasOpOrHigher && canManage) {
                     menuItems.push({ separator: true });
                     menuItems.push(
                         { icon: '👢', label: this.t('nickmenu.kick', 'Kick'), action: 'kick' },
@@ -3584,6 +3621,10 @@ class ChatManager {
                 
             case 'kick':
                 if (channel.startsWith('#') || channel.startsWith('&')) {
+                    if (!this.canManageNick(channel, nick)) {
+                        window.ircParser.parseOutput(` <span style="color: #ff0000">==</span> Cannot kick ${nick}: they have equal or higher status than you.`);
+                        break;
+                    }
                     const reason = prompt(`Kick reason for ${nick}:`, 'Kicked');
                     if (reason !== null) {
                         window.postManager.submitTextMessage(`/kick ${channel} ${nick} ${reason}`);
@@ -3593,12 +3634,20 @@ class ChatManager {
                 
             case 'ban':
                 if (channel.startsWith('#') || channel.startsWith('&')) {
+                    if (!this.canManageNick(channel, nick)) {
+                        window.ircParser.parseOutput(` <span style="color: #ff0000">==</span> Cannot ban ${nick}: they have equal or higher status than you.`);
+                        break;
+                    }
                     window.postManager.submitTextMessage(`/mode ${channel} +b ${nick}!*@*`);
                 }
                 break;
                 
             case 'kickban':
                 if (channel.startsWith('#') || channel.startsWith('&')) {
+                    if (!this.canManageNick(channel, nick)) {
+                        window.ircParser.parseOutput(` <span style="color: #ff0000">==</span> Cannot kickban ${nick}: they have equal or higher status than you.`);
+                        break;
+                    }
                     const reason = prompt(`Kickban reason for ${nick}:`, 'Banned');
                     if (reason !== null) {
                         window.postManager.submitTextMessage(`/mode ${channel} +b ${nick}!*@*`);
