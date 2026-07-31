@@ -968,6 +968,19 @@ class ChatManager {
         
         // Load saved channels for rejoin
         this.loadSavedChannels();
+        
+        // Event delegation for list channel clicks
+        this.chatWindow.addEventListener('click', (e) => {
+            const channelLink = e.target.closest('.list-channel');
+            if (channelLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const channelName = channelLink.dataset.channel;
+                if (channelName && window.postManager) {
+                    window.postManager.submitTextMessage(`/join ${channelName}`);
+                }
+            }
+        });
     }
     
     saveChannelList() {
@@ -1294,7 +1307,7 @@ class ChatManager {
 
             if (!this.uiPrefs.enableSidebar || isMobileViewport) {
                 const currentChannel = this.channels.find(ch => ch.page === this.activeWindow);
-                const isStatusOrQuery = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query');
+                const isStatusOrQuery = currentChannel && (currentChannel.type === 'status' || currentChannel.type === 'query' || currentChannel.type === 'list');
 
                 if (isStatusOrQuery) {
                     container.style.gridTemplateColumns = '1fr';
@@ -2568,10 +2581,11 @@ class ChatManager {
         const tf = document.querySelectorAll(".topic_frame");
         const container = document.querySelector(".chat-container");
         const isChannelView = type === "channel";
+        const isStatusOrQuery = type === "status" || type === "query";
+        const isListView = type === "list";
         const shouldShowNicklist = isChannelView && !this.uiPrefs.hideNicklist;
         
-        if (!isChannelView) {
-            // Status and query windows use the simplified full-width layout.
+        if (!isChannelView || isListView) {
             if (container) container.classList.add('status-view');
             right.forEach(frame => {
                 frame.style.display = 'none';
@@ -2580,8 +2594,6 @@ class ChatManager {
                 frame.style.display = 'none';
             });
         } else {
-            // Channel windows keep the topic visible and only show the nicklist
-            // when the user has explicitly enabled it.
             if (container) container.classList.remove('status-view');
             right.forEach(frame => {
                 frame.style.display = shouldShowNicklist ? '' : 'none';
@@ -2771,6 +2783,13 @@ class ChatManager {
         
         this.channels.forEach(elem => {
             if (elem.page.toLowerCase() === channel.toLowerCase() && channel.toLowerCase() === this.activeWindow.toLowerCase()) {
+                if (elem.type === 'list') {
+                    if (this.topicWindow) {
+                        this.topicWindow.innerHTML = '';
+                    }
+                    return;
+                }
+                
                 let text = elem.topic;
                 let topicContent = "";
                 
@@ -2829,7 +2848,7 @@ class ChatManager {
         this.clearTabAlerts(page);
         
         this.channels.forEach(elem => {
-            if (elem.page.toLowerCase() === page.toLowerCase() && elem.type.toLowerCase() !== "status") {
+            if (elem.page.toLowerCase() === page.toLowerCase() && elem.type.toLowerCase() !== "status" && elem.type.toLowerCase() !== "list") {
                 const i = this.channels.findIndex(data => data.page === page);
                 this.channels.splice(i, 1);
             }
@@ -2837,6 +2856,150 @@ class ChatManager {
         
         this.refreshNav();
         this.setWindow("Status");
+    }
+
+    ensureListTab() {
+        if (!this.isPage('Channel List')) {
+            this.channels.push({
+                type: 'list',
+                page: 'Channel List',
+                elem: document.createElement('div'),
+                topic: '',
+                setted: 0,
+                by: '',
+                nicks: [],
+                listEntries: [],
+                listHeader: null,
+                listFooter: null
+            });
+            this.refreshNav();
+        }
+        if (this.activeWindow !== 'Channel List') {
+            this.setWindow('Channel List');
+        }
+    }
+
+    closeListTab() {
+        const idx = this.channels.findIndex(ch => ch.type === 'list');
+        if (idx !== -1) {
+            this.channels.splice(idx, 1);
+        }
+        this.refreshNav();
+        if (this.isPage('Status')) {
+            this.setWindow('Status');
+        } else if (this.channels.length > 0) {
+            this.setWindow(this.channels[0].page);
+        }
+    }
+
+    clearListTab() {
+        const listChannel = this.channels.find(ch => ch.type === 'list');
+        if (listChannel) {
+            listChannel.elem.innerHTML = '';
+            listChannel.listEntries = [];
+            listChannel.listHeader = null;
+            listChannel.listFooter = null;
+        }
+    }
+
+    addListEntry(channel, users, topic) {
+        const listChannel = this.channels.find(ch => ch.type === 'list');
+        if (!listChannel) return;
+
+        let channelName = channel;
+        let flags = '';
+        let entryTopic = topic || '';
+
+        // Strip leading mode flags from channel name (e.g. @#chan, +#chan)
+        channelName = channelName.replace(/^[@+~*`]+/, '');
+
+        // Extract flags from channel name first (e.g., #chan[+nt])
+        const flagMatch = channelName.match(/^([^\[\s]+)(\[[^\]]*\])?$/);
+        if (flagMatch) {
+            channelName = flagMatch[1];
+            flags = flagMatch[2] ? flagMatch[2].replace(/^\[|\]$/g, '') : '';
+        }
+
+        // If no flags found in channel name, try to extract from topic (some IRC servers do this)
+        if (!flags && entryTopic) {
+            const topicFlagMatch = entryTopic.match(/^\s*(\[[^\]]*\])\s*(.*)$/);
+            if (topicFlagMatch) {
+                flags = topicFlagMatch[1].replace(/^\[|\]$/g, '');
+                entryTopic = topicFlagMatch[2];
+            }
+        }
+
+        const entry = { channel: channelName, flags, users: parseInt(users, 10) || 0, topic: entryTopic };
+        listChannel.listEntries.push(entry);
+
+        // Re-sort entries by user count descending
+        listChannel.listEntries.sort((a, b) => b.users - a.users);
+
+        // Re-render the entire list
+        this.renderListEntries(listChannel);
+    }
+
+    renderListEntries(listChannel) {
+        // Save header and table header before clearing
+        const header = listChannel.elem.querySelector('.list-header');
+        const tableHeader = listChannel.elem.querySelector('.list-table-header');
+        const footer = listChannel.elem.querySelector('.list-footer');
+        
+        listChannel.elem.innerHTML = '';
+        
+        if (header) listChannel.elem.appendChild(header);
+        if (tableHeader) listChannel.elem.appendChild(tableHeader);
+
+        for (const entry of listChannel.listEntries) {
+            let safeTopic = this.parseControl(entry.topic);
+
+            const row = document.createElement('div');
+            row.className = 'list-entry-row';
+            row.innerHTML = `<span class="list-flags" title="${this.escapeHtml(entry.flags)}">${this.escapeHtml(entry.flags)}</span><span class="list-channel" data-channel="${this.escapeHtml(entry.channel)}">${this.escapeHtml(entry.channel)}</span><span class="list-users">${entry.users}</span><span class="list-topic" data-topic="${this.escapeHtml(entry.topic)}">${safeTopic}</span>`;
+            listChannel.elem.appendChild(row);
+        }
+
+        if (footer) listChannel.elem.appendChild(footer);
+
+        if (this.activeWindow === 'Channel List') {
+            this.chatWindow.innerHTML = listChannel.elem.innerHTML;
+            this.scrollToEnd('#chat_window', 1);
+        }
+    }
+
+    setListHeader(text) {
+        const listChannel = this.channels.find(ch => ch.type === 'list');
+        if (!listChannel) return;
+        listChannel.listHeader = text;
+        listChannel.elem.innerHTML = '';
+        const header = document.createElement('div');
+        header.className = 'list-header';
+        header.innerHTML = text;
+        listChannel.elem.appendChild(header);
+
+        const tableHeader = document.createElement('div');
+        tableHeader.className = 'list-table-header';
+        tableHeader.innerHTML = `<span class="list-flags">Flags</span><span class="list-channel">Channel</span><span class="list-users">Users</span><span class="list-topic">Topic</span>`;
+        listChannel.elem.appendChild(tableHeader);
+
+        if (this.activeWindow === 'Channel List') {
+            this.chatWindow.innerHTML = listChannel.elem.innerHTML;
+            this.scrollToEnd('#chat_window', 1);
+        }
+    }
+
+    setListFooter(text) {
+        const listChannel = this.channels.find(ch => ch.type === 'list');
+        if (!listChannel) return;
+        listChannel.listFooter = text;
+        const footer = document.createElement('div');
+        footer.className = 'list-footer';
+        footer.innerHTML = text;
+        listChannel.elem.appendChild(footer);
+        if (this.activeWindow === 'Channel List') {
+            this.chatWindow.innerHTML = listChannel.elem.innerHTML;
+            this.scrollToEnd('#chat_window', 1);
+        }
     }
 
     clearTabAlerts(tabName) {
@@ -2860,7 +3023,7 @@ class ChatManager {
     }
 
     sortChannelsForNav() {
-        const priority = { status: 0, channel: 1, query: 2 };
+        const priority = { status: 0, channel: 1, query: 2, list: 99 };
         return [...this.channels].sort((a, b) => {
             const pa = priority[a.type] ?? 3;
             const pb = priority[b.type] ?? 3;
@@ -2879,9 +3042,15 @@ class ChatManager {
             const safePage = sortedChannels[i].page.replace(/'/g, "\\'");
             
             if (i === 0) {
-                this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;">${sortedChannels[i].page}</nv> `;
+                if (sortedChannels[i].type === 'list') {
+                    this.navElement.innerHTML = `<nv class="${classes} list-tab" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><i class="fas fa-list-ul"></i> ${sortedChannels[i].page}<span class="list-tab-close" onclick="event.stopPropagation(); chatManager.closeListTab();">✕</span></nv> `;
+                } else {
+                    this.navElement.innerHTML = `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;">${sortedChannels[i].page}</nv> `;
+                }
             } else {
-                if (sortedChannels[i].page.startsWith("#") || sortedChannels[i].page.startsWith("&")) {
+                if (sortedChannels[i].type === 'list') {
+                    this.navElement.innerHTML += `<nv class="${classes} list-tab" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><i class="fas fa-list-ul"></i> ${sortedChannels[i].page}<span class="list-tab-close" onclick="event.stopPropagation(); chatManager.closeListTab();">✕</span></nv> `;
+                } else if (sortedChannels[i].page.startsWith("#") || sortedChannels[i].page.startsWith("&")) {
                     this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${sortedChannels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); postManager.submitTextMessage('/part ${safePage} Closed tab!');">✕</span></nv> `;
                 } else {
                     this.navElement.innerHTML += `<nv class="${classes}" onclick="chatManager.setWindow('${safePage}');" style="cursor: pointer;"><span class="tab-label">${sortedChannels[i].page}</span><span class="tab-close" onclick="event.stopPropagation(); chatManager.delPage('${safePage}');">✕</span></nv> `;

@@ -368,12 +368,27 @@ class IRCParser {
             }
 
             case "321": { // LIST start
+                if (window.listCommandEnabled === true) {
+                    this.output = "Channel List";
+                    this.chatManager.ensureListTab();
+                    const span = this.i18nSpan('chat.rpl.listStart', 'Channel list:');
+                    this.chatManager.setListHeader(span);
+                    return null;
+                }
                 this.output = channelTarget || "Status";
                 const span = this.i18nSpan('chat.rpl.listStart', 'Channel list:');
                 return ` <span style="color: #00aaff">==</span> ${span}`;
             }
 
             case "322": { // LIST entry
+                if (window.listCommandEnabled === true) {
+                    this.output = "Channel List";
+                    const channel = params[1] || '';
+                    const users = params[2] || '0';
+                    const topic = (params.slice(3).join(' ') || '').replace(/^:/, '').trim();
+                    this.chatManager.addListEntry(channel, users, topic);
+                    return null;
+                }
                 this.output = channelTarget || "Status";
                 const channel = params[1] || '';
                 const users = params[2] || '0';
@@ -383,6 +398,12 @@ class IRCParser {
             }
 
             case "323": { // LIST end
+                if (window.listCommandEnabled === true) {
+                    this.output = "Channel List";
+                    const span = this.i18nSpan('chat.rpl.listEnd', 'End of channel list');
+                    this.chatManager.setListFooter(span);
+                    return null;
+                }
                 this.output = channelTarget || "Status";
                 const span = this.i18nSpan('chat.rpl.listEnd', 'End of channel list');
                 return ` <span style="color: #00aaff">==</span> ${span}`;

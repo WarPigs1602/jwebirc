@@ -159,8 +159,8 @@ class PostManager {
         const keyLower = key && key.toLowerCase ? key.toLowerCase() : key;
         
         // Send typing notification if message-tags capability is enabled
-        if (!['Enter', 'ArrowUp', 'ArrowDown', 'Tab', 'Escape'].includes(key) && 
-            !keyEvent.ctrlKey && !keyEvent.altKey && !keyEvent.metaKey) {
+        if (!['Enter', 'ArrowUp', 'ArrowDown', 'Tab', 'Escape', '/'].includes(key) && 
+            !keyEvent.ctrlKey && !keyEvent.altKey && !keyEvent.metaKey && !(key === '7' && keyEvent.shiftKey)) {
             this.sendTypingNotification();
         }
         
@@ -458,8 +458,13 @@ class PostManager {
         
         const activeWindow = this.chatManager.getActiveWindow();
         
-        // Only send for channels and query windows, not for Status
-        if (!activeWindow || activeWindow.toLowerCase() === 'status') {
+        // Only send for channels and query windows, not for Status or special windows
+        if (!activeWindow || activeWindow.toLowerCase() === 'status' || activeWindow.toLowerCase() === 'channel list') {
+            return;
+        }
+        
+        // Don't send typing notifications for IRC commands
+        if (this.messageInput && this.messageInput.value.trim().startsWith('/')) {
             return;
         }
         
@@ -494,8 +499,13 @@ class PostManager {
         
         const activeWindow = this.chatManager.getActiveWindow();
         
-        // Only send for channels and query windows, not for Status
-        if (!activeWindow || activeWindow.toLowerCase() === 'status') {
+        // Only send for channels and query windows, not for Status or special windows
+        if (!activeWindow || activeWindow.toLowerCase() === 'status' || activeWindow.toLowerCase() === 'channel list') {
+            return;
+        }
+        
+        // Don't send typing done for IRC commands
+        if (this.messageInput && this.messageInput.value.trim().startsWith('/')) {
             return;
         }
         
@@ -610,9 +620,13 @@ class PostManager {
             return capCommand;
         }
         
-        // Block /LIST command
+        // /LIST command handling - if enabled, send to server so irc.js can route it to the list tab
         if (text.toLowerCase().startsWith("/list")) {
-                this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.listDisabled', 'The /LIST command is disabled') + "\n");
+            if (window.listCommandEnabled === true) {
+                this.chatManager.clearListTab();
+                return this.ircText(text);
+            }
+            this.chatManager.parsePage(this.chatManager.getTimestamp() + " <span style=\"color: #ff0000\">==</span> " + this.t('chat.command.listDisabled', 'The /LIST command is disabled') + "\n");
             this.chatManager.addWindow();
             return null;
         }

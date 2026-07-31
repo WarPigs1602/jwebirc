@@ -161,7 +161,14 @@
     <Parameter name="jwebirc.historyCommandDelay" value="2000" override="false"/>
     
     <!-- General command delay after join (milliseconds) -->
-     <Parameter name="jwebirc.commandDelayOnJoin" value="300" override="false"/>
+    <Parameter name="jwebirc.commandDelayOnJoin" value="300" override="false"/>
+    
+    <!-- ============================================
+         /LIST COMMAND
+         ============================================ -->
+    
+    <!-- Enable /LIST command (results are shown in a dedicated tab) -->
+    <Parameter name="jwebirc.listCommandEnabled" value="true" override="false"/>
     
     <!-- ============================================
          ERROR HANDLING

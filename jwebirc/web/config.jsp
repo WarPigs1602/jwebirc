@@ -88,6 +88,8 @@
     String historyCommandDelay = param(ctx, "jwebirc.historyCommandDelay", "2000");
     String commandDelayOnJoin = param(ctx, "jwebirc.commandDelayOnJoin", "300");
 
+    String listCommandEnabled = param(ctx, "jwebirc.listCommandEnabled", "false");
+
     String showStackTrace = param(ctx, "jwebirc.showStackTrace", "true");
     String errorPageStyle = param(ctx, "jwebirc.errorPageStyle", "detailed");
 %>
