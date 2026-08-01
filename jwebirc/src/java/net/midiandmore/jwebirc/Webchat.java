@@ -177,7 +177,17 @@ public class Webchat {
             return null;
         }
         WebchatConfig config = new WebchatConfig();
-        config.sessionTimeout = Integer.parseInt((String) hs.getAttribute("webchat_session_timout"));
+        try {
+            Object sessionTimeoutAttr = hs.getAttribute("webchat_session_timeout");
+            if (sessionTimeoutAttr != null) {
+                config.sessionTimeout = Integer.parseInt(sessionTimeoutAttr.toString());
+            } else {
+                config.sessionTimeout = 300000;
+            }
+        } catch (IllegalStateException | NumberFormatException ex) {
+            LOGGER.log(Level.WARNING, "Invalid webchat session timeout, using default", ex);
+            config.sessionTimeout = 300000;
+        }
         Object nickLengthAttr = hs.getAttribute("webchat_nick_length");
         config.nickLength = 15;
         if (nickLengthAttr instanceof String nickLengthValue) {
@@ -189,7 +199,17 @@ public class Webchat {
             }
         }
         config.host = (String) hs.getAttribute("webchat_host");
-        config.port = Integer.parseInt((String) hs.getAttribute("webchat_port"));
+        try {
+            Object portAttr = hs.getAttribute("webchat_port");
+            if (portAttr != null) {
+                config.port = Integer.parseInt(portAttr.toString());
+            } else {
+                config.port = 6669;
+            }
+        } catch (IllegalStateException | NumberFormatException ex) {
+            LOGGER.log(Level.WARNING, "Invalid webchat port, using default 6669", ex);
+            config.port = 6669;
+        }
         
         // Parse SSL flag robustly: case-insensitive, handle null, trim whitespace, and log debug info
         Object sslAttr = hs.getAttribute("webchat_ssl");
@@ -378,27 +398,37 @@ public class Webchat {
     }
 
     private String getReconnectKey() {
-        if (getHttpSession() == null) {
+        HttpSession hs = getHttpSession();
+        if (hs == null) {
             return null;
         }
-        return getHttpSession().getId();
+        try {
+            return hs.getId();
+        } catch (IllegalStateException ex) {
+            LOGGER.log(Level.FINE, "HTTP session already invalidated while getting reconnect key", ex);
+            return null;
+        }
     }
 
     private long getReconnectGraceMs() {
-        if (getHttpSession() == null) {
-            return DEFAULT_RECONNECT_GRACE_MS;
-        }
-
-        Object configured = getHttpSession().getAttribute("webchat_reconnect_grace_ms");
-        if (configured == null) {
+        HttpSession hs = getHttpSession();
+        if (hs == null) {
             return DEFAULT_RECONNECT_GRACE_MS;
         }
 
         try {
+            Object configured = hs.getAttribute("webchat_reconnect_grace_ms");
+            if (configured == null) {
+                return DEFAULT_RECONNECT_GRACE_MS;
+            }
+
             long parsed = Long.parseLong(configured.toString().trim());
             return Math.max(1000L, parsed);
+        } catch (IllegalStateException ex) {
+            LOGGER.log(Level.FINE, "HTTP session already invalidated while getting reconnect grace", ex);
+            return DEFAULT_RECONNECT_GRACE_MS;
         } catch (NumberFormatException ex) {
-            LOGGER.log(Level.FINE, ex, () -> "Invalid reconnect grace value: " + configured);
+            LOGGER.log(Level.FINE, ex, () -> "Invalid reconnect grace value");
             return DEFAULT_RECONNECT_GRACE_MS;
         }
     }

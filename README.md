@@ -15,12 +15,15 @@ See a live example at https://chat.midiandmore.net/?channels=dev.
 - [Jakarta EE Integration & Correct Version](#jakarta-ee-integration--correct-version)
 - [Installation](#installation)
 - [Configuration (Server-Side)](#configuration-server-side)
+- [Template System](#template-system)
+- [History Command Configuration](#history-command-configuration)
 - [Asset Minification](#asset-minification)
 - [Usage (Client-Side)](#usage-client-side)
 - [Nick Prefixes & Emoji Mapping](#nick-prefixes--emoji-mapping)
 - [Plugin System](#plugin-system)
 - [IRCv3 Feature Support](#ircv3-feature-support)
 - [IRC Command Reference](#irc-command-reference)
+- [/LIST Command Configuration](#list-command-configuration)
 - [Troubleshooting](#troubleshooting)
 - [Building from Source](#building-from-source)
 
@@ -33,17 +36,6 @@ mvn -f web/WEB-INF/pom.xml clean package
 ```
 
 Then open: `http://localhost:8080/jwebirc/`
-
-## Quick Start (Ant)
-
-Requires local dependency JARs in `jwebirc/lib/` (see [Configuration (Server-Side)](#configuration-server-side)).
-
-```bash
-cd jwebirc
-ant clean
-ant dist
-# deploy dist/jwebirc.war to your Jakarta EE server
-```
 
 ## Features
 
@@ -73,6 +65,7 @@ ant dist
 - **SSL/TLS Support**: Connect to IRC servers using secure connections with full certificate validation
 - **Multi-channel Support**: Join and manage multiple IRC channels simultaneously
 - **Private Messages**: Support for private messaging between users
+- **Protected Kick/Ban**: Operators cannot kick or ban users with equal or higher channel status
 
 ## Recent Changes & Bug Fixes
 
@@ -102,14 +95,14 @@ ant dist
   - jQuery
   - Bootstrap 5
   - Custom CSS
-- **Build Tool**: Apache Ant / Maven
+- **Build Tool**: Maven
 - **Server**: Compatible with Jakarta EE application servers (e.g., GlassFish, Payara, TomEE)
 
 ## Prerequisites
 
 - Java Development Kit (JDK) 21 or higher
 - Jakarta EE 11 compatible application server
-- Apache Ant (for building from source) or Maven 3.9+
+- Maven 3.9+
 
 ## Jakarta EE Integration & Correct Version
 
@@ -262,7 +255,7 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
     <Parameter name="jwebirc.webchatTitle" value="jWebIRC - IRC Web Client" override="false" />
     <Parameter name="jwebirc.ircNetworkName" value="jWebIRC" override="false" />
     <Parameter name="jwebirc.ircNetworkDescription" value="Modern web-based IRC client" override="false" />
-    <Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat" override="false" />
+    <Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat, jWebIRC" override="false" />
     
     <!-- Error Page Configuration -->
     <Parameter name="jwebirc.showStackTrace" value="true" override="false" />
@@ -290,11 +283,10 @@ Edit the configuration file at `jwebirc/web/META-INF/context.xml`:
 
 For detailed CAPTCHA configuration, see the **[CAPTCHA Protection](#captcha-protection)** section below.
 
-#### 3. Resolve Build Dependencies
+#### 3. Build
 
-Choose one build path:
+Build with Maven:
 
-**A) Maven (recommended, resolves dependencies automatically):**
 ```bash
 cd jwebirc
 mvn -f web/WEB-INF/pom.xml clean package
@@ -302,36 +294,11 @@ mvn -f web/WEB-INF/pom.xml clean package
 
 This reads dependencies from `web/WEB-INF/pom.xml`, compiles sources from `src/java`, packages the web root from `web/`, and builds `target/jwebirc.war`.
 
-**B) Ant / NetBeans build:**
-
-Ant uses JARs from `jwebirc/lib/` plus the Jakarta EE API from your application server/IDE.
-Ensure these files exist in `jwebirc/lib/` before running Ant:
-
-- `commons-codec-1.17.2.jar`
-- `ipaddress-5.5.1.jar`
-- `parsson-1.1.7.jar`
-- `jakarta.json-api-2.1.2.jar`
-- `jakarta.websocket-api-2.2.0.jar`
-
-Then run:
-```bash
-cd jwebirc
-ant clean
-ant dist
-```
-
-The WAR file will be generated in `dist/`.
-
-The Ant and Maven build paths are aligned and produce equivalent deployable WAR contents: the same JSPs, static assets, compiled classes, and runtime libraries. The main difference is the output path (`dist/jwebirc.war` for Ant, `target/jwebirc.war` for Maven).
-
-For Ant, `jakarta.websocket-api` and the Jakarta EE server API remain compile-time dependencies from the local IDE/server setup and are not packaged into the WAR.
-
 #### 4. Deploy
 
 Deploy the generated WAR file to your Jakarta EE application server:
 
-For the Maven build, deploy `jwebirc/target/jwebirc.war`.
-For the Ant build, deploy `jwebirc/dist/jwebirc.war`.
+Deploy `jwebirc/target/jwebirc.war`.
 
 - **GlassFish/Payara**: Copy to `domains/domain1/autodeploy/`
 - **TomEE**: Copy to `webapps/`
@@ -364,6 +331,9 @@ Quick navigation:
 <!-- IRC Server Hostname -->
 <Parameter name="jwebirc.webchatHost" value="irc.example.com" override="false" />
 
+<!-- Optional Server Binding Address -->
+<Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false" />
+
 <!-- IRC Server Port (default: 6667 for plain, 6697 for SSL/TLS) -->
 <Parameter name="jwebirc.webchatPort" value="6667" override="false" />
 
@@ -372,9 +342,6 @@ Quick navigation:
 
 <!-- Server Password (if required by IRC server) -->
 <Parameter name="jwebirc.webchatServerPassword" value="" override="false" />
-
-<!-- Optional Server Binding Address -->
-<Parameter name="jwebirc.webchatBind" value="127.0.0.1" override="false" />
 ```
 
 **SSL/TLS Connection Details:**
@@ -556,7 +523,7 @@ Notes:
 <Parameter name="jwebirc.ircNetworkDescription" value="Modern web-based IRC client" override="false" />
 
 <!-- SEO Keywords -->
-<Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat" override="false" />
+<Parameter name="jwebirc.ircNetworkKeywords" value="IRC, WebChat, Chat, Internet Relay Chat, jWebIRC" override="false" />
 ```
 
 `jwebirc.webchatNickLength` defines the maximum nickname length accepted in the login form, applied by the backend before connect, and used as the fallback limit for automatic alternative nicknames when the IRC server rejects the requested nick before advertising its own `NICKLEN` value.
@@ -573,6 +540,24 @@ When `jwebirc.listCommandEnabled` is `true`, users can type `/LIST` in the chat 
 When `false`, `/LIST` is blocked client-side and users see a localized message indicating the command is disabled.
 
 The default value is `true`.
+
+### History Command Configuration
+
+```xml
+<!-- Enable history command on channel join -->
+<Parameter name="jwebirc.historyCommandEnabled" value="false" override="false" />
+
+<!-- History command template (%CHANNEL% is replaced with channel name) -->
+<Parameter name="jwebirc.historyCommand" value="/msg HistServ HISTORY %CHANNEL% 50" override="false" />
+
+<!-- Delay before executing history command (milliseconds) -->
+<Parameter name="jwebirc.historyCommandDelay" value="2000" override="false" />
+
+<!-- General command delay after join (milliseconds) -->
+<Parameter name="jwebirc.commandDelayOnJoin" value="300" override="false" />
+```
+
+When `jwebirc.historyCommandEnabled` is `true`, jWebIRC automatically sends the configured history command after joining a channel. The `%CHANNEL%` placeholder is replaced with the actual channel name. Use `jwebirc.historyCommandDelay` to wait for the channel to be fully joined before requesting history, and `jwebirc.commandDelayOnJoin` for any additional general delay.
 
 ### Error Page Configuration
 
@@ -633,6 +618,29 @@ If bundled files are missing or outdated, rebuild the WAR with Maven so fresh bu
 cd jwebirc
 mvn -f web/WEB-INF/pom.xml clean package
 ```
+
+### Template System
+
+Configure themes and visual appearance:
+
+```xml
+<!-- Enable/disable template system -->
+<Parameter name="jwebirc.templateEnabled" value="true" override="false" />
+
+<!-- Default template (must match directory in templates/) -->
+<Parameter name="jwebirc.templateDefault" value="dark-theme" override="false" />
+
+<!-- Allow users to switch templates -->
+<Parameter name="jwebirc.templateUserSelectable" value="true" override="false" />
+
+<!-- Available templates (comma-separated) -->
+<Parameter name="jwebirc.templateAvailable" value="dark-theme,light-theme" override="false" />
+
+<!-- Template path prefix -->
+<Parameter name="jwebirc.templatePath" value="templates/" override="false" />
+```
+
+Templates are stored in `jwebirc/web/templates/<template-name>/` and can include custom CSS, images, and layout overrides.
 
 ### Chatnapping (Website Embedding)
 
@@ -796,6 +804,7 @@ jWebIRC maps IRC channel status prefixes to role emojis in the nicklist and keep
 
 | Mode | Prefix | Nicklist Emoji | Meaning |
 |------|--------|----------------|---------|
+| `y` | `!` | 🔔 | Unavailable / Special |
 | `q` | `~` | 👑 | Owner / Founder |
 | `a` | `&` | 🛡️ | Admin / Protected |
 | `o` | `@` | ⭐ | Operator |
@@ -807,6 +816,11 @@ jWebIRC maps IRC channel status prefixes to role emojis in the nicklist and keep
 - **Nicklist**: shows emoji + nickname (example: `👑WarPigs`).
 - **Chat line nicks**: show the highest matching IRC prefix symbol (example: `@Nick`), not the full prefix chain.
 - If a user has multiple statuses (for example with `multi-prefix`), jWebIRC keeps all known symbols internally and uses the highest-priority one for compact display in chat.
+- Special prefixes like `!` (Unavailable) are mapped to their own emoji (🔔) in the nicklist.
+
+### Kick/Ban Protection
+
+Kick and ban actions are protected by the same prefix hierarchy used in the nicklist. A user can only kick or ban targets with a lower channel status. Attempting to act on someone with equal or higher status shows an error message and the command is not sent to the server.
 
 ### Automatic Prefix Detection From Server Welcome
 
@@ -943,10 +957,9 @@ CTCP (Client-To-Client Protocol) commands for querying client information:
 
 ## Building from Source
 
-Use the quick sections at the top of this README:
+Use the quick section at the top of this README:
 
-- [Quick Start (3 Commands)](#quick-start-3-commands) for Maven (recommended)
-- [Quick Start (Ant)](#quick-start-ant) for Ant/NetBeans with local `lib/` dependencies
+- [Quick Start (3 Commands)](#quick-start-3-commands) for Maven
 
 ## Contributing
 
