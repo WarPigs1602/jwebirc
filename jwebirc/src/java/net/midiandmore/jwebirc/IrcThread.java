@@ -4,6 +4,7 @@
  */
 package net.midiandmore.jwebirc;
 
+import jakarta.enterprise.concurrent.ManagedExecutorService;
 import jakarta.websocket.Session;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.io.PrintWriter;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.net.Socket;
+import java.util.concurrent.Future;
 
 /**
  *
@@ -20,17 +22,17 @@ import java.net.Socket;
 public class IrcThread implements Runnable {
 
     /**
-     * @return the thread
+     * @return the task
      */
-    public Thread getThread() {
-        return thread;
+    public Future<?> getTask() {
+        return task;
     }
 
     /**
-     * @param thread the thread to set
+     * @param task the task to set
      */
-    public void setThread(Thread thread) {
-        this.thread = thread;
+    public void setTask(Future<?> task) {
+        this.task = task;
     }
 
     /**
@@ -91,7 +93,7 @@ public class IrcThread implements Runnable {
 
     private static final String HOSTNAME_NOT_FOUND = "NOTICE AUTH *** (jwebirc) No hostname found.";
     
-    private Thread thread;
+    private Future<?> task;
     private Socket socket;
     private PrintWriter pw;
     private BufferedReader br;
@@ -99,13 +101,12 @@ public class IrcThread implements Runnable {
     private IrcParser parser;
     private Session session;
     private String nick;
-
-    public IrcThread(IrcParser parser, String nick, Session session) {
+    
+    public IrcThread(IrcParser parser, String nick, Session session, ManagedExecutorService executor) {
         setParser(parser);
         setSession(session);
         setNick(nick);
-        thread = new Thread(this);
-        thread.start();
+        task = executor.submit(this);
     }
 
     @Override

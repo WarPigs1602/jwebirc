@@ -95,16 +95,16 @@ class IRCParser {
         this.whoisLine = (key, fallback, replacements, options = {}) => {
             const translated = this.i18nSpan(key, fallback, replacements);
             const labelValue = this.splitWhoisLabelValue(translated);
-            const ts = options.timestamp && this.chatManager ? `${this.chatManager.getTimestamp()} ` : '';
+            const ts = this.chatManager ? `${this.chatManager.getTimestamp()} ` : '';
             if (labelValue) {
                 const label = `${labelValue.label}:`;
                 const labelSpan = `<span class="whois-label" style="display: inline-block; min-width: ${this.whoisLabelWidth}ch; font-weight: 600;">${label}</span>`;
                 const valueSpan = `<span class="whois-value" style="white-space: pre-wrap;">${labelValue.value}</span>`;
-                return `${ts}<span class="whois-line" style="font-family: monospace;">&nbsp;${labelSpan} ${valueSpan}</span>`;
+                return `${ts}<span class="whois-line" style="display: inline-block; font-family: monospace;">&nbsp;${labelSpan} ${valueSpan}</span>`;
             }
 
             const span = this.normalizeWhoisText(translated);
-            return `${ts}<span class="whois-line" style="font-family: monospace; white-space: pre;">&nbsp;${span}</span>`;
+            return `${ts}<span class="whois-line" style="display: inline-block; font-family: monospace; white-space: pre;">&nbsp;${span}</span>`;
         };
     }
 
@@ -197,14 +197,17 @@ class IRCParser {
             ? this.chatManager.getTimestamp(tags.get('time'))
             : this.chatManager.getTimestamp();
         
+        // WHOIS lines already include their own timestamp via whoisLine
+        const prefixedOutput = /^\s*\[\d{2}:\d{2}:\d{2}\]/.test(output.trim()) ? output.trim() : ts + " " + output.trim();
+
         if (this.chatManager.getActiveWindow()) {
             for (const channel of this.chatManager.channels) {
                 if (this.output.toLowerCase() === channel.page.toLowerCase()) {
-                    this.chatManager.parsePages(ts + " " + output.trim() + "\n", channel.page);
+                    this.chatManager.parsePages(prefixedOutput + "\n", channel.page);
                 }
             }
         } else {
-            this.chatManager.parsePage(ts + " " + output.trim() + "\n");
+            this.chatManager.parsePage(prefixedOutput + "\n");
         }
     }
 
@@ -553,8 +556,8 @@ class IRCParser {
                 const idleText = isNaN(idleSeconds) ? '-' : `${idleSeconds}s`;
                 const signonText = signonTs > 0 ? new Date(signonTs).toLocaleString() : '-';
                 const idleLine = this.whoisLine('chat.whois.idle', 'idle: {idle}', { idle: idleText });
-                const signonLine = this.whoisLine('chat.whois.signon', 'signon: {signon}', { signon: signonText }, { timestamp: true });
-                return `${idleLine}\n${signonLine}`;
+                const signonLine = this.whoisLine('chat.whois.signon', 'signon: {signon}', { signon: signonText });
+                return `${idleLine}<br>${signonLine}`;
             }
 
             case "330": { // WHOIS logged in as (authname)
@@ -1802,9 +1805,9 @@ class IRCParser {
         const realname = params[5] || '';
         const lines = [
             this.whoisLine('chat.whois.header', 'whois: {nick} [{user}@{host}]', { nick, user, host }),
-            this.whoisLine('chat.whois.realname', 'realname: {realname}', { realname: realname || '(none)' }, { timestamp: true })
+            this.whoisLine('chat.whois.realname', 'realname: {realname}', { realname: realname || '(none)' })
         ];
-        return lines.join("\n");
+        return lines.join("<br>");
     }
     
     formatWhoisChannels(ircMsg) {

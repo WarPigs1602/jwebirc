@@ -19,6 +19,9 @@ import jakarta.websocket.PongMessage;
 import jakarta.websocket.server.HandshakeRequest;
 import jakarta.websocket.server.ServerEndpoint;
 import jakarta.websocket.server.ServerEndpointConfig;
+import jakarta.enterprise.concurrent.ContextService;
+import jakarta.enterprise.concurrent.ManagedExecutorService;
+import jakarta.enterprise.concurrent.ManagedScheduledExecutorService;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
@@ -29,10 +32,7 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -48,7 +48,47 @@ public class Webchat {
     private static final Logger LOGGER = Logger.getLogger(Webchat.class.getName());
     private static final long DEFAULT_RECONNECT_GRACE_MS = 30000L;
     private static final Map<String, ReconnectContext> RECONNECT_CONTEXTS = new ConcurrentHashMap<>();
-    private static final ScheduledExecutorService RECONNECT_SCHEDULER = Executors.newSingleThreadScheduledExecutor(new ReconnectThreadFactory());
+
+    /**
+     * Jakarta Concurrency managed scheduled executor used for the reconnect grace window.
+     * Resolved lazily because WebSocket endpoints are not CDI injection targets.
+     */
+    private static volatile ManagedScheduledExecutorService reconnectScheduler;
+
+    /**
+     * Resolves the managed scheduled executor from CDI. WebSocket endpoints are not
+     * injection targets, so the managed bean is looked up programmatically. The
+     * Jakarta Concurrency provider manages the thread lifecycle (naming, daemon
+     * behaviour, shutdown on undeploy).
+     */
+    private static ManagedScheduledExecutorService getReconnectScheduler() {
+        if (reconnectScheduler == null) {
+            synchronized (Webchat.class) {
+                if (reconnectScheduler == null) {
+                    reconnectScheduler = ConcurrencyResources.reconnectScheduler();
+                }
+            }
+        }
+        return reconnectScheduler;
+    }
+
+    private static volatile ManagedExecutorService ircExecutor;
+
+    /**
+     * Resolves the managed executor for running the IRC read loop. The Jakarta Concurrency
+     * provider owns the worker thread lifecycle and applies the container thread context
+     * instead of creating a raw {@link java.lang.Thread}.
+     */
+    private static ManagedExecutorService getManagedExecutor() {
+        if (ircExecutor == null) {
+            synchronized (Webchat.class) {
+                if (ircExecutor == null) {
+                    ircExecutor = ConcurrencyResources.ircExecutor();
+                }
+            }
+        }
+        return ircExecutor;
+    }
 
     private static final class ReconnectContext {
         private final String key;
@@ -62,15 +102,6 @@ public class Webchat {
             this.key = key;
             this.parser = parser;
             this.ircThread = ircThread;
-        }
-    }
-
-    private static final class ReconnectThreadFactory implements ThreadFactory {
-        @Override
-        public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "jwebirc-reconnect-scheduler");
-            thread.setDaemon(true);
-            return thread;
         }
     }
 
@@ -393,7 +424,7 @@ public class Webchat {
             return;
         }
         p.setLoginChannels(channel);
-        setIrcThread(new IrcThread(p, config.nick, getSession()));
+        setIrcThread(new IrcThread(p, config.nick, getSession(), getManagedExecutor()));
         registerReconnectContext();
     }
 
@@ -529,7 +560,7 @@ public class Webchat {
             }
 
             long graceMs = getReconnectGraceMs();
-            context.cleanupTask = RECONNECT_SCHEDULER.schedule(() -> {
+            context.cleanupTask = getReconnectScheduler().schedule(() -> {
                 ReconnectContext latest = RECONNECT_CONTEXTS.get(context.key);
                 if (latest != context) {
                     return;

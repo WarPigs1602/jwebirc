@@ -7,6 +7,12 @@
     
     <display-name>jWebIRC - MidiAndMore IRC Client</display-name>
     <description>Web-based IRC client for the MidiAndMore.Net IRC Network</description>
+
+    <listener>
+        <listener-class>net.midiandmore.jwebirc.ConcurrencyBootstrap</listener-class>
+    </listener>
+
+
     
     <!-- Session Configuration -->
     <session-config>
