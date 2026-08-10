@@ -488,21 +488,56 @@ server {
 }
 ```
 
-Recommended matching application settings:
+Recommended matching application settings (for both Nginx and Apache):
 
 ```xml
 <Parameter name="jwebirc.forwardedForHeader" value="X-Forwarded-For" override="false" />
 <Parameter name="jwebirc.forwardedForIps" value="127.0.0.1" override="false" />
 ```
 
-Notes:
+#### Nginx Notes
 
 - The WebSocket endpoint is exposed below the application path as `/jwebirc/Webchat`, so WebSocket upgrade headers must be passed through by Nginx.
 - `map $http_upgrade $connection_upgrade` avoids forcing `Connection: upgrade` on normal HTTP requests.
 - `proxy_buffering off` and longer read/send timeouts help prevent idle WebSocket sessions from being interrupted too aggressively.
-- Set `jwebirc.forwardedForIps` to the IP address or CIDR range of your trusted proxy, not to arbitrary client networks.
 - If Nginx runs on another host, replace `127.0.0.1:8080` and `127.0.0.1` with the actual application server address and the trusted proxy address or subnet.
 - For HTTPS deployments, keep the same proxy headers and switch the listener to `443 ssl` or `443 ssl http2` with your TLS certificate configuration.
+
+### Apache Reverse Proxy Example
+
+Enable the required modules and use `mod_proxy` with `mod_proxy_wstunnel` for WebSocket support:
+
+```bash
+sudo a2enmod proxy
+sudo a2enmod proxy_http
+sudo a2enmod proxy_wstunnel
+sudo a2enmod rewrite
+sudo systemctl restart apache2
+```
+
+Example Apache virtual host (`/etc/apache2/sites-available/jwebirc.conf`):
+
+```apache
+<VirtualHost *:80>
+    ServerName chat.example.com
+
+    ProxyPass /jwebirc http://127.0.0.1:8080/jwebirc
+    ProxyPassReverse /jwebirc http://127.0.0.1:8080/jwebirc
+
+    RewriteEngine on
+
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule ^/jwebirc(?:/(.*))?$ "ws://127.0.0.1:8080/jwebirc/$1" [P,L]
+</VirtualHost>
+```
+
+#### Apache Notes
+
+- `mod_proxy_wstunnel` is required so that WebSocket connections to `/jwebirc/Webchat` are tunneled correctly.
+- The `RewriteRule` matches `Upgrade: websocket` requests and forwards them to the WebSocket backend, while all other requests are handled by the `ProxyPass` directives.
+- For HTTPS deployments, add your TLS certificate configuration to the virtual host and adjust `ProxyPassReverse`/`X-Forwarded-Proto` accordingly.
+- Set `jwebirc.forwardedForIps` to the IP address or CIDR range of your trusted proxy (here `127.0.0.1`), not to arbitrary client networks.
 
 ### Application Display Configuration
 
