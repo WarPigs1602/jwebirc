@@ -313,6 +313,7 @@ class LoginOptionsManager {
         
         // Apply hue-rotate filter to entire page (same as chat)
         root.style.setProperty('--hue-rotate', `${this.uiPrefs.hue}deg`);
+        root.style.setProperty('--hue-filter', this.uiPrefs.hue ? `hue-rotate(${this.uiPrefs.hue}deg)` : 'none');
     }
     
     /**

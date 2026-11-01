@@ -151,7 +151,7 @@ html {
     font-size: var(--font-size-base);
     scroll-behavior: smooth;
     overflow: hidden;
-    filter: hue-rotate(var(--hue-rotate));
+    filter: var(--hue-filter, none);
 }
 
 body {
@@ -844,7 +844,11 @@ a:focus {
     padding: 2px 0;
     scrollbar-width: none;
     scroll-behavior: smooth;
-    border: none !important;
+    border: 0 !important;
+    border-bottom: 0 !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+    -ms-overflow-style: none;
 }
 
 .nav-tabs::-webkit-scrollbar {
@@ -1273,7 +1277,8 @@ nv::before {
     height: 2px;
     background: var(--primary-color);
     transform: scaleX(0);
-    transition: transform 0.3s ease;
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 nv .tab-label {
@@ -1327,6 +1332,7 @@ nv.active {
 
 nv.active::before {
     transform: scaleX(1);
+    opacity: 1;
 }
 
 nv.active .tab-close {
@@ -1434,7 +1440,7 @@ nv.highlighted:not(.unread)::after {
     justify-content: flex-start;
     gap: 10px;
     overflow: hidden;
-    backdrop-filter: blur(12px);
+    backdrop-filter: none;
     font-weight: 600;
     color: #f0f0f0;
     font-size: 0.9rem;
@@ -1526,7 +1532,7 @@ nv.highlighted:not(.unread)::after {
     color: var(--text-primary);
     transition: box-shadow var(--transition-speed) ease;
     filter: var(--frame-drop-shadow);
-    backdrop-filter: blur(10px);
+    backdrop-filter: none;
     min-height: 0;
 }
 
@@ -1560,7 +1566,7 @@ nv.highlighted:not(.unread)::after {
     scrollbar-gutter: stable;
     font-size: 0.9rem;
     color: var(--text-primary);
-    backdrop-filter: blur(10px);
+    backdrop-filter: none;
     min-height: 0;
     height: 100%;
     position: relative;
@@ -1602,7 +1608,7 @@ nv.highlighted:not(.unread)::after {
     border-radius: 8px;
     box-shadow: var(--frame-shadow);
     padding: 10px 12px;
-    backdrop-filter: blur(10px);
+    backdrop-filter: none;
     display: flex;
     flex-direction: column;
     justify-content: center;

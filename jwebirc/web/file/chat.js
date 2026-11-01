@@ -1387,6 +1387,7 @@ class ChatManager {
         // Apply hue filter
         const hue = this.uiPrefs.hue || 0;
         document.documentElement.style.setProperty('--hue-rotate', hue + 'deg');
+        document.documentElement.style.setProperty('--hue-filter', hue ? 'hue-rotate(' + hue + 'deg)' : 'none');
 
         // Sidebar mode
         if (this.uiPrefs.enableSidebar && !isMobileViewport) {

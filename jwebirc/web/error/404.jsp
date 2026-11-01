@@ -109,6 +109,7 @@
                         if (prefs.hue !== undefined && prefs.hue !== null) {
                             const hue = parseInt(prefs.hue, 10) || 0;
                             document.documentElement.style.setProperty('--hue-rotate', hue + 'deg');
+                            document.documentElement.style.setProperty('--hue-filter', hue ? 'hue-rotate(' + hue + 'deg)' : 'none');
                         }
                         // Apply font size
                         if (prefs.fontSize !== undefined && prefs.fontSize !== null) {
