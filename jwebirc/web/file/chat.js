@@ -1928,26 +1928,33 @@ class ChatManager {
             let changed = false;
             const underlined = this.isUnderlined(node.parentNode);
             const linkStyle = underlined ? '' : ' style="text-decoration: none;"';
-            let replaced = text.replace(channelRegex, (full, prefix, channel, trailing) => {
-                // Only wrap valid channel names
-                if (!this.isChannel(channel)) return full;
-                changed = true;
-                const safeChannel = this.escapeAttribute(channel);
-                return `${prefix}<a href="#" class="channel-link" data-channel="${safeChannel}" onclick="return chatManager.handleChannelClick('${safeChannel}');"${linkStyle}>${channel}</a>${trailing || ''}`;
-            });
-
-            // Link nick mentions when the nick exists in the current channel
-            replaced = replaced.replace(nickRegex, (full, prefix, nick, trailing) => {
-                if (!currentChannel || !this.hasNick(currentChannel, nick)) return full;
+            // Link channels first, then nicks only in the remaining plain text so
+            // generated anchor markup is never re-processed.
+            const linkNicks = (plain) => plain.replace(nickRegex, (full, prefix, nick, trailing) => {
+                if (!currentChannel || !this.hasNick(currentChannel, nick)) return this.escapeHtml(full);
                 changed = true;
                 const safeNick = this.escapeAttribute(nick);
                 const nickColor = this.getColor(currentChannel, nick) || this.getNickColor(nick);
                 const nickStyle = underlined
                     ? ` style="color: ${nickColor}; font-weight: 600;"`
                     : ` style="text-decoration: none; color: ${nickColor}; font-weight: 600;"`;
-                return `${prefix}<a href="#" class="nick-link" data-nick="${safeNick}" onclick="return chatManager.handleNickClick('${safeNick}');"${nickStyle}>${nick}</a>${trailing || ''}`;
+                return `${this.escapeHtml(prefix)}<a href="#" class="nick-link" data-nick="${safeNick}" onclick="return chatManager.handleNickClick('${safeNick}');"${nickStyle}>${this.escapeHtml(nick)}</a>${this.escapeHtml(trailing || '')}`;
             });
-            
+            let replaced = '';
+            let lastIndex = 0;
+            channelRegex.lastIndex = 0;
+            let m;
+            while ((m = channelRegex.exec(text)) !== null) {
+                const [full, prefix, channel, trailing] = m;
+                if (!this.isChannel(channel)) continue;
+                changed = true;
+                const safeChannel = this.escapeAttribute(channel);
+                replaced += linkNicks(text.slice(lastIndex, m.index) + prefix);
+                replaced += `<a href="#" class="channel-link" data-channel="${safeChannel}" onclick="return chatManager.handleChannelClick('${safeChannel}');"${linkStyle}>${this.escapeHtml(channel)}</a>${this.escapeHtml(trailing || '')}`;
+                lastIndex = m.index + full.length;
+            }
+            replaced += linkNicks(text.slice(lastIndex));
+
             if (changed) {
                 const wrapper = document.createElement('span');
                 wrapper.innerHTML = replaced;
